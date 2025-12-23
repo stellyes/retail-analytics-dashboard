@@ -17,6 +17,13 @@ from datetime import datetime, timedelta
 import hashlib
 import json
 
+# Import Claude AI integration (optional)
+try:
+    from claude_integration import ClaudeAnalytics
+    CLAUDE_AVAILABLE = True
+except ImportError:
+    CLAUDE_AVAILABLE = False
+
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
@@ -751,32 +758,140 @@ def render_recommendations(state, analytics):
         st.warning("Please upload data to generate recommendations.")
         return
     
-    # Generate recommendations
+    # Generate rule-based recommendations
     metrics = analytics.calculate_store_metrics(state.sales_data)
     recommendations = analytics.generate_recommendations(metrics, state.brand_data)
     
-    if not recommendations:
-        st.info("No specific recommendations at this time. Data looks good!")
-        return
+    # Create tabs for different recommendation types
+    tab1, tab2 = st.tabs(["📋 Automated Insights", "🤖 AI Analysis"])
     
-    # Display recommendations by priority
-    st.subheader("🔴 High Priority")
-    high_priority = [r for r in recommendations if r['priority'] == 'high']
-    for rec in high_priority:
-        with st.expander(f"⚠️ {rec['title']}", expanded=True):
-            st.write(rec['description'])
+    with tab1:
+        if not recommendations:
+            st.info("No specific recommendations at this time. Data looks good!")
+        else:
+            # Display recommendations by priority
+            st.subheader("🔴 High Priority")
+            high_priority = [r for r in recommendations if r['priority'] == 'high']
+            for rec in high_priority:
+                with st.expander(f"⚠️ {rec['title']}", expanded=True):
+                    st.write(rec['description'])
+            
+            st.subheader("🟡 Medium Priority")
+            medium_priority = [r for r in recommendations if r['priority'] == 'medium']
+            for rec in medium_priority:
+                with st.expander(f"📊 {rec['title']}"):
+                    st.write(rec['description'])
+            
+            st.subheader("🟢 Insights")
+            low_priority = [r for r in recommendations if r['priority'] == 'low']
+            for rec in low_priority:
+                with st.expander(f"💡 {rec['title']}"):
+                    st.write(rec['description'])
     
-    st.subheader("🟡 Medium Priority")
-    medium_priority = [r for r in recommendations if r['priority'] == 'medium']
-    for rec in medium_priority:
-        with st.expander(f"📊 {rec['title']}"):
-            st.write(rec['description'])
-    
-    st.subheader("🟢 Insights")
-    low_priority = [r for r in recommendations if r['priority'] == 'low']
-    for rec in low_priority:
-        with st.expander(f"💡 {rec['title']}"):
-            st.write(rec['description'])
+    with tab2:
+        # Claude AI Integration
+        if not CLAUDE_AVAILABLE:
+            st.warning("Claude integration module not found. Make sure `claude_integration.py` is in the same directory.")
+            return
+        
+        # Get API key from secrets
+        api_key = None
+        try:
+            api_key = st.secrets.get("anthropic", {}).get("api_key")
+        except Exception:
+            pass
+        
+        if not api_key:
+            st.info("""
+            **🔑 Enable AI Analysis**
+            
+            Add your Anthropic API key to unlock AI-powered insights:
+            
+            1. Get an API key at [console.anthropic.com](https://console.anthropic.com)
+            2. Add to your `.streamlit/secrets.toml`:
+            ```toml
+            [anthropic]
+            api_key = "sk-ant-api03-..."
+            ```
+            """)
+            return
+        
+        # Initialize Claude
+        claude = ClaudeAnalytics(api_key=api_key)
+        
+        if not claude.is_available():
+            st.error("Could not initialize Claude API. Please check your API key.")
+            return
+        
+        st.success("✅ Claude AI connected")
+        
+        # Prepare data summaries for Claude
+        sales_summary = {
+            'store_metrics': metrics,
+            'date_range': {
+                'start': state.sales_data['Date'].min().strftime('%Y-%m-%d') if 'Date' in state.sales_data.columns else 'Unknown',
+                'end': state.sales_data['Date'].max().strftime('%Y-%m-%d') if 'Date' in state.sales_data.columns else 'Unknown',
+            },
+            'total_records': len(state.sales_data)
+        }
+        
+        brand_summary = []
+        if state.brand_data is not None:
+            top_brands = state.brand_data.nlargest(30, 'Net Sales')[['Brand', 'Net Sales', 'Gross Margin %']].to_dict('records')
+            brand_summary = top_brands
+        
+        # AI Analysis Buttons
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            if st.button("📊 Analyze Sales Trends", use_container_width=True):
+                with st.spinner("Claude is analyzing your sales data..."):
+                    analysis = claude.analyze_sales_trends(sales_summary)
+                    st.markdown("### Sales Analysis")
+                    st.markdown(analysis)
+        
+        with col2:
+            if st.button("🏷️ Brand Recommendations", use_container_width=True):
+                if not brand_summary:
+                    st.warning("Upload brand data first.")
+                else:
+                    with st.spinner("Claude is analyzing brand performance..."):
+                        analysis = claude.analyze_brand_performance(brand_summary)
+                        st.markdown("### Brand Analysis")
+                        st.markdown(analysis)
+        
+        with col3:
+            if st.button("🎯 Deal Suggestions", use_container_width=True):
+                if state.brand_data is None:
+                    st.warning("Upload brand data first.")
+                else:
+                    with st.spinner("Claude is generating deal recommendations..."):
+                        # Find slow movers and high margin items
+                        slow_movers = state.brand_data.nsmallest(15, 'Net Sales')[['Brand', 'Net Sales', 'Gross Margin %']].to_dict('records')
+                        high_margin = state.brand_data[state.brand_data['Gross Margin %'] > 0.6].nlargest(15, 'Net Sales')[['Brand', 'Net Sales', 'Gross Margin %']].to_dict('records')
+                        
+                        analysis = claude.generate_deal_recommendations(slow_movers, high_margin)
+                        st.markdown("### Deal Recommendations")
+                        st.markdown(analysis)
+        
+        # Free-form Q&A
+        st.markdown("---")
+        st.subheader("💬 Ask Claude About Your Business")
+        
+        question = st.text_input("Ask anything about your sales, brands, or business strategy:")
+        
+        if question:
+            # Prepare context
+            context = {
+                'sales_summary': sales_summary,
+                'top_brands': brand_summary[:20] if brand_summary else [],
+                'product_mix': state.product_data.to_dict('records') if state.product_data is not None else []
+            }
+            
+            with st.spinner("Thinking..."):
+                answer = claude.answer_business_question(question, context)
+                st.markdown("### Answer")
+                st.markdown(answer)
 
 
 def render_upload_page(s3_manager, processor):
@@ -812,20 +927,42 @@ def render_upload_page(s3_manager, processor):
         store_id = store_id_map[selected_store]
     
     with settings_col2:
-        date_range = st.date_input(
+        # Default date range (last 30 days)
+        default_start = (datetime.now() - timedelta(days=30)).strftime("%m/%d/%Y")
+        default_end = datetime.now().strftime("%m/%d/%Y")
+        default_range = f"{default_start} - {default_end}"
+        
+        date_range_input = st.text_input(
             "Data Date Range",
-            value=(datetime.now() - timedelta(days=30), datetime.now()),
-            help="What date range does this data cover?"
+            value=default_range,
+            help="Format: MM/DD/YYYY - MM/DD/YYYY",
+            placeholder="MM/DD/YYYY - MM/DD/YYYY"
         )
         
-        # Handle single date vs range
-        if isinstance(date_range, tuple) and len(date_range) == 2:
-            start_date, end_date = date_range
-        else:
-            start_date = end_date = date_range
+        # Parse the date range
+        start_date = None
+        end_date = None
+        date_error = False
+        
+        try:
+            if " - " in date_range_input:
+                start_str, end_str = date_range_input.split(" - ")
+                start_date = datetime.strptime(start_str.strip(), "%m/%d/%Y").date()
+                end_date = datetime.strptime(end_str.strip(), "%m/%d/%Y").date()
+            else:
+                # Single date entered
+                start_date = datetime.strptime(date_range_input.strip(), "%m/%d/%Y").date()
+                end_date = start_date
+        except ValueError:
+            date_error = True
+            st.error("⚠️ Invalid date format. Please use MM/DD/YYYY - MM/DD/YYYY")
+            # Fallback to defaults
+            start_date = (datetime.now() - timedelta(days=30)).date()
+            end_date = datetime.now().date()
     
     # Display selected settings
-    st.info(f"📍 **Store:** {selected_store} | 📅 **Period:** {start_date.strftime('%b %d, %Y')} to {end_date.strftime('%b %d, %Y')}")
+    if not date_error:
+        st.info(f"📍 **Store:** {selected_store} | 📅 **Period:** {start_date.strftime('%b %d, %Y')} to {end_date.strftime('%b %d, %Y')}")
     
     st.markdown("---")
     
