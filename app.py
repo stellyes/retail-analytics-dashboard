@@ -782,6 +782,45 @@ def render_upload_page(s3_manager, processor):
     - **Net Sales by Product**: Product category summaries
     """)
     
+    # Global upload settings
+    st.markdown("---")
+    st.subheader("📋 Upload Settings")
+    
+    settings_col1, settings_col2 = st.columns(2)
+    
+    with settings_col1:
+        selected_store = st.selectbox(
+            "Select Store",
+            options=["Barbary Coast", "Grass Roots", "Both Stores (Combined)"],
+            help="Which store does this data belong to?"
+        )
+        
+        # Map display name to internal ID
+        store_id_map = {
+            "Barbary Coast": "barbary_coast",
+            "Grass Roots": "grass_roots",
+            "Both Stores (Combined)": "combined"
+        }
+        store_id = store_id_map[selected_store]
+    
+    with settings_col2:
+        date_range = st.date_input(
+            "Data Date Range",
+            value=(datetime.now() - timedelta(days=30), datetime.now()),
+            help="What date range does this data cover?"
+        )
+        
+        # Handle single date vs range
+        if isinstance(date_range, tuple) and len(date_range) == 2:
+            start_date, end_date = date_range
+        else:
+            start_date = end_date = date_range
+    
+    # Display selected settings
+    st.info(f"📍 **Store:** {selected_store} | 📅 **Period:** {start_date.strftime('%b %d, %Y')} to {end_date.strftime('%b %d, %Y')}")
+    
+    st.markdown("---")
+    
     # File uploaders
     col1, col2, col3 = st.columns(3)
     
@@ -793,15 +832,40 @@ def render_upload_page(s3_manager, processor):
             df = pd.read_csv(sales_file)
             st.success(f"Loaded {len(df)} rows")
             
-            if st.button("Process Sales Data"):
+            # Preview
+            with st.expander("Preview Data"):
+                st.dataframe(df.head(), use_container_width=True)
+            
+            if st.button("Process Sales Data", key="process_sales"):
                 processed = processor.clean_sales_by_store(df)
-                st.session_state.sales_data = processed
                 
-                # Upload to S3
+                # Add metadata
+                processed['Upload_Store'] = store_id
+                processed['Upload_Start_Date'] = pd.to_datetime(start_date)
+                processed['Upload_End_Date'] = pd.to_datetime(end_date)
+                
+                # If store is manually specified and not "combined", override Store_ID
+                if store_id != "combined":
+                    processed['Store_ID'] = store_id
+                
+                # Merge with existing data or replace
+                if st.session_state.sales_data is not None:
+                    # Option to append or replace
+                    st.session_state.sales_data = pd.concat([
+                        st.session_state.sales_data,
+                        processed
+                    ]).drop_duplicates(subset=['Store', 'Date'], keep='last')
+                else:
+                    st.session_state.sales_data = processed
+                
+                # Upload to S3 with metadata in path
                 sales_file.seek(0)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                if s3_manager.upload_file(sales_file, f"raw-uploads/sales_{timestamp}.csv"):
-                    st.success("✅ Uploaded to S3")
+                date_range_str = f"{start_date.strftime('%Y%m%d')}-{end_date.strftime('%Y%m%d')}"
+                s3_key = f"raw-uploads/{store_id}/sales_{date_range_str}_{timestamp}.csv"
+                
+                if s3_manager.upload_file(sales_file, s3_key):
+                    st.success(f"✅ Uploaded to S3: {s3_key}")
                 else:
                     st.info("Running locally (S3 not configured)")
                 
@@ -816,14 +880,38 @@ def render_upload_page(s3_manager, processor):
             df = pd.read_csv(brand_file)
             st.success(f"Loaded {len(df)} rows")
             
-            if st.button("Process Brand Data"):
+            # Preview
+            with st.expander("Preview Data"):
+                st.dataframe(df.head(), use_container_width=True)
+            
+            if st.button("Process Brand Data", key="process_brand"):
                 processed = processor.clean_brand_data(df)
-                st.session_state.brand_data = processed
+                
+                # Add metadata
+                processed['Upload_Store'] = store_id
+                processed['Upload_Start_Date'] = pd.to_datetime(start_date)
+                processed['Upload_End_Date'] = pd.to_datetime(end_date)
+                
+                # If store is manually specified and not "combined", set Store_ID
+                if store_id != "combined":
+                    processed['Store_ID'] = store_id
+                
+                # Merge with existing data or replace
+                if st.session_state.brand_data is not None:
+                    st.session_state.brand_data = pd.concat([
+                        st.session_state.brand_data,
+                        processed
+                    ]).drop_duplicates(subset=['Brand', 'Upload_Store', 'Upload_Start_Date'], keep='last')
+                else:
+                    st.session_state.brand_data = processed
                 
                 brand_file.seek(0)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                if s3_manager.upload_file(brand_file, f"raw-uploads/brand_{timestamp}.csv"):
-                    st.success("✅ Uploaded to S3")
+                date_range_str = f"{start_date.strftime('%Y%m%d')}-{end_date.strftime('%Y%m%d')}"
+                s3_key = f"raw-uploads/{store_id}/brand_{date_range_str}_{timestamp}.csv"
+                
+                if s3_manager.upload_file(brand_file, s3_key):
+                    st.success(f"✅ Uploaded to S3: {s3_key}")
                 else:
                     st.info("Running locally (S3 not configured)")
                 
@@ -838,14 +926,34 @@ def render_upload_page(s3_manager, processor):
             df = pd.read_csv(product_file)
             st.success(f"Loaded {len(df)} rows")
             
-            if st.button("Process Product Data"):
+            # Preview
+            with st.expander("Preview Data"):
+                st.dataframe(df.head(), use_container_width=True)
+            
+            if st.button("Process Product Data", key="process_product"):
                 processed = processor.clean_product_data(df)
-                st.session_state.product_data = processed
+                
+                # Add metadata
+                processed['Upload_Store'] = store_id
+                processed['Upload_Start_Date'] = pd.to_datetime(start_date)
+                processed['Upload_End_Date'] = pd.to_datetime(end_date)
+                
+                # Merge with existing data or replace
+                if st.session_state.product_data is not None:
+                    st.session_state.product_data = pd.concat([
+                        st.session_state.product_data,
+                        processed
+                    ]).drop_duplicates(subset=['Product Type', 'Upload_Store', 'Upload_Start_Date'], keep='last')
+                else:
+                    st.session_state.product_data = processed
                 
                 product_file.seek(0)
                 timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                if s3_manager.upload_file(product_file, f"raw-uploads/product_{timestamp}.csv"):
-                    st.success("✅ Uploaded to S3")
+                date_range_str = f"{start_date.strftime('%Y%m%d')}-{end_date.strftime('%Y%m%d')}"
+                s3_key = f"raw-uploads/{store_id}/product_{date_range_str}_{timestamp}.csv"
+                
+                if s3_manager.upload_file(product_file, s3_key):
+                    st.success(f"✅ Uploaded to S3: {s3_key}")
                 else:
                     st.info("Running locally (S3 not configured)")
                 
@@ -860,21 +968,58 @@ def render_upload_page(s3_manager, processor):
     
     with status_col1:
         if st.session_state.sales_data is not None:
-            st.success(f"✅ Sales: {len(st.session_state.sales_data)} records")
+            df = st.session_state.sales_data
+            stores = df['Store_ID'].unique().tolist() if 'Store_ID' in df.columns else ['Unknown']
+            st.success(f"✅ Sales: {len(df)} records")
+            st.caption(f"Stores: {', '.join(stores)}")
+            if 'Date' in df.columns:
+                st.caption(f"Date range: {df['Date'].min().strftime('%Y-%m-%d')} to {df['Date'].max().strftime('%Y-%m-%d')}")
         else:
             st.warning("❌ No sales data loaded")
     
     with status_col2:
         if st.session_state.brand_data is not None:
-            st.success(f"✅ Brands: {len(st.session_state.brand_data)} records")
+            df = st.session_state.brand_data
+            stores = df['Upload_Store'].unique().tolist() if 'Upload_Store' in df.columns else ['Unknown']
+            st.success(f"✅ Brands: {len(df)} records")
+            st.caption(f"Stores: {', '.join(stores)}")
         else:
             st.warning("❌ No brand data loaded")
     
     with status_col3:
         if st.session_state.product_data is not None:
-            st.success(f"✅ Products: {len(st.session_state.product_data)} records")
+            df = st.session_state.product_data
+            stores = df['Upload_Store'].unique().tolist() if 'Upload_Store' in df.columns else ['Unknown']
+            st.success(f"✅ Products: {len(df)} records")
+            st.caption(f"Stores: {', '.join(stores)}")
         else:
             st.warning("❌ No product data loaded")
+    
+    # Data management section
+    st.markdown("---")
+    st.subheader("🗂️ Data Management")
+    
+    mgmt_col1, mgmt_col2 = st.columns(2)
+    
+    with mgmt_col1:
+        if st.button("🗑️ Clear All Data", type="secondary"):
+            st.session_state.sales_data = None
+            st.session_state.brand_data = None
+            st.session_state.product_data = None
+            st.success("All data cleared!")
+            st.rerun()
+    
+    with mgmt_col2:
+        if st.session_state.sales_data is not None or st.session_state.brand_data is not None:
+            if st.button("📥 Export Combined Data"):
+                # Create a summary export
+                export_data = {
+                    'export_date': datetime.now().isoformat(),
+                    'sales_records': len(st.session_state.sales_data) if st.session_state.sales_data is not None else 0,
+                    'brand_records': len(st.session_state.brand_data) if st.session_state.brand_data is not None else 0,
+                    'product_records': len(st.session_state.product_data) if st.session_state.product_data is not None else 0,
+                }
+                st.json(export_data)
 
 
 if __name__ == "__main__":
