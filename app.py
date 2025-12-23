@@ -212,6 +212,43 @@ class S3DataManager:
         buffer.seek(0)
         
         return self.upload_file(buffer, s3_key)
+    
+    def save_brand_product_mapping(self, mapping: dict) -> tuple[bool, str]:
+        """Save brand-product mapping to S3."""
+        if not self.is_configured():
+            return False, self.connection_error or "S3 not configured"
+        
+        s3_key = "config/brand_product_mapping.json"
+        
+        try:
+            mapping_json = json.dumps(mapping, indent=2)
+            buffer = io.BytesIO(mapping_json.encode('utf-8'))
+            self.s3_client.upload_fileobj(buffer, self.bucket_name, s3_key)
+            return True, f"Saved mapping to s3://{self.bucket_name}/{s3_key}"
+        except ClientError as e:
+            error_msg = e.response.get('Error', {}).get('Message', str(e))
+            return False, f"Failed to save mapping: {error_msg}"
+        except Exception as e:
+            return False, f"Failed to save mapping: {e}"
+    
+    def load_brand_product_mapping(self) -> dict:
+        """Load brand-product mapping from S3."""
+        if not self.is_configured():
+            return {}
+        
+        s3_key = "config/brand_product_mapping.json"
+        
+        try:
+            response = self.s3_client.get_object(Bucket=self.bucket_name, Key=s3_key)
+            mapping_json = response['Body'].read().decode('utf-8')
+            return json.loads(mapping_json)
+        except ClientError as e:
+            if e.response['Error']['Code'] == 'NoSuchKey':
+                # No mapping file exists yet - that's OK
+                return {}
+            return {}
+        except Exception:
+            return {}
 
 
 # =============================================================================
@@ -583,6 +620,9 @@ def main():
         st.session_state.brand_data = None
     if 'product_data' not in st.session_state:
         st.session_state.product_data = None
+    if 'brand_product_mapping' not in st.session_state:
+        # Try to load from S3
+        st.session_state.brand_product_mapping = s3_manager.load_brand_product_mapping()
     
     # Sidebar
     with st.sidebar:
@@ -596,6 +636,7 @@ def main():
             "📈 Sales Analysis", 
             "🏷️ Brand Performance",
             "📦 Product Categories",
+            "🔗 Brand-Product Mapping",
             "💡 Recommendations",
             "📤 Data Upload"
         ])
@@ -633,6 +674,9 @@ def main():
     
     elif page == "📦 Product Categories":
         render_product_analysis(st.session_state, selected_store, date_range)
+    
+    elif page == "🔗 Brand-Product Mapping":
+        render_brand_product_mapping(st.session_state, s3_manager)
     
     elif page == "💡 Recommendations":
         render_recommendations(st.session_state, analytics)
@@ -1013,6 +1057,15 @@ def render_recommendations(state, analytics):
         
         st.success("✅ Claude AI connected")
         
+        # Get brand-product mapping
+        brand_product_mapping = state.brand_product_mapping or {}
+        mapping_count = len(brand_product_mapping)
+        
+        if mapping_count > 0:
+            st.info(f"🔗 Using {mapping_count} brand-product mappings for enhanced analysis")
+        else:
+            st.caption("💡 Tip: Set up Brand-Product Mappings for more detailed category insights")
+        
         # Prepare data summaries for Claude
         sales_summary = {
             'store_metrics': metrics,
@@ -1023,13 +1076,31 @@ def render_recommendations(state, analytics):
             'total_records': len(state.sales_data)
         }
         
+        # Enrich brand data with product category mapping
         brand_summary = []
+        brand_by_category = {}
         if state.brand_data is not None:
-            top_brands = state.brand_data.nlargest(30, 'Net Sales')[['Brand', 'Net Sales', 'Gross Margin %']].to_dict('records')
-            brand_summary = top_brands
+            top_brands_df = state.brand_data.nlargest(30, 'Net Sales')[['Brand', 'Net Sales', 'Gross Margin %']].copy()
+            
+            # Add product category from mapping
+            top_brands_df['Product_Category'] = top_brands_df['Brand'].map(brand_product_mapping).fillna('Unmapped')
+            brand_summary = top_brands_df.to_dict('records')
+            
+            # Aggregate by category for category-level insights
+            if brand_product_mapping:
+                all_brands_df = state.brand_data.copy()
+                all_brands_df['Product_Category'] = all_brands_df['Brand'].map(brand_product_mapping).fillna('Unmapped')
+                
+                category_agg = all_brands_df.groupby('Product_Category').agg({
+                    'Net Sales': 'sum',
+                    'Gross Margin %': 'mean',
+                    'Brand': 'count'
+                }).rename(columns={'Brand': 'Brand_Count'}).reset_index()
+                
+                brand_by_category = category_agg.to_dict('records')
         
         # AI Analysis Buttons
-        col1, col2, col3 = st.columns(3)
+        col1, col2, col3, col4 = st.columns(4)
         
         with col1:
             if st.button("📊 Analyze Sales Trends", use_container_width=True):
@@ -1044,19 +1115,35 @@ def render_recommendations(state, analytics):
                     st.warning("Upload brand data first.")
                 else:
                     with st.spinner("Claude is analyzing brand performance..."):
-                        analysis = claude.analyze_brand_performance(brand_summary)
+                        # Include category info in analysis
+                        analysis = claude.analyze_brand_performance(brand_summary, brand_by_category)
                         st.markdown("### Brand Analysis")
                         st.markdown(analysis)
         
         with col3:
+            if st.button("📦 Category Insights", use_container_width=True):
+                if not brand_by_category:
+                    st.warning("Set up brand-product mappings first to get category insights.")
+                else:
+                    with st.spinner("Claude is analyzing category performance..."):
+                        analysis = claude.analyze_category_performance(brand_by_category, brand_summary)
+                        st.markdown("### Category Analysis")
+                        st.markdown(analysis)
+        
+        with col4:
             if st.button("🎯 Deal Suggestions", use_container_width=True):
                 if state.brand_data is None:
                     st.warning("Upload brand data first.")
                 else:
                     with st.spinner("Claude is generating deal recommendations..."):
-                        # Find slow movers and high margin items
-                        slow_movers = state.brand_data.nsmallest(15, 'Net Sales')[['Brand', 'Net Sales', 'Gross Margin %']].to_dict('records')
-                        high_margin = state.brand_data[state.brand_data['Gross Margin %'] > 0.6].nlargest(15, 'Net Sales')[['Brand', 'Net Sales', 'Gross Margin %']].to_dict('records')
+                        # Find slow movers and high margin items with category info
+                        slow_df = state.brand_data.nsmallest(15, 'Net Sales')[['Brand', 'Net Sales', 'Gross Margin %']].copy()
+                        slow_df['Product_Category'] = slow_df['Brand'].map(brand_product_mapping).fillna('Unmapped')
+                        slow_movers = slow_df.to_dict('records')
+                        
+                        high_df = state.brand_data[state.brand_data['Gross Margin %'] > 0.6].nlargest(15, 'Net Sales')[['Brand', 'Net Sales', 'Gross Margin %']].copy()
+                        high_df['Product_Category'] = high_df['Brand'].map(brand_product_mapping).fillna('Unmapped')
+                        high_margin = high_df.to_dict('records')
                         
                         analysis = claude.generate_deal_recommendations(slow_movers, high_margin)
                         st.markdown("### Deal Recommendations")
@@ -1069,17 +1156,279 @@ def render_recommendations(state, analytics):
         question = st.text_input("Ask anything about your sales, brands, or business strategy:")
         
         if question:
-            # Prepare context
+            # Prepare context with mapping
             context = {
                 'sales_summary': sales_summary,
                 'top_brands': brand_summary[:20] if brand_summary else [],
-                'product_mix': state.product_data.to_dict('records') if state.product_data is not None else []
+                'product_mix': state.product_data.to_dict('records') if state.product_data is not None else [],
+                'brand_by_category': brand_by_category if brand_by_category else [],
+                'brand_product_mapping_sample': dict(list(brand_product_mapping.items())[:30]) if brand_product_mapping else {}
             }
             
             with st.spinner("Thinking..."):
                 answer = claude.answer_business_question(question, context)
                 st.markdown("### Answer")
                 st.markdown(answer)
+
+
+def render_brand_product_mapping(state, s3_manager):
+    """Render brand-product mapping configuration page."""
+    st.header("🔗 Brand-Product Mapping")
+    
+    st.markdown("""
+    Link brands to their product categories. This helps the AI provide more accurate 
+    insights by understanding which brands sell which types of products.
+    """)
+    
+    # Check if we have brand data
+    if state.brand_data is None:
+        st.warning("Please upload brand data first to set up mappings.")
+        return
+    
+    # Get unique brands from the data
+    brands = state.brand_data['Brand'].unique().tolist()
+    brands = sorted([b for b in brands if pd.notna(b) and str(b).strip()])
+    
+    # Define product categories (from your data)
+    product_categories = [
+        "FLOWER",
+        "PREROLL", 
+        "CARTRIDGE",
+        "EDIBLE",
+        "EXTRACT",
+        "BEVERAGE",
+        "TINCTURE",
+        "TOPICAL",
+        "PILL",
+        "MERCH",
+        "OTHER"
+    ]
+    
+    # Get current mapping from session state
+    current_mapping = state.brand_product_mapping or {}
+    
+    # Stats
+    mapped_count = len([b for b in brands if b in current_mapping])
+    st.info(f"📊 **{mapped_count}** of **{len(brands)}** brands mapped ({100*mapped_count/len(brands):.1f}%)")
+    
+    # Tabs for different views
+    tab1, tab2, tab3 = st.tabs(["🔧 Quick Mapping", "📋 Bulk Edit", "📊 View Mappings"])
+    
+    with tab1:
+        st.subheader("Quick Mapping")
+        st.markdown("Select a brand and assign it to a product category.")
+        
+        col1, col2, col3 = st.columns([2, 2, 1])
+        
+        with col1:
+            # Filter for unmapped brands option
+            show_unmapped_only = st.checkbox("Show unmapped brands only", value=True)
+            
+            if show_unmapped_only:
+                available_brands = [b for b in brands if b not in current_mapping]
+            else:
+                available_brands = brands
+            
+            if not available_brands:
+                st.success("✅ All brands are mapped!")
+                selected_brand = None
+            else:
+                selected_brand = st.selectbox(
+                    "Select Brand",
+                    options=available_brands,
+                    key="quick_map_brand"
+                )
+        
+        with col2:
+            if selected_brand:
+                # Show current mapping if exists
+                current_cat = current_mapping.get(selected_brand, None)
+                default_idx = product_categories.index(current_cat) if current_cat in product_categories else 0
+                
+                selected_category = st.selectbox(
+                    "Assign to Category",
+                    options=product_categories,
+                    index=default_idx,
+                    key="quick_map_category"
+                )
+        
+        with col3:
+            if selected_brand:
+                st.markdown("<br>", unsafe_allow_html=True)
+                if st.button("💾 Save", key="quick_save", use_container_width=True):
+                    current_mapping[selected_brand] = selected_category
+                    state.brand_product_mapping = current_mapping
+                    
+                    # Save to S3
+                    success, message = s3_manager.save_brand_product_mapping(current_mapping)
+                    if success:
+                        st.success(f"✅ Mapped '{selected_brand}' → {selected_category}")
+                    else:
+                        st.warning(f"Saved locally. S3: {message}")
+                    st.rerun()
+    
+    with tab2:
+        st.subheader("Bulk Edit")
+        st.markdown("Edit multiple brand mappings at once. Changes are saved when you click 'Save All'.")
+        
+        # Filter options
+        filter_col1, filter_col2 = st.columns(2)
+        with filter_col1:
+            filter_category = st.selectbox(
+                "Filter by category",
+                options=["All Categories"] + product_categories + ["Unmapped"],
+                key="bulk_filter_cat"
+            )
+        with filter_col2:
+            search_term = st.text_input("Search brands", key="bulk_search")
+        
+        # Filter brands
+        filtered_brands = brands.copy()
+        
+        if filter_category == "Unmapped":
+            filtered_brands = [b for b in filtered_brands if b not in current_mapping]
+        elif filter_category != "All Categories":
+            filtered_brands = [b for b in filtered_brands if current_mapping.get(b) == filter_category]
+        
+        if search_term:
+            filtered_brands = [b for b in filtered_brands if search_term.lower() in b.lower()]
+        
+        st.caption(f"Showing {len(filtered_brands)} brands")
+        
+        # Create editable mapping
+        if filtered_brands:
+            # Show in batches of 20
+            batch_size = 20
+            total_batches = (len(filtered_brands) + batch_size - 1) // batch_size
+            
+            if total_batches > 1:
+                batch_num = st.number_input("Page", min_value=1, max_value=total_batches, value=1, key="bulk_page")
+            else:
+                batch_num = 1
+            
+            start_idx = (batch_num - 1) * batch_size
+            end_idx = min(start_idx + batch_size, len(filtered_brands))
+            batch_brands = filtered_brands[start_idx:end_idx]
+            
+            # Store changes temporarily
+            if 'bulk_changes' not in st.session_state:
+                st.session_state.bulk_changes = {}
+            
+            for brand in batch_brands:
+                col1, col2 = st.columns([3, 2])
+                with col1:
+                    st.text(brand)
+                with col2:
+                    current_cat = current_mapping.get(brand, "")
+                    default_idx = product_categories.index(current_cat) if current_cat in product_categories else len(product_categories)
+                    
+                    new_cat = st.selectbox(
+                        "Category",
+                        options=product_categories + ["-- Not Mapped --"],
+                        index=default_idx if current_cat else len(product_categories),
+                        key=f"bulk_{brand}",
+                        label_visibility="collapsed"
+                    )
+                    
+                    if new_cat != "-- Not Mapped --":
+                        st.session_state.bulk_changes[brand] = new_cat
+                    elif brand in st.session_state.bulk_changes:
+                        del st.session_state.bulk_changes[brand]
+            
+            st.markdown("---")
+            
+            if st.button("💾 Save All Changes", key="bulk_save", type="primary"):
+                # Apply all changes
+                for brand, category in st.session_state.bulk_changes.items():
+                    current_mapping[brand] = category
+                
+                state.brand_product_mapping = current_mapping
+                
+                # Save to S3
+                success, message = s3_manager.save_brand_product_mapping(current_mapping)
+                if success:
+                    st.success(f"✅ Saved {len(st.session_state.bulk_changes)} mappings")
+                else:
+                    st.warning(f"Saved locally. S3: {message}")
+                
+                st.session_state.bulk_changes = {}
+                st.rerun()
+    
+    with tab3:
+        st.subheader("Current Mappings")
+        
+        if not current_mapping:
+            st.info("No mappings configured yet. Use the Quick Mapping or Bulk Edit tabs to get started.")
+        else:
+            # Group by category
+            by_category = {}
+            for brand, category in current_mapping.items():
+                if category not in by_category:
+                    by_category[category] = []
+                by_category[category].append(brand)
+            
+            # Display summary
+            summary_data = []
+            for cat in product_categories:
+                brands_in_cat = by_category.get(cat, [])
+                summary_data.append({
+                    "Category": cat,
+                    "Brand Count": len(brands_in_cat),
+                    "Brands": ", ".join(sorted(brands_in_cat)[:5]) + ("..." if len(brands_in_cat) > 5 else "")
+                })
+            
+            st.dataframe(
+                pd.DataFrame(summary_data),
+                use_container_width=True,
+                hide_index=True
+            )
+            
+            # Export/Import options
+            st.markdown("---")
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # Export
+                mapping_json = json.dumps(current_mapping, indent=2)
+                st.download_button(
+                    "📥 Export Mappings (JSON)",
+                    mapping_json,
+                    "brand_product_mapping.json",
+                    "application/json"
+                )
+            
+            with col2:
+                # Import
+                uploaded_mapping = st.file_uploader(
+                    "📤 Import Mappings (JSON)",
+                    type=['json'],
+                    key="import_mapping"
+                )
+                
+                if uploaded_mapping:
+                    try:
+                        imported = json.load(uploaded_mapping)
+                        if isinstance(imported, dict):
+                            if st.button("Apply Imported Mappings"):
+                                state.brand_product_mapping = imported
+                                success, message = s3_manager.save_brand_product_mapping(imported)
+                                if success:
+                                    st.success(f"✅ Imported {len(imported)} mappings")
+                                else:
+                                    st.warning(f"Saved locally. S3: {message}")
+                                st.rerun()
+                        else:
+                            st.error("Invalid mapping format")
+                    except json.JSONDecodeError:
+                        st.error("Invalid JSON file")
+            
+            # Clear all option
+            st.markdown("---")
+            if st.button("🗑️ Clear All Mappings", type="secondary"):
+                state.brand_product_mapping = {}
+                s3_manager.save_brand_product_mapping({})
+                st.success("All mappings cleared")
+                st.rerun()
 
 
 def render_upload_page(s3_manager, processor):
