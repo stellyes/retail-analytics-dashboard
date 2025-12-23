@@ -629,10 +629,10 @@ def main():
         render_sales_analysis(st.session_state, selected_store)
     
     elif page == "🏷️ Brand Performance":
-        render_brand_analysis(st.session_state, analytics, selected_store)
+        render_brand_analysis(st.session_state, analytics, selected_store, date_range)
     
     elif page == "📦 Product Categories":
-        render_product_analysis(st.session_state)
+        render_product_analysis(st.session_state, selected_store, date_range)
     
     elif page == "💡 Recommendations":
         render_recommendations(st.session_state, analytics)
@@ -755,7 +755,7 @@ def render_sales_analysis(state, store_filter):
         st.download_button("📥 Download Data", csv, "sales_data.csv", "text/csv")
 
 
-def render_brand_analysis(state, analytics, store_filter):
+def render_brand_analysis(state, analytics, store_filter, date_filter=None):
     """Render brand performance analysis page."""
     st.header("Brand Performance Analysis")
     
@@ -764,6 +764,41 @@ def render_brand_analysis(state, analytics, store_filter):
         return
     
     df = state.brand_data.copy()
+    
+    # Show available date ranges in the data
+    if 'Upload_Start_Date' in df.columns and 'Upload_End_Date' in df.columns:
+        date_ranges = df.groupby(['Upload_Start_Date', 'Upload_End_Date', 'Upload_Store']).size().reset_index(name='records')
+        
+        with st.expander("📅 Available Data Periods", expanded=False):
+            for _, row in date_ranges.iterrows():
+                start = row['Upload_Start_Date'].strftime('%m/%d/%Y') if pd.notna(row['Upload_Start_Date']) else 'Unknown'
+                end = row['Upload_End_Date'].strftime('%m/%d/%Y') if pd.notna(row['Upload_End_Date']) else 'Unknown'
+                store = row['Upload_Store']
+                st.text(f"  • {store}: {start} - {end} ({row['records']} brands)")
+        
+        # Filter by date range if provided
+        if date_filter and len(date_filter) == 2:
+            filter_start, filter_end = date_filter
+            filter_start = pd.to_datetime(filter_start)
+            filter_end = pd.to_datetime(filter_end)
+            
+            # Keep data where upload period overlaps with filter period
+            df = df[
+                (df['Upload_Start_Date'] <= filter_end) & 
+                (df['Upload_End_Date'] >= filter_start)
+            ]
+            
+            if len(df) == 0:
+                st.warning(f"No brand data available for the selected date range ({filter_start.strftime('%m/%d/%Y')} - {filter_end.strftime('%m/%d/%Y')})")
+                return
+            
+            st.info(f"📅 Showing data for: {filter_start.strftime('%m/%d/%Y')} - {filter_end.strftime('%m/%d/%Y')}")
+    
+    # Filter by store if specified
+    if store_filter and store_filter != 'All Stores':
+        store_id = [k for k, v in STORE_DISPLAY_NAMES.items() if v == store_filter]
+        if store_id and 'Upload_Store' in df.columns:
+            df = df[df['Upload_Store'] == store_id[0]]
     
     # Top performers
     st.subheader("Top Performing Brands")
@@ -839,7 +874,7 @@ def render_brand_analysis(state, analytics, store_filter):
         """)
 
 
-def render_product_analysis(state):
+def render_product_analysis(state, store_filter=None, date_filter=None):
     """Render product category analysis page."""
     st.header("Product Category Analysis")
     
@@ -848,6 +883,41 @@ def render_product_analysis(state):
         return
     
     df = state.product_data.copy()
+    
+    # Show available date ranges in the data
+    if 'Upload_Start_Date' in df.columns and 'Upload_End_Date' in df.columns:
+        date_ranges = df.groupby(['Upload_Start_Date', 'Upload_End_Date', 'Upload_Store']).size().reset_index(name='records')
+        
+        with st.expander("📅 Available Data Periods", expanded=False):
+            for _, row in date_ranges.iterrows():
+                start = row['Upload_Start_Date'].strftime('%m/%d/%Y') if pd.notna(row['Upload_Start_Date']) else 'Unknown'
+                end = row['Upload_End_Date'].strftime('%m/%d/%Y') if pd.notna(row['Upload_End_Date']) else 'Unknown'
+                store = row['Upload_Store']
+                st.text(f"  • {store}: {start} - {end} ({row['records']} categories)")
+        
+        # Filter by date range if provided
+        if date_filter and len(date_filter) == 2:
+            filter_start, filter_end = date_filter
+            filter_start = pd.to_datetime(filter_start)
+            filter_end = pd.to_datetime(filter_end)
+            
+            # Keep data where upload period overlaps with filter period
+            df = df[
+                (df['Upload_Start_Date'] <= filter_end) & 
+                (df['Upload_End_Date'] >= filter_start)
+            ]
+            
+            if len(df) == 0:
+                st.warning(f"No product data available for the selected date range ({filter_start.strftime('%m/%d/%Y')} - {filter_end.strftime('%m/%d/%Y')})")
+                return
+            
+            st.info(f"📅 Showing data for: {filter_start.strftime('%m/%d/%Y')} - {filter_end.strftime('%m/%d/%Y')}")
+    
+    # Filter by store if specified
+    if store_filter and store_filter != 'All Stores':
+        store_id = [k for k, v in STORE_DISPLAY_NAMES.items() if v == store_filter]
+        if store_id and 'Upload_Store' in df.columns:
+            df = df[df['Upload_Store'] == store_id[0]]
     
     col1, col2 = st.columns(2)
     
@@ -1290,7 +1360,7 @@ def render_upload_page(s3_manager, processor):
             st.success(f"✅ Sales: {len(df)} records")
             st.caption(f"Stores: {', '.join(stores)}")
             if 'Date' in df.columns:
-                st.caption(f"Date range: {df['Date'].min().strftime('%Y-%m-%d')} to {df['Date'].max().strftime('%Y-%m-%d')}")
+                st.caption(f"📅 {df['Date'].min().strftime('%m/%d/%Y')} - {df['Date'].max().strftime('%m/%d/%Y')}")
         else:
             st.warning("❌ No sales data loaded")
     
@@ -1300,6 +1370,14 @@ def render_upload_page(s3_manager, processor):
             stores = df['Upload_Store'].unique().tolist() if 'Upload_Store' in df.columns else ['Unknown']
             st.success(f"✅ Brands: {len(df)} records")
             st.caption(f"Stores: {', '.join(stores)}")
+            if 'Upload_Start_Date' in df.columns and 'Upload_End_Date' in df.columns:
+                # Show all unique date ranges
+                for store in stores:
+                    store_df = df[df['Upload_Store'] == store] if 'Upload_Store' in df.columns else df
+                    start = store_df['Upload_Start_Date'].min()
+                    end = store_df['Upload_End_Date'].max()
+                    if pd.notna(start) and pd.notna(end):
+                        st.caption(f"📅 {store}: {start.strftime('%m/%d/%Y')} - {end.strftime('%m/%d/%Y')}")
         else:
             st.warning("❌ No brand data loaded")
     
@@ -1309,6 +1387,14 @@ def render_upload_page(s3_manager, processor):
             stores = df['Upload_Store'].unique().tolist() if 'Upload_Store' in df.columns else ['Unknown']
             st.success(f"✅ Products: {len(df)} records")
             st.caption(f"Stores: {', '.join(stores)}")
+            if 'Upload_Start_Date' in df.columns and 'Upload_End_Date' in df.columns:
+                # Show all unique date ranges
+                for store in stores:
+                    store_df = df[df['Upload_Store'] == store] if 'Upload_Store' in df.columns else df
+                    start = store_df['Upload_Start_Date'].min()
+                    end = store_df['Upload_End_Date'].max()
+                    if pd.notna(start) and pd.notna(end):
+                        st.caption(f"📅 {store}: {start.strftime('%m/%d/%Y')} - {end.strftime('%m/%d/%Y')}")
         else:
             st.warning("❌ No product data loaded")
     
