@@ -32,14 +32,16 @@ st.set_page_config(
 STORE_MAPPING = {
     "Barbary Coast - SF Mission": "barbary_coast",
     "Grass Roots - SF": "grass_roots",
-    "[DS]": "barbary_coast",  # Likely Dispensary Store prefix
-    "[SS]": "grass_roots",     # Likely Second Store prefix
 }
 
 STORE_DISPLAY_NAMES = {
     "barbary_coast": "Barbary Coast",
     "grass_roots": "Grass Roots"
 }
+
+# Sample prefixes to filter out (not actual sales)
+# [DS] = Display Samples, [SS] = Staff Samples
+SAMPLE_PREFIXES = ["[DS]", "[SS]"]
 
 # =============================================================================
 # AUTHENTICATION
@@ -199,24 +201,26 @@ class DataProcessor:
         """Clean and process Net Sales by Brand data."""
         df = df.copy()
         
-        # Extract store prefix from brand name
-        def extract_store(brand):
-            if str(brand).startswith('[DS]'):
-                return 'barbary_coast'
-            elif str(brand).startswith('[SS]'):
-                return 'grass_roots'
-            return 'combined'
+        # Filter out sample records ([DS] = Display Samples, [SS] = Staff Samples)
+        # These are not actual sales and should be excluded from analysis
+        original_count = len(df)
+        df = df[~df['Brand'].str.startswith(('[DS]', '[SS]'), na=False)]
+        filtered_count = original_count - len(df)
         
-        df['Store_ID'] = df['Brand'].apply(extract_store)
+        if filtered_count > 0:
+            print(f"Filtered out {filtered_count} sample records ([DS]/[SS])")
         
-        # Clean brand name (remove store prefix)
-        df['Brand_Clean'] = df['Brand'].str.replace(r'^\[(DS|SS)\]\s*', '', regex=True)
+        # Clean brand name (remove any remaining prefixes like numbers in parentheses)
+        df['Brand_Clean'] = df['Brand'].str.strip()
         
         # Ensure numeric columns
         numeric_cols = ['% of Total Net Sales', 'Gross Margin %', 'Avg Cost (w/o excise)', 'Net Sales']
         for col in numeric_cols:
             if col in df.columns:
                 df[col] = pd.to_numeric(df[col], errors='coerce')
+        
+        # Filter out rows with zero or negative net sales (likely adjustments/corrections)
+        df = df[df['Net Sales'] > 0]
         
         return df
     
@@ -263,7 +267,11 @@ class AnalyticsEngine:
         if store and store != 'All Stores':
             store_id = [k for k, v in STORE_DISPLAY_NAMES.items() if v == store]
             if store_id:
-                df = df[df['Store_ID'] == store_id[0]]
+                # Check for Store_ID first, then Upload_Store
+                if 'Store_ID' in df.columns:
+                    df = df[df['Store_ID'] == store_id[0]]
+                elif 'Upload_Store' in df.columns:
+                    df = df[df['Upload_Store'] == store_id[0]]
         
         return df.nlargest(n, 'Net Sales')[['Brand', 'Net Sales', 'Gross Margin %', '% of Total Net Sales']]
     
@@ -880,12 +888,22 @@ def render_upload_page(s3_manager, processor):
             df = pd.read_csv(brand_file)
             st.success(f"Loaded {len(df)} rows")
             
+            # Show sample record count that will be filtered
+            sample_count = df['Brand'].str.startswith(('[DS]', '[SS]'), na=False).sum()
+            if sample_count > 0:
+                st.info(f"ℹ️ {sample_count} sample records ([DS]/[SS]) will be filtered out")
+            
             # Preview
             with st.expander("Preview Data"):
                 st.dataframe(df.head(), use_container_width=True)
             
             if st.button("Process Brand Data", key="process_brand"):
+                original_count = len(df)
                 processed = processor.clean_brand_data(df)
+                filtered_count = original_count - len(processed)
+                
+                if filtered_count > 0:
+                    st.info(f"Filtered out {filtered_count} records (samples + zero/negative sales)")
                 
                 # Add metadata
                 processed['Upload_Store'] = store_id
