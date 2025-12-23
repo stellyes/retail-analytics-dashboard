@@ -96,17 +96,37 @@ class S3DataManager:
     """Manages data persistence with AWS S3."""
     
     def __init__(self):
-        self.bucket_name = os.environ.get("S3_BUCKET_NAME", "your-retail-analytics-bucket")
+        self.bucket_name = None
         self.s3_client = None
+        self.connection_error = None
         self._initialize_client()
     
     def _initialize_client(self):
         """Initialize S3 client with credentials from environment or Streamlit secrets."""
         try:
             # Try environment variables first, then Streamlit secrets
-            aws_access_key = os.environ.get("AWS_ACCESS_KEY_ID") or st.secrets.get("aws", {}).get("access_key_id")
-            aws_secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY") or st.secrets.get("aws", {}).get("secret_access_key")
+            aws_access_key = os.environ.get("AWS_ACCESS_KEY_ID")
+            aws_secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
             aws_region = os.environ.get("AWS_DEFAULT_REGION", "us-west-2")
+            bucket_name = os.environ.get("S3_BUCKET_NAME")
+            
+            # Fall back to Streamlit secrets
+            if not aws_access_key:
+                try:
+                    aws_secrets = st.secrets.get("aws", {})
+                    aws_access_key = aws_secrets.get("access_key_id")
+                    aws_secret_key = aws_secrets.get("secret_access_key")
+                    aws_region = aws_secrets.get("region", "us-west-2")
+                    bucket_name = aws_secrets.get("bucket_name")
+                except Exception as e:
+                    self.connection_error = f"Could not read secrets: {e}"
+                    return
+            
+            if not bucket_name:
+                self.connection_error = "No bucket_name configured in secrets.toml [aws] section"
+                return
+            
+            self.bucket_name = bucket_name
             
             if aws_access_key and aws_secret_key:
                 self.s3_client = boto3.client(
@@ -116,26 +136,51 @@ class S3DataManager:
                     region_name=aws_region
                 )
             else:
-                # Try default credentials (IAM role, etc.)
-                self.s3_client = boto3.client('s3')
+                self.connection_error = "Missing AWS credentials (access_key_id or secret_access_key)"
+                return
+                
         except Exception as e:
-            st.warning(f"S3 connection not configured. Running in local mode. Error: {e}")
+            self.connection_error = f"S3 initialization error: {e}"
             self.s3_client = None
     
-    def upload_file(self, file_obj, s3_key: str) -> bool:
-        """Upload a file to S3."""
-        if not self.s3_client:
-            return False
+    def is_configured(self) -> bool:
+        """Check if S3 is properly configured."""
+        return self.s3_client is not None and self.bucket_name is not None
+    
+    def test_connection(self) -> tuple[bool, str]:
+        """Test S3 connection by attempting to list bucket contents."""
+        if not self.is_configured():
+            return False, self.connection_error or "S3 not configured"
+        
+        try:
+            # Try to list objects (even empty bucket should work)
+            self.s3_client.list_objects_v2(Bucket=self.bucket_name, MaxKeys=1)
+            return True, f"Connected to bucket: {self.bucket_name}"
+        except ClientError as e:
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            error_msg = e.response.get('Error', {}).get('Message', str(e))
+            return False, f"S3 Error ({error_code}): {error_msg}"
+        except Exception as e:
+            return False, f"Connection test failed: {e}"
+    
+    def upload_file(self, file_obj, s3_key: str) -> tuple[bool, str]:
+        """Upload a file to S3. Returns (success, message)."""
+        if not self.is_configured():
+            return False, self.connection_error or "S3 not configured"
+        
         try:
             self.s3_client.upload_fileobj(file_obj, self.bucket_name, s3_key)
-            return True
+            return True, f"Uploaded to s3://{self.bucket_name}/{s3_key}"
         except ClientError as e:
-            st.error(f"Upload failed: {e}")
-            return False
+            error_code = e.response.get('Error', {}).get('Code', 'Unknown')
+            error_msg = e.response.get('Error', {}).get('Message', str(e))
+            return False, f"Upload failed ({error_code}): {error_msg}"
+        except Exception as e:
+            return False, f"Upload failed: {e}"
     
     def download_file(self, s3_key: str) -> pd.DataFrame:
         """Download a CSV file from S3 and return as DataFrame."""
-        if not self.s3_client:
+        if not self.is_configured():
             return None
         try:
             response = self.s3_client.get_object(Bucket=self.bucket_name, Key=s3_key)
@@ -148,7 +193,7 @@ class S3DataManager:
     
     def list_files(self, prefix: str = "") -> list:
         """List files in S3 bucket with given prefix."""
-        if not self.s3_client:
+        if not self.is_configured():
             return []
         try:
             response = self.s3_client.list_objects_v2(Bucket=self.bucket_name, Prefix=prefix)
@@ -157,7 +202,7 @@ class S3DataManager:
             st.error(f"List failed: {e}")
             return []
     
-    def save_processed_data(self, df: pd.DataFrame, data_type: str, store: str = "combined"):
+    def save_processed_data(self, df: pd.DataFrame, data_type: str, store: str = "combined") -> tuple[bool, str]:
         """Save processed data to S3."""
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         s3_key = f"processed/{store}/{data_type}_{timestamp}.csv"
@@ -404,30 +449,68 @@ def plot_category_breakdown(df: pd.DataFrame):
 
 def plot_brand_performance(df: pd.DataFrame, top_n: int = 15):
     """Create brand performance visualization."""
-    top_brands = df.nlargest(top_n, 'Net Sales')
+    top_brands = df.nlargest(top_n, 'Net Sales').copy()
+    
+    # Convert margin to percentage for display
+    top_brands['Margin_Pct'] = top_brands['Gross Margin %'] * 100
     
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     
+    # Bar chart for Net Sales
     fig.add_trace(
-        go.Bar(x=top_brands['Brand'], y=top_brands['Net Sales'],
-               name='Net Sales', marker_color='steelblue'),
+        go.Bar(
+            x=top_brands['Brand'], 
+            y=top_brands['Net Sales'],
+            name='Net Sales', 
+            marker_color='steelblue',
+            hovertemplate='<b>%{x}</b><br>Net Sales: $%{y:,.0f}<extra></extra>'
+        ),
         secondary_y=False
     )
     
+    # Scatter plot for Gross Margin (markers only, no line)
     fig.add_trace(
-        go.Scatter(x=top_brands['Brand'], y=top_brands['Gross Margin %'] * 100,
-                   name='Gross Margin %', mode='lines+markers',
-                   marker_color='coral', line=dict(width=2)),
+        go.Scatter(
+            x=top_brands['Brand'], 
+            y=top_brands['Margin_Pct'],
+            name='Gross Margin %', 
+            mode='markers',  # Markers only - no connecting line
+            marker=dict(
+                color='coral',
+                size=12,
+                symbol='diamond',
+                line=dict(width=1, color='white')
+            ),
+            hovertemplate='<b>%{x}</b><br>Margin: %{y:.1f}%<extra></extra>'
+        ),
         secondary_y=True
+    )
+    
+    # Add a reference line for target margin (e.g., 55%)
+    fig.add_hline(
+        y=55, 
+        line_dash="dash", 
+        line_color="rgba(255,255,255,0.3)",
+        secondary_y=True,
+        annotation_text="55% Target",
+        annotation_position="right"
     )
     
     fig.update_layout(
         title=f'Top {top_n} Brands by Net Sales with Margin Overlay',
         xaxis_tickangle=-45,
-        height=500
+        height=500,
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1
+        ),
+        hovermode='x unified'
     )
     fig.update_yaxes(title_text="Net Sales ($)", secondary_y=False)
-    fig.update_yaxes(title_text="Gross Margin (%)", secondary_y=True)
+    fig.update_yaxes(title_text="Gross Margin (%)", range=[40, 90], secondary_y=True)
     
     return fig
 
@@ -707,18 +790,53 @@ def render_brand_analysis(state, analytics, store_filter):
     
     # Filter to significant brands
     significant_brands = df[df['Net Sales'] > 10000].copy()
+    significant_brands['Margin_Pct'] = significant_brands['Gross Margin %'] * 100
     
-    fig = px.scatter(significant_brands, 
-                    x='Net Sales', 
-                    y='Gross Margin %',
-                    hover_data=['Brand'],
-                    title='Brand Positioning: Sales vs Margin',
-                    log_x=True)
+    # Color by margin performance
+    fig = px.scatter(
+        significant_brands, 
+        x='Net Sales', 
+        y='Margin_Pct',
+        hover_name='Brand',
+        color='Margin_Pct',
+        color_continuous_scale='RdYlGn',  # Red (low) to Green (high)
+        size='Net Sales',
+        size_max=30,
+        title='Brand Positioning: Sales vs Margin',
+        log_x=True,
+        labels={'Margin_Pct': 'Gross Margin %', 'Net Sales': 'Net Sales ($)'}
+    )
     
     # Add quadrant lines
-    fig.add_hline(y=0.55, line_dash="dash", line_color="gray", annotation_text="Target Margin")
+    fig.add_hline(
+        y=55, 
+        line_dash="dash", 
+        line_color="rgba(255,255,255,0.5)", 
+        annotation_text="55% Target Margin",
+        annotation_position="right"
+    )
+    
+    fig.update_layout(
+        height=500,
+        coloraxis_colorbar=dict(title="Margin %")
+    )
     
     st.plotly_chart(fig, use_container_width=True)
+    
+    # Add interpretation help
+    with st.expander("📖 How to read this chart"):
+        st.markdown("""
+        - **X-axis (horizontal)**: Net Sales in dollars (log scale)
+        - **Y-axis (vertical)**: Gross Margin percentage
+        - **Bubble size**: Larger = higher sales volume
+        - **Color**: Green = high margin, Red = low margin
+        
+        **Quadrants:**
+        - **Top-right**: Stars (high sales + high margin) ✅
+        - **Top-left**: Niche winners (low sales but high margin)
+        - **Bottom-right**: Volume drivers (high sales but low margin) - watch closely
+        - **Bottom-left**: Consider discontinuing ⚠️
+        """)
 
 
 def render_product_analysis(state):
@@ -898,6 +1016,44 @@ def render_upload_page(s3_manager, processor):
     """Render data upload page."""
     st.header("📤 Data Upload")
     
+    # S3 Connection Status
+    st.subheader("☁️ S3 Storage Status")
+    
+    s3_connected, s3_message = s3_manager.test_connection()
+    
+    if s3_connected:
+        st.success(f"✅ {s3_message}")
+        
+        # Show existing files in bucket
+        with st.expander("📂 Files in S3 Bucket"):
+            files = s3_manager.list_files()
+            if files:
+                for f in files[:50]:  # Limit to 50 files
+                    st.text(f"  {f}")
+                if len(files) > 50:
+                    st.text(f"  ... and {len(files) - 50} more files")
+            else:
+                st.info("Bucket is empty - no files uploaded yet")
+    else:
+        st.error(f"❌ S3 Not Connected: {s3_message}")
+        st.markdown("""
+        **To fix this, check your `.streamlit/secrets.toml`:**
+        ```toml
+        [aws]
+        access_key_id = "AKIA..."
+        secret_access_key = "your_secret_key..."
+        region = "us-west-2"
+        bucket_name = "retail-data-bcgr"
+        ```
+        
+        Make sure:
+        1. All four values are filled in
+        2. The IAM user has `s3:PutObject`, `s3:GetObject`, `s3:ListBucket` permissions
+        3. The bucket name matches exactly (case-sensitive)
+        """)
+    
+    st.markdown("---")
+    
     st.markdown("""
     Upload your CSV files to update the dashboard. Supported file types:
     - **Sales by Store**: Daily transaction and revenue data
@@ -1009,10 +1165,12 @@ def render_upload_page(s3_manager, processor):
                 date_range_str = f"{start_date.strftime('%Y%m%d')}-{end_date.strftime('%Y%m%d')}"
                 s3_key = f"raw-uploads/{store_id}/sales_{date_range_str}_{timestamp}.csv"
                 
-                if s3_manager.upload_file(sales_file, s3_key):
-                    st.success(f"✅ Uploaded to S3: {s3_key}")
+                success, message = s3_manager.upload_file(sales_file, s3_key)
+                if success:
+                    st.success(f"✅ {message}")
                 else:
-                    st.info("Running locally (S3 not configured)")
+                    st.warning(f"⚠️ S3 upload failed: {message}")
+                    st.info("Data processed locally but NOT saved to S3")
                 
                 st.success("✅ Data processed and ready!")
                 st.rerun()
@@ -1065,10 +1223,12 @@ def render_upload_page(s3_manager, processor):
                 date_range_str = f"{start_date.strftime('%Y%m%d')}-{end_date.strftime('%Y%m%d')}"
                 s3_key = f"raw-uploads/{store_id}/brand_{date_range_str}_{timestamp}.csv"
                 
-                if s3_manager.upload_file(brand_file, s3_key):
-                    st.success(f"✅ Uploaded to S3: {s3_key}")
+                success, message = s3_manager.upload_file(brand_file, s3_key)
+                if success:
+                    st.success(f"✅ {message}")
                 else:
-                    st.info("Running locally (S3 not configured)")
+                    st.warning(f"⚠️ S3 upload failed: {message}")
+                    st.info("Data processed locally but NOT saved to S3")
                 
                 st.success("✅ Data processed!")
                 st.rerun()
@@ -1107,10 +1267,12 @@ def render_upload_page(s3_manager, processor):
                 date_range_str = f"{start_date.strftime('%Y%m%d')}-{end_date.strftime('%Y%m%d')}"
                 s3_key = f"raw-uploads/{store_id}/product_{date_range_str}_{timestamp}.csv"
                 
-                if s3_manager.upload_file(product_file, s3_key):
-                    st.success(f"✅ Uploaded to S3: {s3_key}")
+                success, message = s3_manager.upload_file(product_file, s3_key)
+                if success:
+                    st.success(f"✅ {message}")
                 else:
-                    st.info("Running locally (S3 not configured)")
+                    st.warning(f"⚠️ S3 upload failed: {message}")
+                    st.info("Data processed locally but NOT saved to S3")
                 
                 st.success("✅ Data processed!")
                 st.rerun()
