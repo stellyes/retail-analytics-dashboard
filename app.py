@@ -249,6 +249,153 @@ class S3DataManager:
             return {}
         except Exception:
             return {}
+    
+    def load_all_data_from_s3(self, processor) -> dict:
+        """
+        Load all uploaded data from S3 and return merged DataFrames.
+        
+        Args:
+            processor: DataProcessor instance for cleaning data
+            
+        Returns:
+            Dict with 'sales', 'brand', 'product' DataFrames (or None if no data)
+        """
+        if not self.is_configured():
+            return {'sales': None, 'brand': None, 'product': None}
+        
+        result = {'sales': None, 'brand': None, 'product': None}
+        
+        try:
+            # List all files in raw-uploads
+            files = self.list_files(prefix="raw-uploads/")
+            
+            if not files:
+                return result
+            
+            # Group files by type
+            sales_files = [f for f in files if '/sales_' in f and f.endswith('.csv')]
+            brand_files = [f for f in files if '/brand_' in f and f.endswith('.csv')]
+            product_files = [f for f in files if '/product_' in f and f.endswith('.csv')]
+            
+            # Load and merge sales data
+            if sales_files:
+                sales_dfs = []
+                for f in sales_files:
+                    try:
+                        df = self.download_file(f)
+                        if df is not None and not df.empty:
+                            # Extract store from path
+                            store_id = self._extract_store_from_path(f)
+                            df = processor.clean_sales_by_store(df)
+                            if store_id and store_id != 'combined':
+                                df['Upload_Store'] = store_id
+                            sales_dfs.append(df)
+                    except Exception as e:
+                        print(f"Error loading {f}: {e}")
+                        continue
+                
+                if sales_dfs:
+                    result['sales'] = pd.concat(sales_dfs, ignore_index=True)
+                    # Remove duplicates based on Store and Date
+                    result['sales'] = result['sales'].drop_duplicates(
+                        subset=['Store', 'Date'], 
+                        keep='last'
+                    )
+            
+            # Load and merge brand data
+            if brand_files:
+                brand_dfs = []
+                for f in brand_files:
+                    try:
+                        df = self.download_file(f)
+                        if df is not None and not df.empty:
+                            store_id = self._extract_store_from_path(f)
+                            date_range = self._extract_date_range_from_path(f)
+                            
+                            df = processor.clean_brand_data(df)
+                            df['Upload_Store'] = store_id
+                            
+                            if date_range:
+                                df['Upload_Start_Date'] = pd.to_datetime(date_range[0])
+                                df['Upload_End_Date'] = pd.to_datetime(date_range[1])
+                            
+                            brand_dfs.append(df)
+                    except Exception as e:
+                        print(f"Error loading {f}: {e}")
+                        continue
+                
+                if brand_dfs:
+                    result['brand'] = pd.concat(brand_dfs, ignore_index=True)
+                    # Remove duplicates
+                    if 'Upload_Start_Date' in result['brand'].columns:
+                        result['brand'] = result['brand'].drop_duplicates(
+                            subset=['Brand', 'Upload_Store', 'Upload_Start_Date'], 
+                            keep='last'
+                        )
+            
+            # Load and merge product data
+            if product_files:
+                product_dfs = []
+                for f in product_files:
+                    try:
+                        df = self.download_file(f)
+                        if df is not None and not df.empty:
+                            store_id = self._extract_store_from_path(f)
+                            date_range = self._extract_date_range_from_path(f)
+                            
+                            df = processor.clean_product_data(df)
+                            df['Upload_Store'] = store_id
+                            
+                            if date_range:
+                                df['Upload_Start_Date'] = pd.to_datetime(date_range[0])
+                                df['Upload_End_Date'] = pd.to_datetime(date_range[1])
+                            
+                            product_dfs.append(df)
+                    except Exception as e:
+                        print(f"Error loading {f}: {e}")
+                        continue
+                
+                if product_dfs:
+                    result['product'] = pd.concat(product_dfs, ignore_index=True)
+                    # Remove duplicates
+                    if 'Upload_Start_Date' in result['product'].columns:
+                        result['product'] = result['product'].drop_duplicates(
+                            subset=['Product Type', 'Upload_Store', 'Upload_Start_Date'], 
+                            keep='last'
+                        )
+        
+        except Exception as e:
+            print(f"Error loading data from S3: {e}")
+        
+        return result
+    
+    def _extract_store_from_path(self, path: str) -> str:
+        """Extract store ID from S3 file path."""
+        # Path format: raw-uploads/{store_id}/type_daterange_timestamp.csv
+        parts = path.split('/')
+        if len(parts) >= 2:
+            return parts[1]  # e.g., 'barbary_coast', 'grass_roots', 'combined'
+        return 'combined'
+    
+    def _extract_date_range_from_path(self, path: str) -> tuple:
+        """Extract date range from S3 file path."""
+        # Filename format: type_YYYYMMDD-YYYYMMDD_timestamp.csv
+        import re
+        
+        filename = path.split('/')[-1]
+        match = re.search(r'_(\d{8})-(\d{8})_', filename)
+        
+        if match:
+            start_str = match.group(1)
+            end_str = match.group(2)
+            try:
+                start_date = datetime.strptime(start_str, '%Y%m%d')
+                end_date = datetime.strptime(end_str, '%Y%m%d')
+                return (start_date, end_date)
+            except ValueError:
+                pass
+        
+        return None
 
 
 # =============================================================================
@@ -614,6 +761,10 @@ def main():
     analytics = AnalyticsEngine()
     
     # Initialize session state for data
+    # Use a flag to track if we've attempted to load from S3 this session
+    if 'data_loaded_from_s3' not in st.session_state:
+        st.session_state.data_loaded_from_s3 = False
+    
     if 'sales_data' not in st.session_state:
         st.session_state.sales_data = None
     if 'brand_data' not in st.session_state:
@@ -621,8 +772,39 @@ def main():
     if 'product_data' not in st.session_state:
         st.session_state.product_data = None
     if 'brand_product_mapping' not in st.session_state:
-        # Try to load from S3
-        st.session_state.brand_product_mapping = s3_manager.load_brand_product_mapping()
+        st.session_state.brand_product_mapping = None
+    
+    # Auto-load data from S3 on first run of session
+    if not st.session_state.data_loaded_from_s3:
+        with st.spinner("🔄 Loading data from S3..."):
+            # Load brand-product mapping
+            st.session_state.brand_product_mapping = s3_manager.load_brand_product_mapping()
+            
+            # Load all CSV data
+            loaded_data = s3_manager.load_all_data_from_s3(processor)
+            
+            if loaded_data['sales'] is not None:
+                st.session_state.sales_data = loaded_data['sales']
+            if loaded_data['brand'] is not None:
+                st.session_state.brand_data = loaded_data['brand']
+            if loaded_data['product'] is not None:
+                st.session_state.product_data = loaded_data['product']
+            
+            st.session_state.data_loaded_from_s3 = True
+            
+            # Show what was loaded
+            loaded_items = []
+            if st.session_state.sales_data is not None:
+                loaded_items.append(f"Sales ({len(st.session_state.sales_data)} records)")
+            if st.session_state.brand_data is not None:
+                loaded_items.append(f"Brands ({len(st.session_state.brand_data)} records)")
+            if st.session_state.product_data is not None:
+                loaded_items.append(f"Products ({len(st.session_state.product_data)} records)")
+            if st.session_state.brand_product_mapping:
+                loaded_items.append(f"Mappings ({len(st.session_state.brand_product_mapping)} brands)")
+            
+            if loaded_items:
+                st.toast(f"✅ Loaded: {', '.join(loaded_items)}", icon="📊")
     
     # Sidebar
     with st.sidebar:
@@ -1751,19 +1933,51 @@ def render_upload_page(s3_manager, processor):
     st.markdown("---")
     st.subheader("🗂️ Data Management")
     
-    mgmt_col1, mgmt_col2 = st.columns(2)
+    mgmt_col1, mgmt_col2, mgmt_col3 = st.columns(3)
     
     with mgmt_col1:
-        if st.button("🗑️ Clear All Data", type="secondary"):
+        if st.button("🔄 Reload from S3", type="primary", use_container_width=True):
+            with st.spinner("Reloading data from S3..."):
+                # Reload all data from S3
+                loaded_data = s3_manager.load_all_data_from_s3(processor)
+                
+                if loaded_data['sales'] is not None:
+                    st.session_state.sales_data = loaded_data['sales']
+                if loaded_data['brand'] is not None:
+                    st.session_state.brand_data = loaded_data['brand']
+                if loaded_data['product'] is not None:
+                    st.session_state.product_data = loaded_data['product']
+                
+                # Also reload mappings
+                st.session_state.brand_product_mapping = s3_manager.load_brand_product_mapping()
+                
+                # Show what was loaded
+                loaded_items = []
+                if st.session_state.sales_data is not None:
+                    loaded_items.append(f"Sales ({len(st.session_state.sales_data)})")
+                if st.session_state.brand_data is not None:
+                    loaded_items.append(f"Brands ({len(st.session_state.brand_data)})")
+                if st.session_state.product_data is not None:
+                    loaded_items.append(f"Products ({len(st.session_state.product_data)})")
+                
+                if loaded_items:
+                    st.success(f"✅ Reloaded: {', '.join(loaded_items)}")
+                else:
+                    st.info("No data found in S3")
+                st.rerun()
+    
+    with mgmt_col2:
+        if st.button("🗑️ Clear Session Data", type="secondary", use_container_width=True):
             st.session_state.sales_data = None
             st.session_state.brand_data = None
             st.session_state.product_data = None
-            st.success("All data cleared!")
+            st.session_state.data_loaded_from_s3 = False
+            st.success("Session data cleared! (S3 data preserved)")
             st.rerun()
     
-    with mgmt_col2:
+    with mgmt_col3:
         if st.session_state.sales_data is not None or st.session_state.brand_data is not None:
-            if st.button("📥 Export Combined Data"):
+            if st.button("📥 Export Summary", use_container_width=True):
                 # Create a summary export
                 export_data = {
                     'export_date': datetime.now().isoformat(),
