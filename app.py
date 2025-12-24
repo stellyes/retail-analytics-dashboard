@@ -1284,12 +1284,18 @@ def render_recommendations(state, analytics):
         # AI Analysis Buttons
         col1, col2, col3, col4 = st.columns(4)
         
+        # Initialize session state for AI analysis result
+        if 'ai_analysis_result' not in st.session_state:
+            st.session_state.ai_analysis_result = None
+            st.session_state.ai_analysis_title = None
+        
         with col1:
             if st.button("📊 Analyze Sales Trends", use_container_width=True):
                 with st.spinner("Claude is analyzing your sales data..."):
                     analysis = claude.analyze_sales_trends(sales_summary)
-                    st.markdown("### Sales Analysis")
-                    st.markdown(analysis)
+                    st.session_state.ai_analysis_title = "📊 Sales Analysis"
+                    st.session_state.ai_analysis_result = analysis
+                    st.rerun()
         
         with col2:
             if st.button("🏷️ Brand Recommendations", use_container_width=True):
@@ -1297,10 +1303,10 @@ def render_recommendations(state, analytics):
                     st.warning("Upload brand data first.")
                 else:
                     with st.spinner("Claude is analyzing brand performance..."):
-                        # Include category info in analysis
                         analysis = claude.analyze_brand_performance(brand_summary, brand_by_category)
-                        st.markdown("### Brand Analysis")
-                        st.markdown(analysis)
+                        st.session_state.ai_analysis_title = "🏷️ Brand Analysis"
+                        st.session_state.ai_analysis_result = analysis
+                        st.rerun()
         
         with col3:
             if st.button("📦 Category Insights", use_container_width=True):
@@ -1309,8 +1315,9 @@ def render_recommendations(state, analytics):
                 else:
                     with st.spinner("Claude is analyzing category performance..."):
                         analysis = claude.analyze_category_performance(brand_by_category, brand_summary)
-                        st.markdown("### Category Analysis")
-                        st.markdown(analysis)
+                        st.session_state.ai_analysis_title = "📦 Category Analysis"
+                        st.session_state.ai_analysis_result = analysis
+                        st.rerun()
         
         with col4:
             if st.button("🎯 Deal Suggestions", use_container_width=True):
@@ -1328,8 +1335,26 @@ def render_recommendations(state, analytics):
                         high_margin = high_df.to_dict('records')
                         
                         analysis = claude.generate_deal_recommendations(slow_movers, high_margin)
-                        st.markdown("### Deal Recommendations")
-                        st.markdown(analysis)
+                        st.session_state.ai_analysis_title = "🎯 Deal Recommendations"
+                        st.session_state.ai_analysis_result = analysis
+                        st.rerun()
+        
+        # Display AI analysis result at full width
+        if st.session_state.ai_analysis_result:
+            st.markdown("---")
+            
+            # Header with clear button
+            header_col1, header_col2 = st.columns([6, 1])
+            with header_col1:
+                st.subheader(st.session_state.ai_analysis_title)
+            with header_col2:
+                if st.button("✖️ Clear", key="clear_analysis"):
+                    st.session_state.ai_analysis_result = None
+                    st.session_state.ai_analysis_title = None
+                    st.rerun()
+            
+            # Full-width analysis content
+            st.markdown(st.session_state.ai_analysis_result)
         
         # Free-form Q&A
         st.markdown("---")
