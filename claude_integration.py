@@ -180,28 +180,35 @@ Keep your response concise and actionable. Use bullet points for clarity."""
         except Exception as e:
             return f"Error analyzing data: {str(e)}"
     
-    def analyze_brand_performance(self, brand_data: list) -> str:
+    def analyze_brand_performance(self, brand_data: list, brand_by_category: dict = None) -> str:
         """
         Analyze brand performance and suggest inventory decisions.
-        
+
         Args:
             brand_data: List of brand performance dictionaries
-        
+            brand_by_category: Optional dict mapping categories to brand performance data
+
         Returns:
             AI-generated brand recommendations
         """
         if not self.is_available():
             return f"Claude AI not configured: {self.init_error}"
-        
+
         # Limit to top 50 brands and safely serialize
         limited_data = brand_data[:50] if len(brand_data) > 50 else brand_data
         data_str = safe_json_dumps(limited_data)
-        
+
+        # Add category context if provided
+        category_context = ""
+        if brand_by_category:
+            category_str = safe_json_dumps(brand_by_category)
+            category_context = f"\n\nBrand performance by category:\n{category_str}\n"
+
         prompt = f"""You are a cannabis retail buyer and merchandising expert.
 
 Analyze the following brand performance data:
 
-{data_str}
+{data_str}{category_context}
 
 Please provide:
 1. Which brands should we increase orders for and why?
@@ -221,6 +228,55 @@ Focus on actionable buying recommendations. Use specific brand names from the da
             return message.content[0].text
         except Exception as e:
             return f"Error analyzing brands: {str(e)}"
+
+    def analyze_category_performance(self, brand_by_category: dict, brand_summary: list = None) -> str:
+        """
+        Analyze category performance and provide insights.
+
+        Args:
+            brand_by_category: Dict mapping categories to brand performance data
+            brand_summary: Optional list of overall brand performance data
+
+        Returns:
+            AI-generated category analysis
+        """
+        if not self.is_available():
+            return f"Claude AI not configured: {self.init_error}"
+
+        # Safely serialize the data
+        category_str = safe_json_dumps(brand_by_category)
+
+        # Add brand summary context if provided
+        brand_context = ""
+        if brand_summary:
+            limited_brands = brand_summary[:30] if len(brand_summary) > 30 else brand_summary
+            brand_str = safe_json_dumps(limited_brands)
+            brand_context = f"\n\nOverall brand performance:\n{brand_str}\n"
+
+        prompt = f"""You are a cannabis retail category manager and merchandising expert.
+
+Analyze the following category performance data:
+
+{category_str}{brand_context}
+
+Please provide:
+1. Which categories are performing best and why?
+2. Which categories need attention or intervention?
+3. Category-specific opportunities for growth
+4. Recommendations for category mix optimization
+5. Suggested category-level promotional strategies
+
+Focus on actionable category management recommendations with specific insights."""
+
+        try:
+            message = self.client.messages.create(
+                model=self.model,
+                max_tokens=1024,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            return message.content[0].text
+        except Exception as e:
+            return f"Error analyzing categories: {str(e)}"
     
     def generate_deal_recommendations(self, 
                                        slow_movers: list,
