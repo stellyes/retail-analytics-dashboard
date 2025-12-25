@@ -1262,15 +1262,20 @@ def render_recommendations(state, analytics):
         brand_summary = []
         brand_by_category = {}
         if state.brand_data is not None:
-            top_brands_df = state.brand_data.nlargest(30, 'Net Sales')[['Brand', 'Net Sales', 'Gross Margin %']].copy()
-            
+            # Filter out promotional brands (containing "$1" or "Promo")
+            filtered_brands = state.brand_data[
+                ~state.brand_data['Brand'].str.contains(r'\$1|Promo', case=False, na=False, regex=True)
+            ]
+
+            top_brands_df = filtered_brands.nlargest(30, 'Net Sales')[['Brand', 'Net Sales', 'Gross Margin %']].copy()
+
             # Add product category from mapping
             top_brands_df['Product_Category'] = top_brands_df['Brand'].map(brand_product_mapping).fillna('Unmapped')
             brand_summary = top_brands_df.to_dict('records')
             
             # Aggregate by category for category-level insights
             if brand_product_mapping:
-                all_brands_df = state.brand_data.copy()
+                all_brands_df = filtered_brands.copy()
                 all_brands_df['Product_Category'] = all_brands_df['Brand'].map(brand_product_mapping).fillna('Unmapped')
                 
                 category_agg = all_brands_df.groupby('Product_Category').agg({
