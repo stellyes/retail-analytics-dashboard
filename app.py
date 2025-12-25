@@ -1484,7 +1484,7 @@ def render_brand_product_mapping(state, s3_manager):
         st.markdown("Edit multiple brand mappings at once. Changes are saved when you click 'Save All'.")
         
         # Filter options
-        filter_col1, filter_col2 = st.columns(2)
+        filter_col1, filter_col2, filter_col3 = st.columns(3)
         with filter_col1:
             filter_category = st.selectbox(
                 "Filter by category",
@@ -1493,17 +1493,31 @@ def render_brand_product_mapping(state, s3_manager):
             )
         with filter_col2:
             search_term = st.text_input("Search brands", key="bulk_search")
-        
+        with filter_col3:
+            sort_option = st.selectbox(
+                "Sort by",
+                options=["Alphabetical", "Mapped First", "Unmapped First"],
+                key="bulk_sort"
+            )
+
         # Filter brands
         filtered_brands = brands.copy()
-        
+
         if filter_category == "Unmapped":
             filtered_brands = [b for b in filtered_brands if b not in current_mapping]
         elif filter_category != "All Categories":
             filtered_brands = [b for b in filtered_brands if current_mapping.get(b) == filter_category]
-        
+
         if search_term:
             filtered_brands = [b for b in filtered_brands if search_term.lower() in b.lower()]
+
+        # Sort brands based on selected option
+        if sort_option == "Mapped First":
+            filtered_brands = sorted(filtered_brands, key=lambda b: (b not in current_mapping, b.lower()))
+        elif sort_option == "Unmapped First":
+            filtered_brands = sorted(filtered_brands, key=lambda b: (b in current_mapping, b.lower()))
+        else:  # Alphabetical
+            filtered_brands = sorted(filtered_brands, key=lambda b: b.lower())
         
         st.caption(f"Showing {len(filtered_brands)} brands")
         
