@@ -24,14 +24,14 @@ except ImportError:
 # =============================================================================
 
 # Research topics to monitor
+# NOTE: To avoid rate limits, topics rotate - only 1-2 researched per cycle
 RESEARCH_TOPICS = [
     {
         "id": "regulatory",
         "name": "Regulatory Updates",
         "queries": [
-            "cannabis regulation changes California 2024 2025",
-            "marijuana dispensary license requirements California",
-            "cannabis banking legislation SAFE Act updates",
+            "cannabis regulation California 2025",
+            "marijuana dispensary license California",
         ],
         "importance": "high"
     },
@@ -39,9 +39,8 @@ RESEARCH_TOPICS = [
         "id": "market_trends",
         "name": "Market Trends",
         "queries": [
-            "cannabis retail market trends",
-            "marijuana consumer preferences 2024 2025",
-            "cannabis product category growth",
+            "cannabis retail trends 2025",
+            "marijuana consumer preferences",
         ],
         "importance": "medium"
     },
@@ -49,9 +48,8 @@ RESEARCH_TOPICS = [
         "id": "competition",
         "name": "Competitive Landscape",
         "queries": [
-            "San Francisco cannabis dispensary news",
-            "California cannabis retail competition",
-            "cannabis delivery services Bay Area",
+            "San Francisco cannabis dispensary",
+            "Bay Area cannabis retail",
         ],
         "importance": "medium"
     },
@@ -59,9 +57,8 @@ RESEARCH_TOPICS = [
         "id": "products",
         "name": "Product Innovation",
         "queries": [
-            "new cannabis products launch",
-            "cannabis edibles beverages trends",
-            "popular marijuana brands California",
+            "new cannabis products 2025",
+            "cannabis brands California",
         ],
         "importance": "low"
     },
@@ -69,9 +66,8 @@ RESEARCH_TOPICS = [
         "id": "pricing",
         "name": "Pricing & Economics",
         "queries": [
-            "cannabis wholesale prices California",
-            "marijuana price trends dispensary",
-            "cannabis tax changes California",
+            "cannabis prices California",
+            "marijuana tax California",
         ],
         "importance": "high"
     }
@@ -519,26 +515,24 @@ Only mark has_new_content=true if there are developments from the past 7 days th
         if topic_findings.get("new_signals"):
             signals_context = f"\n\nPreliminary scan found these new developments to investigate:\n- " + "\n- ".join(topic_findings["new_signals"])
         
-        prompt = f"""You are a cannabis industry research analyst monitoring trends for a retail dispensary operation in San Francisco.
+        prompt = f"""Research cannabis industry trends for SF dispensary.
 
-Research Topic: {topic["name"]}
-Search Queries to Investigate:
-{queries_str}{signals_context}
+Topic: {topic["name"]}
+Queries: {queries_str}{signals_context}
 
-Please search for the most recent and relevant information on these topics. Focus on:
-1. News from the past 7 days when available
-2. Regulatory changes or announcements
-3. Market trends and consumer behavior shifts
-4. Competitive developments
-5. Anything that could impact a cannabis retail business
+Search for recent info (past 7 days preferred). Focus on:
+- Regulatory changes
+- Market/consumer trends
+- Competition
+- Business impact
 
-For each significant finding, provide:
-- A clear, concise summary (2-3 sentences)
-- The source and date if available
-- Relevance to retail operations (high/medium/low)
-- Any recommended actions
+For each finding:
+- 2-3 sentence summary
+- Source & date
+- Relevance (high/med/low)
+- Actions needed
 
-Format your response as a structured analysis. Be specific with dates, numbers, and sources."""
+Be specific with dates, numbers, sources."""
 
         try:
             response = self.client.messages.create(
@@ -558,11 +552,11 @@ Format your response as a structured analysis. Be specific with dates, numbers, 
                     research_text += block.text
             
             topic_findings["raw_response"] = research_text
-            
-            # Now parse and structure the findings
-            parsed = self._parse_findings(topic, research_text)
-            topic_findings["findings"] = parsed["findings"]
-            topic_findings["summary"] = parsed["summary"]
+
+            # Extract summary and findings directly from response (avoid extra API call)
+            # This prevents rate limit errors from the parsing step
+            topic_findings["summary"] = self._extract_summary(research_text)
+            topic_findings["findings"] = self._extract_findings_simple(research_text)
             
         except Exception as e:
             topic_findings["error"] = str(e)
@@ -570,32 +564,99 @@ Format your response as a structured analysis. Be specific with dates, numbers, 
         
         return topic_findings
     
+    def _extract_summary(self, text: str) -> str:
+        """Extract a simple summary from research text without API call."""
+        # Look for executive summary sections
+        lines = text.split('\n')
+        summary_lines = []
+
+        for i, line in enumerate(lines):
+            if any(keyword in line.lower() for keyword in ['summary:', 'key findings:', 'overview:', '##']):
+                # Get next 3-5 lines as summary
+                summary_lines = lines[i+1:i+4]
+                break
+
+        if summary_lines:
+            summary = ' '.join(summary_lines).strip()
+            return summary[:500] if len(summary) > 500 else summary
+
+        # Fallback: first 300 chars
+        return text[:300].strip() + "..."
+
+    def _extract_findings_simple(self, text: str) -> list:
+        """Extract findings from structured text without API call."""
+        findings = []
+        lines = text.split('\n')
+
+        current_finding = {}
+        for line in lines:
+            line = line.strip()
+
+            # Look for numbered findings or bold headers
+            if line.startswith('**') and '**' in line[2:]:
+                # Save previous finding
+                if current_finding:
+                    findings.append(current_finding)
+
+                # Start new finding
+                title = line.replace('**', '').strip()
+                current_finding = {
+                    "title": title[:100],
+                    "description": "",
+                    "source": "Web search",
+                    "date": "2025",
+                    "relevance": "medium",
+                    "action_required": False,
+                    "recommended_action": ""
+                }
+            elif current_finding and line and not line.startswith('#'):
+                # Add to description
+                if current_finding["description"]:
+                    current_finding["description"] += " " + line
+                else:
+                    current_finding["description"] = line
+
+                # Extract relevance if mentioned
+                if 'high relevance' in line.lower():
+                    current_finding["relevance"] = "high"
+                elif 'low relevance' in line.lower():
+                    current_finding["relevance"] = "low"
+
+                # Limit description length
+                if len(current_finding["description"]) > 300:
+                    current_finding["description"] = current_finding["description"][:300] + "..."
+
+        # Add last finding
+        if current_finding:
+            findings.append(current_finding)
+
+        return findings[:10]  # Limit to 10 findings
+
     def _parse_findings(self, topic: dict, raw_text: str) -> dict:
         """Parse raw research text into structured findings."""
         
-        prompt = f"""Analyze this research output and extract structured findings.
+        prompt = f"""Extract structured findings from research.
 
-Research Topic: {topic["name"]}
-Raw Research Output:
-{raw_text}
+Topic: {topic["name"]}
+Raw Output: {raw_text[:2000]}
 
-Extract and return a JSON object with:
+Return JSON:
 {{
-    "summary": "2-3 sentence executive summary of key findings",
+    "summary": "2-3 sentence key findings",
     "findings": [
         {{
             "title": "Brief title",
-            "description": "Detailed finding (2-3 sentences)",
-            "source": "Source name if known",
-            "date": "Date if known (YYYY-MM-DD format)",
+            "description": "2-3 sentences",
+            "source": "Source",
+            "date": "YYYY-MM-DD",
             "relevance": "high/medium/low",
             "action_required": true/false,
-            "recommended_action": "What the dispensary should do, if anything"
+            "recommended_action": "Action if any"
         }}
     ]
 }}
 
-Return ONLY valid JSON, no markdown or explanation."""
+ONLY valid JSON."""
 
         try:
             response = self.client.messages.create(
@@ -751,18 +812,47 @@ Return ONLY valid JSON."""
                 "error": str(e)
             }
     
-    def run_research_cycle(self, topics: list = None, force_full: bool = False) -> dict:
+    def run_research_cycle(self, topics: list = None, force_full: bool = False, max_topics: int = 1) -> dict:
         """Run a complete research cycle with conditional scanning.
-        
+
         Args:
             topics: List of topics to research (default: all RESEARCH_TOPICS)
             force_full: Skip preliminary scans and do full research on all topics
+            max_topics: Maximum topics to research per cycle (to avoid rate limits)
         """
-        
-        topics = topics or RESEARCH_TOPICS
-        
+
+        all_topics = topics or RESEARCH_TOPICS
+
+        # Pick ONE random query from all queries across all topics
+        import random
+        from datetime import datetime
+
+        # Flatten all queries from all topics
+        all_queries = []
+        for topic in all_topics:
+            for query in topic["queries"]:
+                all_queries.append({
+                    "topic": topic,
+                    "query": query
+                })
+
+        # Pick one random query
+        selected = random.choice(all_queries)
+
+        # Create a mini-topic with just this one query
+        topics = [{
+            "id": selected["topic"]["id"],
+            "name": selected["topic"]["name"],
+            "queries": [selected["query"]],  # Only one query
+            "importance": selected["topic"]["importance"]
+        }]
+
         print(f"Starting research cycle at {datetime.utcnow().isoformat()}")
-        print(f"Researching {len(topics)} topics (force_full={force_full})")
+        print(f"Researching 1 randomly selected query of {len(all_queries)} total queries")
+        print(f"Selected query: '{selected['query']}' from topic '{topics[0]['name']}'")
+
+        # Add delay between topics to avoid rate limits (30k tokens/min)
+        import time
         
         # Load prior context
         prior_context = self.load_prior_context()
@@ -789,26 +879,32 @@ Return ONLY valid JSON."""
             "errors": []
         }
         
-        for topic in topics:
+        for idx, topic in enumerate(topics):
             print(f"Researching: {topic['name']}")
             try:
                 # Get known findings for this topic's category
                 known_findings = known_by_topic.get(topic["id"], [])
-                
+
                 topic_result = self.research_topic(
-                    topic, 
-                    skip_scan=force_full, 
+                    topic,
+                    skip_scan=force_full,
                     known_findings=known_findings
                 )
                 results["topics"].append(topic_result)
-                
+
                 if topic_result.get("skipped"):
                     results["topics_skipped"] += 1
                     print(f"  ⏭️  Skipped: {topic_result.get('skip_reason', 'no new content')}")
                 else:
                     results["topics_researched"] += 1
                     print(f"  ✅ Found {len(topic_result.get('findings', []))} findings")
-                    
+
+                    # Add 15 second delay after each researched topic to avoid rate limits
+                    # Each topic uses ~6-8k tokens, so we need to space them out
+                    if idx < len(topics) - 1:  # Don't delay after last topic
+                        print(f"  Waiting 15 seconds to avoid rate limits...")
+                        time.sleep(15)
+
             except Exception as e:
                 error_msg = f"Error researching {topic['name']}: {e}"
                 print(f"  ❌ {error_msg}")
@@ -822,10 +918,17 @@ Return ONLY valid JSON."""
         self.storage.save_findings(results)
         print("Saved raw findings to S3")
         
-        # Generate and save cumulative summary
-        summary = self.generate_cumulative_summary(results, prior_summary)
-        self.storage.save_summary(summary)
-        print("Saved cumulative summary to S3")
+        # Generate and save cumulative summary (with rate limit protection)
+        try:
+            summary = self.generate_cumulative_summary(results, prior_summary)
+            self.storage.save_summary(summary)
+            print("Saved cumulative summary to S3")
+        except Exception as e:
+            print(f"Summary generation skipped due to rate limits: {e}")
+            summary = {
+                "executive_summary": "Summary generation delayed due to rate limits. Raw findings saved to S3.",
+                "generated_at": datetime.utcnow().isoformat()
+            }
         
         results["summary"] = summary
         

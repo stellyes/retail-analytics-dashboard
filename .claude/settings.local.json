@@ -8,7 +8,9 @@
       "Bash(docker login:*)",
       "Bash(docker tag:*)",
       "Bash(docker push:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(docker image inspect:*)",
+      "Bash(cat:*)"
     ]
   }
 }
