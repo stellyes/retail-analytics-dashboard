@@ -24,6 +24,13 @@ try:
 except ImportError:
     CLAUDE_AVAILABLE = False
 
+# Import Research Integration (optional)
+try:
+    from research_integration import render_research_page
+    RESEARCH_AVAILABLE = True
+except ImportError:
+    RESEARCH_AVAILABLE = False
+
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
@@ -813,15 +820,22 @@ def main():
         st.markdown("---")
         
         # Navigation
-        page = st.radio("Navigation", [
+        nav_options = [
             "📊 Dashboard",
-            "📈 Sales Analysis", 
+            "📈 Sales Analysis",
             "🏷️ Brand Performance",
             "📦 Product Categories",
             "🔗 Brand-Product Mapping",
             "💡 Recommendations",
-            "📤 Data Upload"
-        ])
+        ]
+
+        # Add research page if available
+        if RESEARCH_AVAILABLE:
+            nav_options.append("🔬 Industry Research")
+
+        nav_options.append("📤 Data Upload")
+
+        page = st.radio("Navigation", nav_options)
         
         st.markdown("---")
         
@@ -862,7 +876,13 @@ def main():
     
     elif page == "💡 Recommendations":
         render_recommendations(st.session_state, analytics)
-    
+
+    elif page == "🔬 Industry Research":
+        if RESEARCH_AVAILABLE:
+            render_research_page()
+        else:
+            st.error("Research integration module not found. Make sure `research_integration.py` is in the same directory.")
+
     elif page == "📤 Data Upload":
         render_upload_page(s3_manager, processor)
 
