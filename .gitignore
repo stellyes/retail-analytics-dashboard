@@ -1,3 +1,5 @@
+.claude/
+
 # Secrets - NEVER commit these
 .streamlit/secrets.toml
 *.env
