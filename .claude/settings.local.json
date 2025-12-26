@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(dir:*)",
+      "Bash(docker --version:*)",
+      "Bash(aws:*)",
+      "Bash(docker build:*)",
+      "Bash(docker login:*)",
+      "Bash(docker tag:*)",
+      "Bash(docker push:*)",
+      "Bash(ls:*)"
+    ]
+  }
+}
