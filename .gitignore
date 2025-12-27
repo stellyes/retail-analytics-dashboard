@@ -1,4 +1,4 @@
-/.claude/
+/.claude/*
 
 # Secrets - NEVER commit these
 .streamlit/secrets.toml
@@ -33,3 +33,4 @@ Thumbs.db
 # Logs
 *.log
 logs/
+.claude/
