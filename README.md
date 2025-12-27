@@ -1,109 +1,162 @@
-# 🔬 Cannabis Industry Research Agent
+# 📊 Retail Analytics Dashboard
 
-An autonomous AI-powered research agent that monitors cannabis industry trends, regulations, and market developments. Runs on AWS Lambda (container image) and stores findings in S3.
+A comprehensive retail analytics platform for cannabis dispensaries with AI-powered industry research capabilities.
 
-## 📋 Overview
+## Overview
 
-The research agent:
-- **Runs automatically** on a schedule (default: every 6 hours)
-- **Intelligent throttling**: Automatically manages API rate limits with retry logic
-- **Smart query selection**: Researches 2 random queries per cycle from all topics
-- **Monitors key topics**: Regulations, market trends, competition, products, pricing
-- **Maintains context**: Reviews prior findings before each research cycle
-- **Stores findings** in S3 with cumulative summaries and historical archives
-- **Rate limit safe**: Built-in token tracking and automatic pausing/retry
+This repository contains two main components:
 
-## 🏗️ Architecture
+1. **Streamlit Dashboard** (`app.py`) - Interactive analytics dashboard for retail sales data
+2. **Research Agent** (`lambda_function.py`) - Autonomous AWS Lambda agent for industry research
+
+### Dashboard Features
+
+- 📈 **Multi-store analytics** for Barbary Coast and Grass Roots locations
+- 🔒 **Password authentication** with role-based access
+- ☁️ **S3 integration** for data persistence and CSV uploads
+- 🤖 **Claude AI integration** for natural language analytics queries
+- 🔬 **Industry research** page displaying automated research findings
+- 📊 **Sales analysis** with trends, top products, brand performance
+- 🏷️ **Product mapping** tools for data normalization
+- 💰 **Promotional analysis** and discount tracking
+
+### Research Agent Features
+
+- ⏰ **Automated scheduling** (runs every 6 hours via EventBridge)
+- 🧠 **Intelligent throttling** with automatic rate limit management
+- 🔍 **Smart query selection** (2 random queries per cycle from 10 total)
+- 📝 **Topic monitoring**: Regulations, market trends, competition, products, pricing
+- 💾 **S3 storage** with cumulative summaries and historical archives
+- 🔄 **Retry logic** for handling API rate limits gracefully
+
+## Architecture
 
 ```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   EventBridge   │────▶│  Lambda (ECR)   │────▶│       S3        │
-│   (Schedule)    │     │  Container      │     │ (Findings Store)│
-└─────────────────┘     └────────┬────────┘     └────────┬────────┘
-                                 │                        │
-                                 ▼                        ▼
-                        ┌─────────────────┐     ┌─────────────────┐
-                        │  Claude API     │     │   Streamlit     │
-                        │  (Web Search)   │     │   Dashboard     │
-                        └─────────────────┘     └─────────────────┘
+┌─────────────────────┐          ┌──────────────────────┐
+│   Streamlit App     │          │   EventBridge        │
+│   (app.py)          │          │   (Schedule)         │
+└──────────┬──────────┘          └──────────┬───────────┘
+           │                                 │
+           │                                 ▼
+           │                      ┌──────────────────────┐
+           │                      │  Lambda Container    │
+           │                      │  (Research Agent)    │
+           │                      └──────────┬───────────┘
+           │                                 │
+           └────────────────┬────────────────┘
+                            ▼
+                 ┌──────────────────────┐
+                 │         S3           │
+                 │  • Sales CSVs        │
+                 │  • Research findings │
+                 │  • Product mappings  │
+                 └──────────┬───────────┘
+                            │
+                            ▼
+                 ┌──────────────────────┐
+                 │    Claude API        │
+                 │  • Analytics         │
+                 │  • Web Search        │
+                 └──────────────────────┘
 ```
 
-## 📁 Project Structure
+## Project Structure
 
 ```
 retail-analytics-dashboard/
-├── lambda_function.py          # Main research agent with throttling
+├── app.py                      # Main Streamlit dashboard
+├── claude_integration.py       # Claude AI analytics integration
+├── research_integration.py     # Research findings display page
+├── lambda_function.py          # AWS Lambda research agent
 ├── Dockerfile                  # Lambda container definition
 ├── requirements.txt            # Python dependencies
-├── deploy-research-agent.sh    # Deployment script
+├── deploy-research-agent.sh    # Research agent deployment script
 ├── update-schedule.sh          # Schedule modification utility
-├── DEPLOYMENT.md              # Deployment guide
-├── THROTTLING.md              # Token throttling documentation
-├── RATE_LIMITS.md             # Rate limit management guide
+├── DEPLOYMENT.md              # Research agent deployment guide
+├── cloudformation.yaml         # AWS infrastructure (legacy)
+├── cloudformation-container.yaml # Container-based infrastructure
+├── dashboard_patch_instructions.py # Dashboard integration guide
 └── README.md
 ```
 
-## 🚀 Quick Start
+## Quick Start
 
-### Prerequisites
+### 1. Streamlit Dashboard
 
-1. **AWS CLI** installed and configured
-2. **Docker** installed and running
-3. **Anthropic API Key** from [console.anthropic.com](https://console.anthropic.com)
+**Prerequisites:**
+- Python 3.11+
+- AWS credentials configured
+- Anthropic API key (for Claude features)
 
-### Deploy
+**Setup:**
 
 ```bash
-# Run the deployment script
+# Install dependencies
+pip install -r requirements.txt
+
+# Configure secrets
+# Create .streamlit/secrets.toml with:
+# [passwords]
+# admin = "your-hashed-password"
+# analyst = "your-hashed-password"
+
+# Run dashboard
+streamlit run app.py
+```
+
+**Access:**
+- Navigate to `http://localhost:8501`
+- Login with configured credentials
+- Upload CSV files or connect to S3 bucket
+
+### 2. Research Agent (AWS Lambda)
+
+**Prerequisites:**
+- AWS CLI configured
+- Docker installed
+- Anthropic API key set in Lambda environment
+
+**Deploy:**
+
+```bash
+# One-command deployment
 ./deploy-research-agent.sh
 ```
 
-This will:
-1. Create ECR repository (if needed)
-2. Build Docker image with platform specification
-3. Push to ECR
-4. Create IAM role (if needed)
-5. Deploy Lambda function
-6. Set up EventBridge schedule (every 6 hours)
+This deploys a containerized Lambda function that:
+1. Runs every 6 hours automatically
+2. Researches 2 random queries from 5 topics (10 total queries)
+3. Stores findings in S3: `s3://retail-data-bcgr/research-findings/`
+4. Handles API rate limits with intelligent throttling
 
-The script handles everything automatically. See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
+See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
 
-### Test the Function
+## Configuration
 
-```bash
-# Invoke manually
-aws lambda invoke --function-name industry-research-agent --region us-west-1 response.json
+### Dashboard Settings
 
-# Check findings in S3
-aws s3 ls s3://retail-data-bcgr/research-findings/ --recursive
+Edit `.streamlit/secrets.toml`:
+
+```toml
+[passwords]
+admin = "hashed-password-here"
+analyst = "hashed-password-here"
+
+[aws]
+bucket_name = "retail-data-bcgr"
+region = "us-west-1"
 ```
 
-## ⚙️ Configuration
+### Research Agent Settings
 
-### Schedule Options
-
-Update the schedule using the utility script:
-
+**Schedule:**
 ```bash
-# Change to every 12 hours
-./update-schedule.sh 12
-
-# Change to every 4 hours
-./update-schedule.sh 4
+# Change research frequency
+./update-schedule.sh 12  # Every 12 hours
+./update-schedule.sh 6   # Every 6 hours (default)
 ```
 
-Current schedule: **Every 6 hours**
-
-### Throttling Configuration
-
-The agent includes intelligent token throttling to stay within API rate limits (30,000 tokens/minute). See [THROTTLING.md](THROTTLING.md) for details.
-
-Default settings in `lambda_function.py`:
-- `max_queries = 2` - Research 2 random queries per cycle
-- `safety_margin = 0.85` - Use 85% of rate limit (25,500 tokens)
-- Automatic retry with 65-second wait on rate limit errors
-
-### Research Topics
+**Topics & Queries:**
 
 Edit `RESEARCH_TOPICS` in `lambda_function.py`:
 
@@ -118,110 +171,108 @@ RESEARCH_TOPICS = [
         ],
         "importance": "high"
     },
-    # ... 4 more topics (10 total queries)
+    # 4 more topics...
 ]
 ```
 
-The agent randomly selects 2 queries per cycle, ensuring all topics get coverage over time.
+**Throttling:**
 
-## 💰 Cost Optimization
+Default settings in `lambda_function.py`:
+- `max_queries = 2` - Research 2 queries per cycle
+- `safety_margin = 0.85` - Use 85% of rate limit (25,500 tokens/min)
+- Automatic retry with 65-second wait on rate limits
 
-The agent uses multiple strategies to reduce costs:
+## Usage
 
-1. **Smart query selection**: Only 2 random queries per cycle (out of 10 total)
-2. **Quick scan** (Haiku, ~$0.002) checks if there's new content
-3. **Full research** (Sonnet, ~$0.05) only runs if new content found
-4. **Intelligent throttling**: Prevents wasted API calls from rate limit errors
-5. **Automatic retry**: Waits and retries instead of failing
+### Dashboard Analytics
 
-| Scenario | Cost per cycle |
-|----------|---------------|
-| Quiet day (no new content) | ~$0.01 |
-| Normal day (1-2 topics) | ~$0.05-0.10 |
-| Busy news (all queries) | ~$0.15 |
+1. **Upload Data**: Use sidebar to upload CSV files or select S3 files
+2. **View Metrics**: Monitor sales trends, top products, brand performance
+3. **Product Mapping**: Normalize product names for better analytics
+4. **AI Analysis**: Ask questions in natural language via Claude integration
+5. **Research**: View industry research findings on dedicated page
 
-**Monthly estimate**: ~$10-20 at 4x daily (every 6 hours)
+### Research Agent
 
-## 🔧 Manual Commands
-
+**Manual Invocation:**
 ```bash
-# Trigger research cycle
-aws lambda invoke --function-name industry-research-agent \
-  --region us-west-1 response.json
+# Trigger research manually
+aws lambda invoke \
+  --function-name industry-research-agent \
+  --region us-west-1 \
+  response.json
 
 # View latest findings
 aws s3 cp s3://retail-data-bcgr/research-findings/$(date +%Y/%m/%d)/findings.json - \
   --region us-west-1 | python -m json.tool
-
-# View summary
-aws s3 cp s3://retail-data-bcgr/research-findings/summary/latest.json - \
-  --region us-west-1 | python -m json.tool
-
-# Change schedule (using utility script)
-./update-schedule.sh 12  # Change to every 12 hours
 ```
 
-## 📊 Monitoring
-
-Check token usage and research stats:
-
+**Monitoring:**
 ```bash
-# View recent findings with throttle stats
+# Check token usage and stats
 aws s3 cp s3://retail-data-bcgr/research-findings/$(date +%Y/%m/%d)/findings.json - \
-  --region us-west-1 | python -c "import json, sys; d=json.load(sys.stdin); \
-  print(f'Topics researched: {d[\"topics_researched\"]}'); \
-  print(f'Throttle stats: {d.get(\"throttle_stats\", {})}')"
+  --region us-west-1 | python -c "
+import json, sys
+d = json.load(sys.stdin)
+print(f'Topics researched: {d[\"topics_researched\"]}')
+print(f'Findings collected: {sum(len(t.get(\"findings\", [])) for t in d[\"topics\"])}')
+print(f'Throttle stats: {d.get(\"throttle_stats\", {})}')"
 ```
 
-## 📦 Data Archival & Historical Context
-
-The agent automatically maintains long-term memory through a condensation system:
-
-### How It Works
-
-1. **Daily findings** are stored in `research-findings/YYYY/MM/DD/findings.json`
-2. **After 30 days**, findings are condensed into monthly archives
-3. **Monthly archives** are synthesized into a **historical context document**
-4. **The agent reads historical context** before each research cycle
-
-### Automatic Schedules
-
-| Schedule | Action |
-|----------|--------|
-| Every 8 hours (default) | Research cycle |
-| 1st of each month, 6am UTC | Archival cycle |
-
-### S3 Data Structure
+## Data Storage (S3)
 
 ```
-s3://your-bucket/research-findings/
-├── 2024/01/15/findings.json      # Daily (deleted after 30 days if configured)
-├── summary/
-│   ├── latest.json               # Current state
-│   └── history.json              # Recent history
-└── archive/
-    ├── 2024/01/monthly-summary.json   # January 2024 condensed
-    ├── 2024/02/monthly-summary.json   # February 2024 condensed
-    └── historical-context.json        # Long-term trends document
+s3://retail-data-bcgr/
+├── sales-data/                     # Dashboard CSV uploads
+│   ├── barbary_coast/
+│   └── grass_roots/
+├── product-mappings/               # Product normalization data
+│   └── mappings.json
+└── research-findings/              # Research agent output
+    ├── 2025/12/27/findings.json   # Daily findings
+    ├── summary/latest.json         # Current summary
+    └── archive/                    # Historical archives
+        └── historical-context.json
 ```
 
-### Historical Context Document
+## Cost Estimate
 
-The agent maintains a living document with:
-- **Industry overview**: Current state and trajectory
-- **Long-term trends**: Regulatory, market, pricing directions
-- **Historical timeline**: Major events and turning points
-- **Ongoing stories**: Narratives to track over time
-- **Lessons learned**: Patterns from historical data
+### Dashboard
+- **Streamlit Cloud**: $0-20/month (depending on usage)
+- **AWS S3**: ~$1-5/month for storage
+- **Claude API** (analytics): ~$5-10/month (pay-per-use)
 
-This gives the agent deep context about where the industry has been and where it's heading.
+### Research Agent
+- **Lambda**: ~$0.50/month (minimal compute)
+- **EventBridge**: Free (under 1M events)
+- **ECR**: ~$0.10/month for image storage
+- **Claude API** (research): ~$10-20/month
+  - Quiet day: ~$0.01/cycle
+  - Normal day: ~$0.05-0.10/cycle
+  - Busy news: ~$0.15/cycle
+  - 4 cycles/day × 30 days = ~$6-18/month
 
-## 🔄 Updating
+**Total: ~$20-50/month**
 
-After code changes, rebuild and redeploy:
+## Updating
+
+### Dashboard Changes
 
 ```bash
-# Rebuild and push Docker image
+# Local development
+streamlit run app.py
+
+# Deploy to Streamlit Cloud
+git push origin main
+```
+
+### Research Agent Updates
+
+```bash
+# Rebuild and redeploy
+./deploy-research-agent.sh
+
+# Or manually:
 docker build --platform linux/amd64 --provenance=false --sbom=false \
   -t industry-research-agent .
 
@@ -230,26 +281,62 @@ docker tag industry-research-agent:latest \
 
 docker push 716121312511.dkr.ecr.us-west-1.amazonaws.com/industry-research-agent:latest
 
-# Update Lambda function
 aws lambda update-function-code \
   --function-name industry-research-agent \
   --image-uri 716121312511.dkr.ecr.us-west-1.amazonaws.com/industry-research-agent:latest \
   --region us-west-1
 ```
 
-Or use the deployment script: `./deploy-research-agent.sh`
+## Security
 
-## 📚 Additional Documentation
+**Important Notes:**
+- Never commit secrets to git
+- Use `.gitignore` (configured) to exclude:
+  - `.claude/` - AI assistant files
+  - `*.json` - Test/response files
+  - `*.env` - Environment files
+  - `.streamlit/secrets.toml` - Dashboard credentials
+- Store API keys in AWS Lambda environment variables
+- Use IAM roles with least-privilege permissions
+- Hash passwords in `secrets.toml`
 
-- [DEPLOYMENT.md](DEPLOYMENT.md) - Detailed deployment instructions
-- [THROTTLING.md](THROTTLING.md) - Token throttling system documentation
-- [RATE_LIMITS.md](RATE_LIMITS.md) - Rate limit management strategies
+## Troubleshooting
 
-## 🗂️ Repository Structure
+### Dashboard Issues
 
-Important: The `.gitignore` file is configured to exclude:
-- `.claude/` - Claude Code assistant files
-- `*.json` - Test and response files
-- `*.env` - Environment/secret files
+**Problem**: "Could not connect to S3"
+- Check AWS credentials: `aws s3 ls`
+- Verify bucket exists: `aws s3 ls s3://retail-data-bcgr/`
+- Check region in `.streamlit/secrets.toml`
 
-Never commit these files to version control.
+**Problem**: "Claude integration not working"
+- Verify `claude_integration.py` exists
+- Check Anthropic API key in environment
+
+### Research Agent Issues
+
+**Problem**: Rate limit errors (429)
+- Default: 2 queries per cycle with 65s retry wait
+- Reduce queries: Change `max_queries = 1` in `lambda_function.py`
+- See troubleshooting in [DEPLOYMENT.md](DEPLOYMENT.md)
+
+**Problem**: Lambda timeout
+- Check CloudWatch logs
+- Current timeout: 600s (10 minutes)
+- Each query takes ~30-60 seconds
+
+**Problem**: No findings generated
+- Check S3 path: `research-findings/YYYY/MM/DD/findings.json`
+- View Lambda logs for errors
+- Verify Anthropic API key in Lambda environment
+
+## Additional Documentation
+
+- [DEPLOYMENT.md](DEPLOYMENT.md) - Research agent deployment guide
+- Research agent uses Claude with web search tool
+- Dashboard integrates with S3, Claude API, and research findings
+- All research data persists in S3 with historical archival
+
+## License
+
+Internal use only - Cannabis retail analytics platform
