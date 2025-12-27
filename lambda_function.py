@@ -397,19 +397,104 @@ class ResearchStorage:
 
 
 # =============================================================================
+# TOKEN THROTTLE MANAGER
+# =============================================================================
+
+class TokenThrottleManager:
+    """Manages API rate limits by tracking token usage and implementing pauses."""
+
+    def __init__(self, tokens_per_minute: int = 30000, safety_margin: float = 0.85):
+        self.tokens_per_minute = tokens_per_minute
+        self.safety_margin = safety_margin  # Use 85% of limit to be safe
+        self.max_tokens = int(tokens_per_minute * safety_margin)
+
+        self.window_start = datetime.utcnow()
+        self.tokens_used = 0
+        self.api_calls = []
+
+    def estimate_tokens(self, text: str) -> int:
+        """Rough token estimation: ~4 characters per token."""
+        return len(text) // 4
+
+    def record_usage(self, input_tokens: int, output_tokens: int = 0):
+        """Record token usage from an API call."""
+        total = input_tokens + output_tokens
+        self.tokens_used += total
+        self.api_calls.append({
+            "timestamp": datetime.utcnow(),
+            "tokens": total
+        })
+        print(f"  📊 Tokens used: {total} (total: {self.tokens_used}/{self.max_tokens})")
+
+    def get_usage_from_response(self, response) -> tuple:
+        """Extract token usage from Anthropic API response."""
+        input_tokens = getattr(response.usage, 'input_tokens', 0)
+        output_tokens = getattr(response.usage, 'output_tokens', 0)
+        return input_tokens, output_tokens
+
+    def can_proceed(self, estimated_tokens: int = 5000) -> bool:
+        """Check if we can make another API call without exceeding limits."""
+        self._reset_window_if_needed()
+        return (self.tokens_used + estimated_tokens) < self.max_tokens
+
+    def wait_if_needed(self, estimated_tokens: int = 5000) -> float:
+        """Wait if necessary to stay under rate limits. Returns seconds waited."""
+        self._reset_window_if_needed()
+
+        if (self.tokens_used + estimated_tokens) >= self.max_tokens:
+            elapsed = (datetime.utcnow() - self.window_start).total_seconds()
+            wait_time = max(60 - elapsed, 0)
+
+            if wait_time > 0:
+                print(f"  ⏸️  Rate limit approaching ({self.tokens_used}/{self.max_tokens} tokens used)")
+                print(f"  ⏸️  Pausing for {wait_time:.1f} seconds to reset rate limit window...")
+                import time
+                time.sleep(wait_time)
+                self._reset_window()
+                return wait_time
+
+        return 0
+
+    def _reset_window_if_needed(self):
+        """Reset the tracking window if 60 seconds have passed."""
+        elapsed = (datetime.utcnow() - self.window_start).total_seconds()
+        if elapsed >= 60:
+            self._reset_window()
+
+    def _reset_window(self):
+        """Reset the rate limit tracking window."""
+        self.window_start = datetime.utcnow()
+        self.tokens_used = 0
+        self.api_calls = []
+        print(f"  🔄 Rate limit window reset")
+
+    def get_stats(self) -> dict:
+        """Get current usage statistics."""
+        elapsed = (datetime.utcnow() - self.window_start).total_seconds()
+        return {
+            "tokens_used": self.tokens_used,
+            "tokens_limit": self.max_tokens,
+            "utilization": f"{(self.tokens_used / self.max_tokens * 100):.1f}%",
+            "window_elapsed": f"{elapsed:.1f}s",
+            "api_calls": len(self.api_calls)
+        }
+
+
+# =============================================================================
 # RESEARCH AGENT
 # =============================================================================
 
 class IndustryResearchAgent:
     """AI-powered research agent for cannabis industry monitoring."""
-    
+
     def __init__(self, api_key: str, storage: ResearchStorage):
         if not ANTHROPIC_AVAILABLE:
             raise ImportError("anthropic package not installed")
-        
+
         self.client = anthropic.Anthropic(api_key=api_key)
         self.storage = storage
         self.model = "claude-sonnet-4-20250514"
+        self.throttle = TokenThrottleManager(tokens_per_minute=30000, safety_margin=0.85)
     
     def _generate_finding_id(self, content: str) -> str:
         """Generate a unique ID for a finding to detect duplicates."""
@@ -446,38 +531,57 @@ Search and respond with ONLY a JSON object:
 
 Only mark has_new_content=true if there are developments from the past 7 days that we don't already know about. Be conservative - skip if uncertain."""
 
-        try:
-            response = self.client.messages.create(
-                model="claude-haiku-4-5-20251001",  # Use Haiku for cheap quick scan
-                max_tokens=300,
-                tools=[{
-                    "type": "web_search_20250305",
-                    "name": "web_search"
-                }],
-                messages=[{"role": "user", "content": prompt}]
-            )
-            
-            result_text = ""
-            for block in response.content:
-                if hasattr(block, 'text'):
-                    result_text += block.text
-            
-            # Parse JSON response
-            if "```json" in result_text:
-                result_text = result_text.split("```json")[1].split("```")[0]
-            elif "```" in result_text:
-                result_text = result_text.split("```")[1].split("```")[0]
-            
-            return json.loads(result_text.strip())
-            
-        except Exception as e:
-            # On error, default to doing full research (fail open)
-            return {
-                "has_new_content": True,
-                "signals": ["scan_failed"],
-                "skip_reason": None,
-                "error": str(e)
-            }
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                # Check throttle before making API call
+                estimated = self.throttle.estimate_tokens(prompt)
+                self.throttle.wait_if_needed(estimated)
+
+                response = self.client.messages.create(
+                    model="claude-haiku-4-5-20251001",  # Use Haiku for cheap quick scan
+                    max_tokens=300,
+                    tools=[{
+                        "type": "web_search_20250305",
+                        "name": "web_search"
+                    }],
+                    messages=[{"role": "user", "content": prompt}]
+                )
+
+                # Record actual token usage
+                input_tokens, output_tokens = self.throttle.get_usage_from_response(response)
+                self.throttle.record_usage(input_tokens, output_tokens)
+
+                result_text = ""
+                for block in response.content:
+                    if hasattr(block, 'text'):
+                        result_text += block.text
+
+                # Parse JSON response
+                if "```json" in result_text:
+                    result_text = result_text.split("```json")[1].split("```")[0]
+                elif "```" in result_text:
+                    result_text = result_text.split("```")[1].split("```")[0]
+
+                return json.loads(result_text.strip())
+
+            except Exception as e:
+                error_str = str(e)
+                if "rate_limit_error" in error_str and attempt < max_retries - 1:
+                    wait_time = 65  # Wait for rate limit window to reset
+                    print(f"  ⏸️  Rate limit hit (attempt {attempt + 1}/{max_retries}). Waiting {wait_time}s...")
+                    import time
+                    time.sleep(wait_time)
+                    self.throttle._reset_window()  # Reset our tracking
+                    continue
+                else:
+                    # On final error or non-rate-limit error, default to doing full research
+                    return {
+                        "has_new_content": True,
+                        "signals": ["scan_failed"],
+                        "skip_reason": None,
+                        "error": error_str
+                    }
     
     def research_topic(self, topic: dict, skip_scan: bool = False, known_findings: list = None) -> dict:
         """Research a single topic using Claude with web search."""
@@ -534,33 +638,54 @@ For each finding:
 
 Be specific with dates, numbers, sources."""
 
-        try:
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=2000,
-                tools=[{
-                    "type": "web_search_20250305",
-                    "name": "web_search"
-                }],
-                messages=[{"role": "user", "content": prompt}]
-            )
-            
-            # Extract the research results
-            research_text = ""
-            for block in response.content:
-                if hasattr(block, 'text'):
-                    research_text += block.text
-            
-            topic_findings["raw_response"] = research_text
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                # Check throttle before making API call
+                estimated = self.throttle.estimate_tokens(prompt) + 2000  # Add max_tokens estimate
+                self.throttle.wait_if_needed(estimated)
 
-            # Extract summary and findings directly from response (avoid extra API call)
-            # This prevents rate limit errors from the parsing step
-            topic_findings["summary"] = self._extract_summary(research_text)
-            topic_findings["findings"] = self._extract_findings_simple(research_text)
-            
-        except Exception as e:
-            topic_findings["error"] = str(e)
-            topic_findings["summary"] = f"Research failed: {e}"
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=2000,
+                    tools=[{
+                        "type": "web_search_20250305",
+                        "name": "web_search"
+                    }],
+                    messages=[{"role": "user", "content": prompt}]
+                )
+
+                # Record actual token usage
+                input_tokens, output_tokens = self.throttle.get_usage_from_response(response)
+                self.throttle.record_usage(input_tokens, output_tokens)
+
+                # Extract the research results
+                research_text = ""
+                for block in response.content:
+                    if hasattr(block, 'text'):
+                        research_text += block.text
+
+                topic_findings["raw_response"] = research_text
+
+                # Extract summary and findings directly from response (avoid extra API call)
+                # This prevents rate limit errors from the parsing step
+                topic_findings["summary"] = self._extract_summary(research_text)
+                topic_findings["findings"] = self._extract_findings_simple(research_text)
+                break  # Success, exit retry loop
+
+            except Exception as e:
+                error_str = str(e)
+                if "rate_limit_error" in error_str and attempt < max_retries - 1:
+                    wait_time = 65
+                    print(f"  ⏸️  Rate limit hit on research (attempt {attempt + 1}/{max_retries}). Waiting {wait_time}s...")
+                    import time
+                    time.sleep(wait_time)
+                    self.throttle._reset_window()
+                    continue
+                else:
+                    topic_findings["error"] = error_str
+                    topic_findings["summary"] = f"Research failed: {e}"
+                    break
         
         return topic_findings
     
@@ -785,71 +910,99 @@ Generate an updated summary JSON with:
 Merge new findings with prior context. Remove resolved items. Prioritize actionable insights.
 Return ONLY valid JSON."""
 
-        try:
-            response = self.client.messages.create(
-                model=self.model,
-                max_tokens=2000,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            
-            result_text = response.content[0].text
-            
-            # Clean up potential markdown formatting
-            if "```json" in result_text:
-                result_text = result_text.split("```json")[1].split("```")[0]
-            elif "```" in result_text:
-                result_text = result_text.split("```")[1].split("```")[0]
-            
-            return json.loads(result_text.strip())
-            
-        except Exception as e:
-            return {
-                "executive_summary": f"Summary generation failed: {e}",
-                "key_findings": [],
-                "tracking_items": [],
-                "action_items": [],
-                "generated_at": datetime.utcnow().isoformat(),
-                "error": str(e)
-            }
+        max_retries = 2
+        for attempt in range(max_retries):
+            try:
+                # Check throttle before making API call
+                estimated = self.throttle.estimate_tokens(prompt) + 2000
+                self.throttle.wait_if_needed(estimated)
+
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=2000,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+
+                # Record actual token usage
+                input_tokens, output_tokens = self.throttle.get_usage_from_response(response)
+                self.throttle.record_usage(input_tokens, output_tokens)
+
+                result_text = response.content[0].text
+
+                # Clean up potential markdown formatting
+                if "```json" in result_text:
+                    result_text = result_text.split("```json")[1].split("```")[0]
+                elif "```" in result_text:
+                    result_text = result_text.split("```")[1].split("```")[0]
+
+                return json.loads(result_text.strip())
+
+            except Exception as e:
+                error_str = str(e)
+                if "rate_limit_error" in error_str and attempt < max_retries - 1:
+                    wait_time = 65
+                    print(f"  ⏸️  Rate limit hit on summary (attempt {attempt + 1}/{max_retries}). Waiting {wait_time}s...")
+                    import time
+                    time.sleep(wait_time)
+                    self.throttle._reset_window()
+                    continue
+                else:
+                    return {
+                        "executive_summary": f"Summary generation failed: {e}",
+                        "key_findings": [],
+                        "tracking_items": [],
+                        "action_items": [],
+                        "generated_at": datetime.utcnow().isoformat(),
+                        "error": error_str
+                    }
     
-    def run_research_cycle(self, topics: list = None, force_full: bool = False, max_topics: int = 1) -> dict:
-        """Run a complete research cycle with conditional scanning.
+    def run_research_cycle(self, topics: list = None, force_full: bool = False, max_queries: int = 2) -> dict:
+        """Run a complete research cycle with intelligent throttling.
 
         Args:
             topics: List of topics to research (default: all RESEARCH_TOPICS)
             force_full: Skip preliminary scans and do full research on all topics
-            max_topics: Maximum topics to research per cycle (to avoid rate limits)
+            max_queries: Maximum queries to research per cycle (default: 2, with throttling and retry)
         """
 
         all_topics = topics or RESEARCH_TOPICS
 
-        # Pick ONE random query from all queries across all topics
+        # Flatten all queries from all topics and shuffle for random selection
         import random
         from datetime import datetime
 
-        # Flatten all queries from all topics
-        all_queries = []
+        all_query_items = []
         for topic in all_topics:
             for query in topic["queries"]:
-                all_queries.append({
+                all_query_items.append({
                     "topic": topic,
                     "query": query
                 })
 
-        # Pick one random query
-        selected = random.choice(all_queries)
+        # Shuffle and pick up to max_queries
+        random.shuffle(all_query_items)
+        selected_items = all_query_items[:max_queries]
 
-        # Create a mini-topic with just this one query
-        topics = [{
-            "id": selected["topic"]["id"],
-            "name": selected["topic"]["name"],
-            "queries": [selected["query"]],  # Only one query
-            "importance": selected["topic"]["importance"]
-        }]
+        # Group by topic to reduce redundant API calls
+        topics_map = {}
+        for item in selected_items:
+            topic_id = item["topic"]["id"]
+            if topic_id not in topics_map:
+                topics_map[topic_id] = {
+                    "id": item["topic"]["id"],
+                    "name": item["topic"]["name"],
+                    "queries": [],
+                    "importance": item["topic"]["importance"]
+                }
+            topics_map[topic_id]["queries"].append(item["query"])
+
+        topics = list(topics_map.values())
 
         print(f"Starting research cycle at {datetime.utcnow().isoformat()}")
-        print(f"Researching 1 randomly selected query of {len(all_queries)} total queries")
-        print(f"Selected query: '{selected['query']}' from topic '{topics[0]['name']}'")
+        print(f"Researching {sum(len(t['queries']) for t in topics)} queries across {len(topics)} topics")
+        print(f"Token throttling enabled: {self.throttle.max_tokens} tokens/min max")
+        for topic in topics:
+            print(f"  - {topic['name']}: {len(topic['queries'])} queries")
 
         # Add delay between topics to avoid rate limits (30k tokens/min)
         import time
@@ -899,21 +1052,21 @@ Return ONLY valid JSON."""
                     results["topics_researched"] += 1
                     print(f"  ✅ Found {len(topic_result.get('findings', []))} findings")
 
-                    # Add 15 second delay after each researched topic to avoid rate limits
-                    # Each topic uses ~6-8k tokens, so we need to space them out
-                    if idx < len(topics) - 1:  # Don't delay after last topic
-                        print(f"  Waiting 15 seconds to avoid rate limits...")
-                        time.sleep(15)
-
             except Exception as e:
                 error_msg = f"Error researching {topic['name']}: {e}"
                 print(f"  ❌ {error_msg}")
                 results["errors"].append(error_msg)
         
         results["completed_at"] = datetime.utcnow().isoformat()
-        
+
+        # Add throttle statistics
+        throttle_stats = self.throttle.get_stats()
+        results["throttle_stats"] = throttle_stats
+
         print(f"\nCycle summary: {results['topics_researched']} researched, {results['topics_skipped']} skipped")
-        
+        print(f"Token usage: {throttle_stats['tokens_used']}/{throttle_stats['tokens_limit']} ({throttle_stats['utilization']})")
+        print(f"API calls: {throttle_stats['api_calls']} in {throttle_stats['window_elapsed']}")
+
         # Save raw findings
         self.storage.save_findings(results)
         print("Saved raw findings to S3")
