@@ -10,7 +10,8 @@
       "Bash(docker push:*)",
       "Bash(ls:*)",
       "Bash(docker image inspect:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(python:*)"
     ]
   }
 }
