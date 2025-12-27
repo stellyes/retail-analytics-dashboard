@@ -31,6 +31,13 @@ try:
 except ImportError:
     RESEARCH_AVAILABLE = False
 
+# Import SEO Integration (optional)
+try:
+    from seo_integration import render_seo_page
+    SEO_AVAILABLE = True
+except ImportError:
+    SEO_AVAILABLE = False
+
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
@@ -833,6 +840,10 @@ def main():
         if RESEARCH_AVAILABLE:
             nav_options.append("🔬 Industry Research")
 
+        # Add SEO page if available
+        if SEO_AVAILABLE:
+            nav_options.append("🔍 SEO Analysis")
+
         nav_options.append("📤 Data Upload")
 
         page = st.radio("Navigation", nav_options)
@@ -882,6 +893,12 @@ def main():
             render_research_page()
         else:
             st.error("Research integration module not found. Make sure `research_integration.py` is in the same directory.")
+
+    elif page == "🔍 SEO Analysis":
+        if SEO_AVAILABLE:
+            render_seo_page()
+        else:
+            st.error("SEO integration module not found. Make sure `seo_integration.py` is in the same directory.")
 
     elif page == "📤 Data Upload":
         render_upload_page(s3_manager, processor)
