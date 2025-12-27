@@ -1,16 +1,17 @@
 # 🔬 Cannabis Industry Research Agent
 
-An autonomous AI-powered research agent that monitors cannabis industry trends, regulations, and market developments. Runs on AWS Lambda (container image) and integrates with your existing Streamlit retail dashboard.
+An autonomous AI-powered research agent that monitors cannabis industry trends, regulations, and market developments. Runs on AWS Lambda (container image) and stores findings in S3.
 
 ## 📋 Overview
 
 The research agent:
-- **Runs automatically** on a configurable schedule (default: every 8 hours)
-- **Smart scanning**: Uses cheap Haiku scan first, only does full Sonnet research if new content found
+- **Runs automatically** on a schedule (default: every 6 hours)
+- **Intelligent throttling**: Automatically manages API rate limits with retry logic
+- **Smart query selection**: Researches 2 random queries per cycle from all topics
 - **Monitors key topics**: Regulations, market trends, competition, products, pricing
 - **Maintains context**: Reviews prior findings before each research cycle
-- **Stores findings** in S3 with cumulative summaries
-- **Integrates** with your existing Streamlit dashboard
+- **Stores findings** in S3 with cumulative summaries and historical archives
+- **Rate limit safe**: Built-in token tracking and automatic pausing/retry
 
 ## 🏗️ Architecture
 
@@ -30,13 +31,15 @@ The research agent:
 ## 📁 Project Structure
 
 ```
-industry_research_agent/
-├── lambda_function.py          # Main research agent
+retail-analytics-dashboard/
+├── lambda_function.py          # Main research agent with throttling
 ├── Dockerfile                  # Lambda container definition
 ├── requirements.txt            # Python dependencies
-├── cloudformation-container.yaml  # AWS infrastructure
-├── deploy-container.sh         # One-command deployment
-├── research_integration.py     # Streamlit dashboard integration
+├── deploy-research-agent.sh    # Deployment script
+├── update-schedule.sh          # Schedule modification utility
+├── DEPLOYMENT.md              # Deployment guide
+├── THROTTLING.md              # Token throttling documentation
+├── RATE_LIMITS.md             # Rate limit management guide
 └── README.md
 ```
 
@@ -51,49 +54,54 @@ industry_research_agent/
 ### Deploy
 
 ```bash
-# Set your API key
-export ANTHROPIC_API_KEY="sk-ant-api03-..."
-
-# Optional: customize settings
-export S3_BUCKET_NAME="retail-data-bcgr"
-export AWS_REGION="us-west-2"
-export SCHEDULE="rate(8 hours)"
-
-# Deploy
-chmod +x deploy-container.sh
-./deploy-container.sh
+# Run the deployment script
+./deploy-research-agent.sh
 ```
 
 This will:
-1. Create an ECR repository
-2. Build the Docker image
+1. Create ECR repository (if needed)
+2. Build Docker image with platform specification
 3. Push to ECR
-4. Deploy CloudFormation stack
-5. Set up EventBridge schedule
+4. Create IAM role (if needed)
+5. Deploy Lambda function
+6. Set up EventBridge schedule (every 6 hours)
 
-### Integrate with Dashboard
+The script handles everything automatically. See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed instructions.
 
-Add to your `dashboard.py`:
+### Test the Function
 
-```python
-from research_integration import render_research_page
+```bash
+# Invoke manually
+aws lambda invoke --function-name industry-research-agent --region us-west-1 response.json
 
-# In navigation, add: "🔬 Industry Research"
-# In page routing:
-elif page == "🔬 Industry Research":
-    render_research_page()
+# Check findings in S3
+aws s3 ls s3://retail-data-bcgr/research-findings/ --recursive
 ```
 
 ## ⚙️ Configuration
 
 ### Schedule Options
 
-| Expression | Description |
-|------------|-------------|
-| `rate(8 hours)` | Every 8 hours (default) |
-| `rate(4 hours)` | Every 4 hours |
-| `rate(1 day)` | Once daily |
-| `cron(0 8,16 * * ? *)` | 8am and 4pm UTC |
+Update the schedule using the utility script:
+
+```bash
+# Change to every 12 hours
+./update-schedule.sh 12
+
+# Change to every 4 hours
+./update-schedule.sh 4
+```
+
+Current schedule: **Every 6 hours**
+
+### Throttling Configuration
+
+The agent includes intelligent token throttling to stay within API rate limits (30,000 tokens/minute). See [THROTTLING.md](THROTTLING.md) for details.
+
+Default settings in `lambda_function.py`:
+- `max_queries = 2` - Research 2 random queries per cycle
+- `safety_margin = 0.85` - Use 85% of rate limit (25,500 tokens)
+- Automatic retry with 65-second wait on rate limit errors
 
 ### Research Topics
 
@@ -104,54 +112,65 @@ RESEARCH_TOPICS = [
     {
         "id": "regulatory",
         "name": "Regulatory Updates",
-        "queries": ["cannabis regulation California", ...],
-        "importance": "high"  # high = always full research
+        "queries": [
+            "cannabis regulation California 2025",
+            "marijuana dispensary license California"
+        ],
+        "importance": "high"
     },
-    ...
+    # ... 4 more topics (10 total queries)
 ]
 ```
 
+The agent randomly selects 2 queries per cycle, ensuring all topics get coverage over time.
+
 ## 💰 Cost Optimization
 
-The agent uses smart scanning to reduce costs:
+The agent uses multiple strategies to reduce costs:
 
-1. **Quick scan** (Haiku, ~$0.002) checks if there's new content
-2. **Full research** (Sonnet, ~$0.05) only runs if new content found
-3. **High-importance topics** (regulatory, pricing) always get full research
+1. **Smart query selection**: Only 2 random queries per cycle (out of 10 total)
+2. **Quick scan** (Haiku, ~$0.002) checks if there's new content
+3. **Full research** (Sonnet, ~$0.05) only runs if new content found
+4. **Intelligent throttling**: Prevents wasted API calls from rate limit errors
+5. **Automatic retry**: Waits and retries instead of failing
 
 | Scenario | Cost per cycle |
 |----------|---------------|
-| Quiet day | ~$0.06 |
-| Normal day | ~$0.12 |
-| Busy news | ~$0.26 |
+| Quiet day (no new content) | ~$0.01 |
+| Normal day (1-2 topics) | ~$0.05-0.10 |
+| Busy news (all queries) | ~$0.15 |
 
-**Monthly estimate**: ~$10-15 at 3x daily
+**Monthly estimate**: ~$10-20 at 4x daily (every 6 hours)
 
 ## 🔧 Manual Commands
 
 ```bash
-# Trigger research
-aws lambda invoke --function-name industry-research-agent-research-agent \
-  --payload '{"mode": "research"}' out.json
+# Trigger research cycle
+aws lambda invoke --function-name industry-research-agent \
+  --region us-west-1 response.json
 
-# Force full research (skip scans)
-aws lambda invoke --function-name industry-research-agent-research-agent \
-  --payload '{"mode": "research", "force_full": true}' out.json
+# View latest findings
+aws s3 cp s3://retail-data-bcgr/research-findings/$(date +%Y/%m/%d)/findings.json - \
+  --region us-west-1 | python -m json.tool
 
-# Research specific topics
-aws lambda invoke --function-name industry-research-agent-research-agent \
-  --payload '{"mode": "research", "topics": ["regulatory", "pricing"]}' out.json
+# View summary
+aws s3 cp s3://retail-data-bcgr/research-findings/summary/latest.json - \
+  --region us-west-1 | python -m json.tool
 
-# Run archival (condense old data)
-aws lambda invoke --function-name industry-research-agent-research-agent \
-  --payload '{"mode": "archive"}' out.json
+# Change schedule (using utility script)
+./update-schedule.sh 12  # Change to every 12 hours
+```
 
-# Archive and delete original daily files
-aws lambda invoke --function-name industry-research-agent-research-agent \
-  --payload '{"mode": "archive", "delete_after_archive": true}' out.json
+## 📊 Monitoring
 
-# View logs
-aws logs tail /aws/lambda/industry-research-agent-research-agent --follow
+Check token usage and research stats:
+
+```bash
+# View recent findings with throttle stats
+aws s3 cp s3://retail-data-bcgr/research-findings/$(date +%Y/%m/%d)/findings.json - \
+  --region us-west-1 | python -c "import json, sys; d=json.load(sys.stdin); \
+  print(f'Topics researched: {d[\"topics_researched\"]}'); \
+  print(f'Throttle stats: {d.get(\"throttle_stats\", {})}')"
 ```
 
 ## 📦 Data Archival & Historical Context
@@ -199,10 +218,38 @@ This gives the agent deep context about where the industry has been and where it
 
 ## 🔄 Updating
 
-After code changes:
+After code changes, rebuild and redeploy:
 
 ```bash
-./deploy-container.sh
+# Rebuild and push Docker image
+docker build --platform linux/amd64 --provenance=false --sbom=false \
+  -t industry-research-agent .
+
+docker tag industry-research-agent:latest \
+  716121312511.dkr.ecr.us-west-1.amazonaws.com/industry-research-agent:latest
+
+docker push 716121312511.dkr.ecr.us-west-1.amazonaws.com/industry-research-agent:latest
+
+# Update Lambda function
+aws lambda update-function-code \
+  --function-name industry-research-agent \
+  --image-uri 716121312511.dkr.ecr.us-west-1.amazonaws.com/industry-research-agent:latest \
+  --region us-west-1
 ```
 
-This rebuilds the image and updates Lambda automatically.
+Or use the deployment script: `./deploy-research-agent.sh`
+
+## 📚 Additional Documentation
+
+- [DEPLOYMENT.md](DEPLOYMENT.md) - Detailed deployment instructions
+- [THROTTLING.md](THROTTLING.md) - Token throttling system documentation
+- [RATE_LIMITS.md](RATE_LIMITS.md) - Rate limit management strategies
+
+## 🗂️ Repository Structure
+
+Important: The `.gitignore` file is configured to exclude:
+- `.claude/` - Claude Code assistant files
+- `*.json` - Test and response files
+- `*.env` - Environment/secret files
+
+Never commit these files to version control.
