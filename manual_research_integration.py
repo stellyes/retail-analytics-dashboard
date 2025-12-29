@@ -440,13 +440,19 @@ Return ONLY valid JSON."""
         Cost: ~$0.01-0.02
         """
 
+        # DEBUG: Show what we're summarizing
+        st.info(f"🔍 DEBUG - Generating summary:\n- Documents analyzed: {batch_results.get('documents_analyzed', 0)}\n- Categories: {list(batch_results.get('findings_by_category', {}).keys())}\n- Total findings: {len(batch_results.get('all_findings', []))}")
+
         # Compile findings
         findings_text = ""
         for category, findings_list in batch_results.get('findings_by_category', {}).items():
+            st.info(f"📁 DEBUG - Category '{category}' has {len(findings_list)} findings")
             findings_text += f"\n\n## {category}\n"
             for finding in findings_list:
                 findings_text += f"\nSummary: {finding.get('summary', 'N/A')}\n"
                 findings_text += f"Key Facts: {', '.join(finding.get('key_facts', [])[:3])}\n"
+
+        st.info(f"📝 DEBUG - Compiled findings text length: {len(findings_text)} chars\nFirst 500 chars:\n{findings_text[:500]}")
 
         prompt = f"""Create an executive summary from these cannabis industry research findings.
 
