@@ -142,7 +142,15 @@ class DocumentStorage:
                                 Key=obj['Key']
                             )
                             metadata = json.loads(response['Body'].read().decode('utf-8'))
-                            metadata['s3_key'] = obj['Key'].replace('_metadata.json', '')
+
+                            # Reconstruct the actual s3_key from metadata
+                            # Format: research-documents/YYYY/MM/DD/{doc_id}_{original_filename}
+                            # Extract date from metadata key path
+                            key_parts = obj['Key'].split('/')
+                            date_path = '/'.join(key_parts[:-1])  # Everything except the filename
+                            doc_id = metadata.get('doc_id', '')
+                            original_filename = metadata.get('original_filename', '')
+                            metadata['s3_key'] = f"{date_path}/{doc_id}_{original_filename}"
                             metadata['uploaded_at'] = obj['LastModified'].isoformat()
                             documents.append(metadata)
                         except:
@@ -157,14 +165,22 @@ class DocumentStorage:
             st.error(f"Error listing documents: {e}")
             return []
 
-    def get_document_content(self, s3_key: str) -> str:
-        """Retrieve document content from S3."""
+    def get_document_content(self, s3_key: str) -> tuple:
+        """Retrieve document content from S3. Returns (content, error)."""
 
         try:
             response = self.s3.get_object(Bucket=self.bucket_name, Key=s3_key)
-            return response['Body'].read().decode('utf-8', errors='ignore')
+            content = response['Body'].read().decode('utf-8', errors='ignore')
+
+            # Verify we got content
+            if not content or len(content) < 50:
+                return (None, f"S3 returned empty or very short content ({len(content)} bytes)")
+
+            return (content, None)
         except Exception as e:
-            return f"Error loading document: {e}"
+            # Include more details about the error
+            error_msg = f"S3 Error accessing '{s3_key}': {type(e).__name__}: {str(e)}"
+            return (None, error_msg)
 
     def delete_document(self, s3_key: str) -> bool:
         """Delete a document and its metadata."""
@@ -696,11 +712,26 @@ def render_analysis_tab(storage: DocumentStorage, analyzer: ManualResearchAnalyz
                 }
 
                 for idx, doc in enumerate(selected_docs):
-                    status_text.text(f"Analyzing: {doc.get('original_filename', 'Unknown')}")
+                    doc_name = doc.get('original_filename', 'Unknown')
+                    s3_key = doc.get('s3_key', '')
+                    status_text.text(f"Analyzing: {doc_name}")
 
                     try:
-                        # Load and analyze
-                        content = storage.get_document_content(doc['s3_key'])
+                        # Load from S3
+                        content, s3_error = storage.get_document_content(s3_key)
+
+                        if s3_error:
+                            # S3 download failed - show detailed error
+                            results['errors'].append({
+                                'document': doc_name,
+                                'error': s3_error,
+                                's3_key': s3_key,
+                                'bucket': S3_BUCKET
+                            })
+                            progress_bar.progress((idx + 1) / len(selected_docs))
+                            continue
+
+                        # Analyze the content
                         analysis = analyzer.analyze_document(
                             content=content,
                             category=doc.get('category', 'Other'),
@@ -750,6 +781,15 @@ def render_analysis_tab(storage: DocumentStorage, analyzer: ManualResearchAnalyz
                 status_text.empty()
 
                 st.success(f"✅ Analysis complete! Processed {results['documents_analyzed']} documents")
+
+                # Display errors if any
+                if results['errors']:
+                    st.error(f"⚠️ {len(results['errors'])} document(s) failed to process:")
+                    for error in results['errors']:
+                        with st.expander(f"❌ {error.get('document', 'Unknown')}", expanded=True):
+                            st.code(error.get('error', 'Unknown error'))
+                            st.caption(f"Bucket: {error.get('bucket', 'Unknown')}")
+                            st.caption(f"S3 Key: {error.get('s3_key', 'Unknown')}")
 
                 # Display summary metrics
                 col1, col2, col3 = st.columns(3)
