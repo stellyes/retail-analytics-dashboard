@@ -38,6 +38,13 @@ try:
 except ImportError:
     SEO_AVAILABLE = False
 
+# Import QR Code Integration (optional)
+try:
+    from qr_integration import render_qr_page
+    QR_AVAILABLE = True
+except ImportError:
+    QR_AVAILABLE = False
+
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
@@ -844,6 +851,10 @@ def main():
         if SEO_AVAILABLE:
             nav_options.append("🔍 SEO Analysis")
 
+        # Add QR Code page if available
+        if QR_AVAILABLE:
+            nav_options.append("📱 QR Code Portal")
+
         nav_options.append("📤 Data Upload")
 
         page = st.radio("Navigation", nav_options)
@@ -899,6 +910,12 @@ def main():
             render_seo_page()
         else:
             st.error("SEO integration module not found. Make sure `seo_integration.py` is in the same directory.")
+
+    elif page == "📱 QR Code Portal":
+        if QR_AVAILABLE:
+            render_qr_page()
+        else:
+            st.error("QR Code integration module not found. Make sure `qr_integration.py` is in the same directory.")
 
     elif page == "📤 Data Upload":
         render_upload_page(s3_manager, processor)
