@@ -253,9 +253,16 @@ class ManualResearchAnalyzer:
         else:
             clean_text = content
 
-        # Limit to first 8000 characters to control costs (~2000 tokens)
-        # This is sufficient for most news articles and reports
-        clean_text = clean_text[:8000]
+        # Check if we got any meaningful content
+        if not clean_text or len(clean_text.strip()) < 100:
+            return {
+                'success': False,
+                'error': f'Insufficient content extracted from {filename}. Only {len(clean_text)} characters found.'
+            }
+
+        # Limit to first 20000 characters to control costs (~5000 tokens)
+        # Increased from 8000 to capture more content from larger documents
+        clean_text = clean_text[:20000]
 
         prompt = f"""Analyze this cannabis industry document and extract key findings.
 
@@ -264,6 +271,8 @@ Source: {source_url or filename or 'Uploaded document'}
 
 DOCUMENT CONTENT:
 {clean_text}
+
+IMPORTANT: If the document content is meaningful and readable, analyze it. Do NOT say the document is unavailable if you can see the content above.
 
 Extract structured findings as JSON:
 {{
@@ -288,7 +297,7 @@ Return ONLY valid JSON."""
         try:
             response = self.client.messages.create(
                 model=self.model,
-                max_tokens=1000,  # Keep output concise for cost control
+                max_tokens=2000,  # Increased for better analysis quality
                 messages=[{"role": "user", "content": prompt}]
             )
 
