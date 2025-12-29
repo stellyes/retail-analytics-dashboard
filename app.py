@@ -822,7 +822,7 @@ def main():
     
     # Sidebar
     with st.sidebar:
-        st.image("https://via.placeholder.com/150x50?text=Your+Logo", width=150)
+        st.image("https://barbarycoastsf.com/wp-content/uploads/2025/12/icon-1.png", width=150)
         st.markdown(f"**Logged in as:** {st.session_state.get('logged_in_user', 'Unknown')}")
         st.markdown("---")
         
