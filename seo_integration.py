@@ -337,28 +337,31 @@ def render_seo_page():
     st.header("🔍 SEO Analysis Dashboard")
     st.markdown("""
     AI-powered SEO monitoring and analysis for your websites.
-    The agent runs daily to track SEO health, identify issues, and provide recommendations.
+    Manually analyze your sites to track SEO health, identify issues, and get recommendations.
     """)
-    
-    # Website selector
-    st.sidebar.markdown("---")
-    st.sidebar.subheader("🌐 Select Website")
-    
+
+    # Website selector - moved to main page
+    st.subheader("🌐 Select Website")
+
     website_options = {
         "Barbary Coast SF": "https://barbarycoastsf.com",
         "Grassroots SF": "https://grassrootssf.com"
     }
-    
-    selected_site_name = st.sidebar.radio(
-        "Choose website to analyze:",
-        list(website_options.keys())
-    )
-    selected_website = website_options[selected_site_name]
-    
-    st.sidebar.caption(f"📍 {selected_website}")
-    
-    # Show comparison option
-    show_comparison = st.sidebar.checkbox("📊 Show site comparison", value=False)
+
+    col1, col2 = st.columns([3, 1])
+
+    with col1:
+        selected_site_name = st.radio(
+            "Choose website to analyze:",
+            list(website_options.keys()),
+            horizontal=True
+        )
+        selected_website = website_options[selected_site_name]
+        st.caption(f"📍 Analyzing: {selected_website}")
+
+    with col2:
+        # Show comparison option
+        show_comparison = st.checkbox("📊 Compare Both Sites", value=False)
     
     # Initialize viewer for selected website
     viewer = SEOFindingsViewer(website=selected_website)
