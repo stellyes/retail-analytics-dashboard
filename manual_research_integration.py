@@ -260,7 +260,8 @@ class ManualResearchAnalyzer:
                         source_url: str = None, filename: str = None) -> Dict:
         """
         Analyze a single document and extract findings.
-        Cost: ~$0.02-0.05 per document with Haiku (vs $0.50+ with Sonnet + web search)
+        Cost: ~$0.03-0.08 per document with Haiku (vs $0.50+ with Sonnet + web search)
+        Higher cost allows for complete JSON responses without truncation.
         """
 
         # Extract clean text if HTML
@@ -288,18 +289,22 @@ Source: {source_url or filename or 'Uploaded document'}
 DOCUMENT CONTENT:
 {clean_text}
 
-IMPORTANT: If the document content is meaningful and readable, analyze it. Do NOT say the document is unavailable if you can see the content above.
+IMPORTANT:
+1. If the document content is meaningful and readable, analyze it. Do NOT say the document is unavailable.
+2. Keep your response CONCISE. Limit to top 5-7 key findings maximum.
+3. Each finding description should be 1-2 sentences maximum.
+4. Summary should be exactly 2-3 sentences, no more.
 
 Extract structured findings as JSON:
 {{
     "summary": "2-3 sentence summary of the main points",
     "key_findings": [
         {{
-            "finding": "Brief finding description",
+            "finding": "Brief 1-2 sentence finding description",
             "relevance": "high/medium/low",
             "category": "regulatory/market/competition/products/pricing/other",
             "action_required": true/false,
-            "recommended_action": "Specific action if needed"
+            "recommended_action": "Brief action if needed"
         }}
     ],
     "date_mentioned": "YYYY-MM-DD or null if no specific date",
@@ -308,16 +313,23 @@ Extract structured findings as JSON:
 }}
 
 Focus on actionable insights relevant to a San Francisco cannabis dispensary.
-Return ONLY valid JSON."""
+Return ONLY valid JSON with NO additional text or explanations."""
 
         try:
             response = self.client.messages.create(
                 model=self.model,
-                max_tokens=2000,  # Increased for better analysis quality
+                max_tokens=4096,  # Increased to allow complete JSON responses
                 messages=[{"role": "user", "content": prompt}]
             )
 
             result_text = response.content[0].text
+
+            # Check if response was truncated due to max_tokens
+            if response.stop_reason == "max_tokens":
+                return {
+                    'success': False,
+                    'error': f'Response truncated for {filename}. Claude hit the token limit before completing the JSON. Try reducing document size or simplifying the analysis.'
+                }
 
             # Clean JSON
             if "```json" in result_text:
@@ -332,7 +344,7 @@ Return ONLY valid JSON."""
                 # If JSON parsing fails, return error with details
                 return {
                     'success': False,
-                    'error': f'JSON parsing failed for {filename}: {str(json_err)}. Response was: {result_text[:500]}...'
+                    'error': f'JSON parsing failed for {filename}: {str(json_err)}. Stop reason: {response.stop_reason}. Response length: {len(result_text)} chars. Response start: {result_text[:500]}...'
                 }
 
             # Add metadata
