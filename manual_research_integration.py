@@ -958,6 +958,371 @@ def render_findings_tab(analyzer: ManualResearchAnalyzer):
 
 
 # =============================================================================
+# MONTHLY SUMMARY GENERATOR
+# =============================================================================
+
+class MonthlyResearchSummarizer:
+    """
+    Generates comprehensive monthly summaries from manual research findings.
+    Uses Claude Sonnet 4.5 with rate limiting for detailed analysis.
+    """
+
+    def __init__(self, api_key: str, bucket_name: str = None):
+        if not ANTHROPIC_AVAILABLE:
+            raise ImportError("anthropic package not installed")
+
+        self.client = anthropic.Anthropic(api_key=api_key)
+        self.model = "claude-sonnet-4-5-20251022"  # Sonnet 4.5 for comprehensive analysis
+        self.bucket_name = bucket_name or S3_BUCKET
+
+        # Rate limiting: 30,000 tokens per minute max
+        self.max_tokens_per_minute = 30000
+        self.last_request_time = None
+        self.tokens_used_this_minute = 0
+
+        # Initialize S3 client
+        try:
+            if hasattr(st, 'secrets') and 'aws' in st.secrets:
+                self.s3 = boto3.client(
+                    's3',
+                    aws_access_key_id=st.secrets['aws']['access_key_id'],
+                    aws_secret_access_key=st.secrets['aws']['secret_access_key'],
+                    region_name=st.secrets['aws'].get('region', 'us-west-1')
+                )
+            else:
+                self.s3 = boto3.client('s3')
+        except Exception as e:
+            st.error(f"Failed to initialize S3 client: {e}")
+            self.s3 = None
+
+    def _wait_for_rate_limit(self, estimated_tokens: int):
+        """
+        Enforce rate limiting: max 30K tokens per minute.
+        Waits if necessary to stay under limit.
+        """
+        import time
+
+        current_time = time.time()
+
+        # Reset counter if more than 60 seconds have passed
+        if self.last_request_time is None or (current_time - self.last_request_time) >= 60:
+            self.tokens_used_this_minute = 0
+            self.last_request_time = current_time
+
+        # Check if adding this request would exceed limit
+        if self.tokens_used_this_minute + estimated_tokens > self.max_tokens_per_minute:
+            # Calculate how long to wait
+            time_since_last = current_time - self.last_request_time
+            wait_time = 60 - time_since_last
+
+            if wait_time > 0:
+                st.info(f"⏳ Rate limiting: waiting {wait_time:.1f}s to stay under 30K tokens/minute...")
+                time.sleep(wait_time)
+                # Reset after waiting
+                self.tokens_used_this_minute = 0
+                self.last_request_time = time.time()
+
+        # Track tokens for this request
+        self.tokens_used_this_minute += estimated_tokens
+
+    def load_findings_for_month(self, year: int, month: int) -> List[Dict]:
+        """Load all analysis findings for a specific month."""
+        prefix = f"{S3_PREFIX_FINDINGS}{year}/{month:02d}/"
+
+        try:
+            paginator = self.s3.get_paginator('list_objects_v2')
+            findings = []
+
+            for page in paginator.paginate(Bucket=self.bucket_name, Prefix=prefix):
+                for obj in page.get('Contents', []):
+                    if obj['Key'].endswith('.json'):
+                        try:
+                            response = self.s3.get_object(Bucket=self.bucket_name, Key=obj['Key'])
+                            finding = json.loads(response['Body'].read().decode('utf-8'))
+
+                            # Only include successful analyses with actual findings
+                            if finding.get('documents_analyzed', 0) > 0:
+                                findings.append(finding)
+                        except Exception as e:
+                            st.warning(f"Error loading {obj['Key']}: {e}")
+                            continue
+
+            return findings
+
+        except Exception as e:
+            st.error(f"Error listing findings: {e}")
+            return []
+
+    def generate_monthly_summary(self, year: int, month: int) -> Dict:
+        """
+        Generate comprehensive monthly summary from all findings.
+        Uses Claude Sonnet 4.5 with 50K output tokens and rate limiting.
+        Cost: ~$0.30-0.90 per month depending on input size.
+        """
+        # Load all findings for the month
+        findings = self.load_findings_for_month(year, month)
+
+        if not findings:
+            return {
+                'success': False,
+                'error': f'No findings available for {year}-{month:02d}'
+            }
+
+        # Prepare consolidated findings data
+        all_key_findings = []
+        categories_data = {}
+        total_docs = 0
+
+        for analysis in findings:
+            total_docs += analysis.get('documents_analyzed', 0)
+
+            for finding in analysis.get('all_findings', []):
+                # Extract key findings from each document
+                for kf in finding.get('key_findings', []):
+                    all_key_findings.append({
+                        'finding': kf.get('finding'),
+                        'category': kf.get('category'),
+                        'relevance': kf.get('relevance'),
+                        'action_required': kf.get('action_required'),
+                        'recommended_action': kf.get('recommended_action'),
+                        'source': finding.get('source', 'Unknown'),
+                        'date': finding.get('date_mentioned')
+                    })
+
+                # Group by category
+                cat = finding.get('category', 'Other')
+                if cat not in categories_data:
+                    categories_data[cat] = []
+                categories_data[cat].append(finding.get('summary', ''))
+
+        # Build comprehensive prompt
+        findings_text = self._build_findings_text(all_key_findings, categories_data)
+
+        # Estimate input tokens (rough: chars / 4)
+        estimated_input_tokens = len(findings_text) // 4 + 2000  # findings + prompt
+        estimated_output_tokens = 50000
+
+        # Check rate limit before making request
+        self._wait_for_rate_limit(estimated_input_tokens + estimated_output_tokens)
+
+        prompt = f"""You are analyzing {total_docs} cannabis industry research documents for a San Francisco dispensary.
+Generate a COMPREHENSIVE monthly summary for {datetime(year, month, 1).strftime('%B %Y')}.
+
+FINDINGS DATA:
+{findings_text}
+
+Generate a detailed JSON response with the following structure:
+{{
+    "executive_summary": "3-5 paragraph comprehensive overview of the month",
+    "key_insights": [
+        {{
+            "insight": "Major consolidated insight (2-3 sentences)",
+            "importance": "high/medium/low",
+            "category": "regulatory/market/competition/products/pricing/other",
+            "supporting_findings": ["source 1 finding", "source 2 finding"],
+            "recommended_actions": [
+                {{
+                    "action": "Specific action to take",
+                    "priority": "high/medium/low",
+                    "timeline": "immediate/short-term/long-term",
+                    "expected_impact": "Description of impact"
+                }}
+            ]
+        }}
+    ],
+    "trends_analysis": {{
+        "regulatory": "Detailed regulatory trends and changes",
+        "market": "Market dynamics, growth areas, consumer behavior",
+        "competition": "Competitive landscape analysis",
+        "products": "Product innovation and category trends",
+        "pricing": "Pricing trends and economic factors"
+    }},
+    "opportunities": [
+        {{
+            "opportunity": "Specific business opportunity",
+            "rationale": "Why this is an opportunity",
+            "actions": ["step 1", "step 2"],
+            "potential_impact": "Expected business impact"
+        }}
+    ],
+    "risks_and_challenges": [
+        {{
+            "risk": "Identified risk or challenge",
+            "severity": "high/medium/low",
+            "mitigation": "How to address this risk"
+        }}
+    ],
+    "category_summaries": {{
+        "Regulatory Updates": "Detailed summary",
+        "Market Trends": "Detailed summary",
+        "Competitive Landscape": "Detailed summary",
+        "Product Innovation": "Detailed summary",
+        "Pricing & Economics": "Detailed summary"
+    }},
+    "strategic_recommendations": [
+        "Long-form strategic recommendation with detailed rationale"
+    ]
+}}
+
+IMPORTANT:
+- Be thorough and detailed - you have 50,000 tokens available
+- Synthesize patterns across multiple findings
+- Provide specific, actionable recommendations
+- Reference source documents in supporting_findings
+- Focus on insights relevant to SF cannabis dispensary operations
+- Return ONLY valid JSON"""
+
+        try:
+            with st.spinner("Generating comprehensive monthly summary..."):
+                response = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=50000,  # Maximum detail
+                    messages=[{"role": "user", "content": prompt}]
+                )
+
+            result_text = response.content[0].text
+
+            # Check for truncation
+            if response.stop_reason == "max_tokens":
+                st.warning("⚠️ Response reached 50K token limit. Summary is complete but could be even more detailed.")
+
+            # Clean and parse JSON
+            if "```json" in result_text:
+                result_text = result_text.split("```json")[1].split("```")[0]
+            elif "```" in result_text:
+                result_text = result_text.split("```")[1].split("```")[0]
+
+            try:
+                summary = json.loads(result_text.strip())
+            except json.JSONDecodeError as json_err:
+                return {
+                    'success': False,
+                    'error': f'JSON parsing failed: {str(json_err)}. Response: {result_text[:1000]}...'
+                }
+
+            # Add metadata
+            summary['generated_at'] = datetime.utcnow().isoformat()
+            summary['year'] = year
+            summary['month'] = month
+            summary['month_name'] = datetime(year, month, 1).strftime('%B %Y')
+            summary['documents_analyzed'] = total_docs
+            summary['findings_count'] = len(all_key_findings)
+            summary['model_used'] = self.model
+
+            # Token usage and cost tracking
+            input_tokens = getattr(response.usage, 'input_tokens', 0)
+            output_tokens = getattr(response.usage, 'output_tokens', 0)
+
+            summary['tokens_used'] = {
+                'input': input_tokens,
+                'output': output_tokens,
+                'total': input_tokens + output_tokens
+            }
+
+            # Sonnet 4.5 pricing: $3/M input, $15/M output
+            cost = (input_tokens * 3.00 / 1_000_000) + (output_tokens * 15.00 / 1_000_000)
+            summary['estimated_cost_usd'] = round(cost, 4)
+
+            return {
+                'success': True,
+                'summary': summary
+            }
+
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def _build_findings_text(self, all_findings: List[Dict], categories: Dict) -> str:
+        """Build formatted text of all findings for the prompt."""
+        text = ""
+
+        # Group by category
+        by_category = {}
+        for f in all_findings:
+            cat = f.get('category', 'other')
+            if cat not in by_category:
+                by_category[cat] = []
+            by_category[cat].append(f)
+
+        # Format findings
+        for category, findings in by_category.items():
+            text += f"\n## {category.upper()}\n"
+            for i, f in enumerate(findings, 1):
+                text += f"\n{i}. {f.get('finding')}\n"
+                text += f"   Source: {f.get('source')}\n"
+                text += f"   Relevance: {f.get('relevance')}\n"
+                if f.get('action_required'):
+                    text += f"   Action: {f.get('recommended_action')}\n"
+
+        return text
+
+    def save_monthly_summary(self, summary: Dict) -> bool:
+        """Save monthly summary to S3."""
+        year = summary['year']
+        month = summary['month']
+
+        s3_key = f"{S3_PREFIX_FINDINGS}monthly-summaries/{year}/{month:02d}/summary.json"
+
+        try:
+            self.s3.put_object(
+                Bucket=self.bucket_name,
+                Key=s3_key,
+                Body=json.dumps(summary, indent=2, default=str),
+                ContentType='application/json'
+            )
+            return True
+        except Exception as e:
+            st.error(f"Error saving summary: {e}")
+            return False
+
+    def list_monthly_summaries(self) -> List[Dict]:
+        """List all available monthly summaries."""
+        prefix = f"{S3_PREFIX_FINDINGS}monthly-summaries/"
+
+        try:
+            paginator = self.s3.get_paginator('list_objects_v2')
+            summaries = []
+
+            for page in paginator.paginate(Bucket=self.bucket_name, Prefix=prefix):
+                for obj in page.get('Contents', []):
+                    if obj['Key'].endswith('summary.json'):
+                        try:
+                            # Extract year/month from path
+                            parts = obj['Key'].split('/')
+                            year = int(parts[-3])
+                            month = int(parts[-2])
+
+                            summaries.append({
+                                'year': year,
+                                'month': month,
+                                'display': datetime(year, month, 1).strftime('%B %Y'),
+                                's3_key': obj['Key'],
+                                'last_modified': obj['LastModified'].isoformat()
+                            })
+                        except (ValueError, IndexError):
+                            continue
+
+            return sorted(summaries, key=lambda x: (x['year'], x['month']), reverse=True)
+
+        except Exception as e:
+            st.error(f"Error listing summaries: {e}")
+            return []
+
+    def load_monthly_summary(self, year: int, month: int) -> Dict:
+        """Load a specific monthly summary."""
+        s3_key = f"{S3_PREFIX_FINDINGS}monthly-summaries/{year}/{month:02d}/summary.json"
+
+        try:
+            response = self.s3.get_object(Bucket=self.bucket_name, Key=s3_key)
+            return json.loads(response['Body'].read().decode('utf-8'))
+        except Exception as e:
+            st.error(f"Error loading summary: {e}")
+            return None
+
+
+# =============================================================================
 # MAIN
 # =============================================================================
 

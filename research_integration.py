@@ -208,7 +208,8 @@ def render_research_page():
             render_analysis_tab,
             render_findings_tab,
             DocumentStorage,
-            ManualResearchAnalyzer
+            ManualResearchAnalyzer,
+            MonthlyResearchSummarizer
         )
         manual_research_available = True
     except ImportError:
@@ -262,24 +263,40 @@ def render_research_page():
             else:
                 st.error("⚠️ ANTHROPIC_API_KEY not configured. Cannot view manual research findings.")
 
-        # Historical automated research tabs
+        # Historical manual research tabs
         with tab4:
-            if not viewer.is_available():
-                st.info("📭 No historical automated research findings available.")
+            # Get API key for monthly summarizer
+            api_key = os.environ.get("ANTHROPIC_API_KEY")
+            if not api_key:
+                try:
+                    api_key = st.secrets.get("ANTHROPIC_API_KEY")
+                except Exception:
+                    pass
+            if not api_key:
+                try:
+                    api_key = st.secrets.get("anthropic", {}).get("ANTHROPIC_API_KEY")
+                except Exception:
+                    pass
+
+            if api_key:
+                summarizer = MonthlyResearchSummarizer(api_key)
+                _render_manual_monthly_summary(summarizer)
             else:
-                _render_executive_summary(viewer)
+                st.error("⚠️ ANTHROPIC_API_KEY not configured. Cannot generate monthly summaries.")
 
         with tab5:
-            if not viewer.is_available():
-                st.info("📭 No historical automated research findings available.")
+            if api_key:
+                summarizer = MonthlyResearchSummarizer(api_key)
+                _render_manual_findings_list(summarizer)
             else:
-                _render_daily_findings(viewer)
+                st.error("⚠️ ANTHROPIC_API_KEY not configured. Cannot view findings.")
 
         with tab6:
-            if not viewer.is_available():
-                st.info("📭 No historical automated research findings available.")
+            if api_key:
+                summarizer = MonthlyResearchSummarizer(api_key)
+                _render_manual_archives(summarizer)
             else:
-                _render_archives(viewer)
+                st.error("⚠️ ANTHROPIC_API_KEY not configured. Cannot view archives.")
 
     else:
         # Original layout if manual research not available
@@ -689,6 +706,261 @@ def _render_archives(viewer: ResearchFindingsViewer):
                     st.markdown(f"Key Drivers: {', '.join(trend_ind['key_drivers'])}")
         else:
             st.error(f"Could not load archive for {selected_archive}")
+
+
+def _render_manual_monthly_summary(summarizer):
+    """Render the manual research monthly summary tab."""
+    st.header("📋 Monthly Research Summary")
+
+    st.markdown("""
+    Generate comprehensive monthly summaries from your manually uploaded research.
+    Uses Claude Sonnet 4.5 to synthesize all findings into actionable insights.
+    """)
+
+    # Select month to generate summary for
+    col1, col2 = st.columns(2)
+
+    with col1:
+        current_year = datetime.now().year
+        year = st.selectbox("Year", range(current_year, current_year - 3, -1))
+
+    with col2:
+        month = st.selectbox("Month", range(1, 13), format_func=lambda x: datetime(2000, x, 1).strftime('%B'))
+
+    # Check if summary already exists
+    existing_summaries = summarizer.list_monthly_summaries()
+    summary_exists = any(s['year'] == year and s['month'] == month for s in existing_summaries)
+
+    if summary_exists:
+        st.info(f"✅ Summary already exists for {datetime(year, month, 1).strftime('%B %Y')}. View it in the Archives tab or regenerate below.")
+
+    # Generate summary button
+    if st.button("🚀 Generate Monthly Summary", type="primary"):
+        with st.spinner(f"Generating comprehensive summary for {datetime(year, month, 1).strftime('%B %Y')}..."):
+            result = summarizer.generate_monthly_summary(year, month)
+
+            if result['success']:
+                summary = result['summary']
+
+                # Save to S3
+                if summarizer.save_monthly_summary(summary):
+                    st.success(f"✅ Summary generated and saved!")
+                else:
+                    st.warning("⚠️ Summary generated but failed to save to S3")
+
+                # Display summary
+                st.markdown("---")
+                _display_monthly_summary(summary)
+
+            else:
+                st.error(f"❌ Failed to generate summary: {result['error']}")
+
+    # Show existing summary if available
+    if summary_exists and not st.session_state.get('regenerating'):
+        st.markdown("---")
+        st.subheader(f"Existing Summary: {datetime(year, month, 1).strftime('%B %Y')}")
+
+        summary = summarizer.load_monthly_summary(year, month)
+        if summary:
+            _display_monthly_summary(summary)
+
+
+def _display_monthly_summary(summary: Dict):
+    """Display a monthly summary."""
+    # Metadata
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Documents", summary.get('documents_analyzed', 0))
+    col2.metric("Findings", summary.get('findings_count', 0))
+    col3.metric("Cost", f"${summary.get('estimated_cost_usd', 0):.3f}")
+
+    tokens = summary.get('tokens_used', {})
+    col4.metric("Tokens", f"{tokens.get('total', 0):,}")
+
+    st.markdown("---")
+
+    # Executive Summary
+    st.subheader("📋 Executive Summary")
+    st.markdown(summary.get('executive_summary', 'No summary available'))
+
+    st.markdown("---")
+
+    # Key Insights
+    st.subheader("💡 Key Insights")
+    for insight in summary.get('key_insights', []):
+        importance = insight.get('importance', 'medium')
+        emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(importance, "⚪")
+
+        with st.expander(f"{emoji} {insight.get('insight', 'Untitled')[:100]}...", expanded=(importance == 'high')):
+            st.markdown(f"**Category:** {insight.get('category', 'Unknown').title()}")
+            st.markdown(f"**Insight:** {insight.get('insight')}")
+
+            if insight.get('supporting_findings'):
+                st.markdown("**Supporting Findings:**")
+                for finding in insight['supporting_findings']:
+                    st.markdown(f"- {finding}")
+
+            if insight.get('recommended_actions'):
+                st.markdown("**Recommended Actions:**")
+                for action in insight['recommended_actions']:
+                    priority = action.get('priority', 'medium')
+                    emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(priority, "⚪")
+                    st.markdown(f"{emoji} **{action.get('action')}**")
+                    st.markdown(f"   - Timeline: {action.get('timeline')}")
+                    st.markdown(f"   - Impact: {action.get('expected_impact')}")
+
+    st.markdown("---")
+
+    # Trends Analysis
+    st.subheader("📈 Trends Analysis")
+    trends = summary.get('trends_analysis', {})
+
+    for category, analysis in trends.items():
+        if analysis:
+            with st.expander(f"📊 {category.replace('_', ' ').title()}"):
+                st.markdown(analysis)
+
+    # Opportunities
+    if summary.get('opportunities'):
+        st.markdown("---")
+        st.subheader("🎯 Opportunities")
+        for opp in summary['opportunities']:
+            with st.expander(f"💼 {opp.get('opportunity', 'Untitled')[:80]}..."):
+                st.markdown(f"**Rationale:** {opp.get('rationale')}")
+                st.markdown(f"**Potential Impact:** {opp.get('potential_impact')}")
+                if opp.get('actions'):
+                    st.markdown("**Action Steps:**")
+                    for i, action in enumerate(opp['actions'], 1):
+                        st.markdown(f"{i}. {action}")
+
+    # Risks
+    if summary.get('risks_and_challenges'):
+        st.markdown("---")
+        st.subheader("⚠️ Risks & Challenges")
+        for risk in summary['risks_and_challenges']:
+            severity = risk.get('severity', 'medium')
+            emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(severity, "⚪")
+
+            with st.expander(f"{emoji} {risk.get('risk', 'Untitled')[:80]}..."):
+                st.markdown(f"**Severity:** {severity.title()}")
+                st.markdown(f"**Mitigation:** {risk.get('mitigation')}")
+
+    # Strategic Recommendations
+    if summary.get('strategic_recommendations'):
+        st.markdown("---")
+        st.subheader("🎯 Strategic Recommendations")
+        for i, rec in enumerate(summary['strategic_recommendations'], 1):
+            st.markdown(f"**{i}.** {rec}")
+
+    # Download button
+    st.markdown("---")
+    json_data = json.dumps(summary, indent=2, default=str)
+    st.download_button(
+        label="📥 Download Full Summary (JSON)",
+        data=json_data,
+        file_name=f"monthly_summary_{summary.get('year')}_{summary.get('month'):02d}.json",
+        mime="application/json"
+    )
+
+
+def _render_manual_findings_list(summarizer):
+    """Render list of findings with actions from monthly summaries."""
+    st.header("📈 Consolidated Findings")
+
+    summaries = summarizer.list_monthly_summaries()
+
+    if not summaries:
+        st.info("No monthly summaries available yet. Generate one in the 'Historical Summary' tab.")
+        return
+
+    # Select summary to view
+    selected = st.selectbox(
+        "Select Month",
+        options=summaries,
+        format_func=lambda x: x['display']
+    )
+
+    if selected:
+        summary = summarizer.load_monthly_summary(selected['year'], selected['month'])
+
+        if summary:
+            st.subheader(f"Findings: {summary.get('month_name')}")
+
+            # Display each key insight with actions
+            for insight in summary.get('key_insights', []):
+                importance = insight.get('importance', 'medium')
+                emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(importance, "⚪")
+
+                with st.expander(f"{emoji} {insight.get('insight', 'Untitled')[:100]}...", expanded=True):
+                    st.markdown(f"**Finding:** {insight.get('insight')}")
+                    st.markdown(f"**Category:** {insight.get('category', 'Unknown').title()}")
+
+                    # Show recommended actions
+                    if insight.get('recommended_actions'):
+                        st.markdown("### 📋 Actions to Take")
+                        for action in insight['recommended_actions']:
+                            priority = action.get('priority', 'medium')
+                            emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(priority, "⚪")
+
+                            st.markdown(f"{emoji} **{action.get('action')}**")
+                            st.markdown(f"- **Priority:** {priority.title()}")
+                            st.markdown(f"- **Timeline:** {action.get('timeline')}")
+                            st.markdown(f"- **Expected Impact:** {action.get('expected_impact')}")
+                            st.markdown("---")
+
+                    # Show supporting findings (sources)
+                    if insight.get('supporting_findings'):
+                        with st.expander("📚 Source Findings"):
+                            for i, finding in enumerate(insight['supporting_findings'], 1):
+                                st.markdown(f"{i}. {finding}")
+
+
+def _render_manual_archives(summarizer):
+    """Render archives of past monthly summaries."""
+    st.header("📚 Historical Archives")
+
+    summaries = summarizer.list_monthly_summaries()
+
+    if not summaries:
+        st.info("No monthly summaries available yet. Generate one in the 'Historical Summary' tab.")
+        return
+
+    st.write(f"**{len(summaries)} monthly summaries available**")
+
+    # Display list of summaries
+    for summary_meta in summaries:
+        with st.expander(f"📅 {summary_meta['display']}", expanded=False):
+            summary = summarizer.load_monthly_summary(summary_meta['year'], summary_meta['month'])
+
+            if summary:
+                # Quick stats
+                col1, col2, col3 = st.columns(3)
+                col1.metric("Documents", summary.get('documents_analyzed', 0))
+                col2.metric("Findings", summary.get('findings_count', 0))
+                col3.metric("Cost", f"${summary.get('estimated_cost_usd', 0):.3f}")
+
+                # Executive summary preview
+                st.markdown("**Executive Summary:**")
+                exec_sum = summary.get('executive_summary', 'No summary')
+                preview = exec_sum[:300] + "..." if len(exec_sum) > 300 else exec_sum
+                st.markdown(preview)
+
+                # View full button
+                if st.button(f"View Full Summary", key=f"view_{summary_meta['year']}_{summary_meta['month']}"):
+                    st.session_state['selected_archive'] = summary_meta
+
+    # Display full summary if selected
+    if 'selected_archive' in st.session_state:
+        st.markdown("---")
+        meta = st.session_state['selected_archive']
+        summary = summarizer.load_monthly_summary(meta['year'], meta['month'])
+
+        if summary:
+            st.subheader(f"📋 Full Summary: {meta['display']}")
+            _display_monthly_summary(summary)
+
+            if st.button("✖️ Close"):
+                del st.session_state['selected_archive']
+                st.rerun()
 
 
 def add_research_to_sidebar():
