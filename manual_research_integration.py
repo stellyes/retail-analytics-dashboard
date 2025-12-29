@@ -48,7 +48,23 @@ class DocumentStorage:
 
     def __init__(self, bucket_name: str):
         self.bucket_name = bucket_name
-        self.s3 = boto3.client('s3')
+
+        # Initialize S3 client with credentials from environment or Streamlit secrets
+        try:
+            # Try Streamlit secrets first (for Streamlit Cloud)
+            if hasattr(st, 'secrets') and 'aws' in st.secrets:
+                self.s3 = boto3.client(
+                    's3',
+                    aws_access_key_id=st.secrets['aws']['access_key_id'],
+                    aws_secret_access_key=st.secrets['aws']['secret_access_key'],
+                    region_name=st.secrets['aws'].get('region', 'us-west-1')
+                )
+            else:
+                # Fall back to environment/IAM credentials
+                self.s3 = boto3.client('s3')
+        except Exception as e:
+            st.error(f"Failed to initialize S3 client: {e}")
+            self.s3 = None
 
     def upload_document(self, file_content: bytes, filename: str,
                        category: str, source_url: str = None) -> Dict:
@@ -183,7 +199,23 @@ class ManualResearchAnalyzer:
         self.client = anthropic.Anthropic(api_key=api_key)
         # Use Haiku for cost efficiency - ~95% cheaper than Sonnet
         self.model = "claude-haiku-4-5-20251001"
-        self.s3 = boto3.client('s3')
+
+        # Initialize S3 client with credentials from environment or Streamlit secrets
+        try:
+            # Try Streamlit secrets first (for Streamlit Cloud)
+            if hasattr(st, 'secrets') and 'aws' in st.secrets:
+                self.s3 = boto3.client(
+                    's3',
+                    aws_access_key_id=st.secrets['aws']['access_key_id'],
+                    aws_secret_access_key=st.secrets['aws']['secret_access_key'],
+                    region_name=st.secrets['aws'].get('region', 'us-west-1')
+                )
+            else:
+                # Fall back to environment/IAM credentials
+                self.s3 = boto3.client('s3')
+        except Exception as e:
+            st.error(f"Failed to initialize S3 client: {e}")
+            self.s3 = None
 
     def extract_text_from_html(self, html_content: str) -> str:
         """Extract clean text from HTML document."""
