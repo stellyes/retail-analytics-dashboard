@@ -1261,29 +1261,36 @@ def render_recommendations(state, analytics):
         if not CLAUDE_AVAILABLE:
             st.warning("Claude integration module not found. Make sure `claude_integration.py` is in the same directory.")
             return
-        
-        # Get API key from secrets
-        api_key = None
-        try:
-            api_key = st.secrets.get("anthropic", {}).get("api_key")
-        except Exception:
-            pass
-        
+
+        # Get API key from environment variable or secrets
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+
+        # Fallback to secrets if environment variable not set
+        if not api_key:
+            try:
+                api_key = st.secrets.get("ANTHROPIC_API_KEY")
+            except Exception:
+                pass
+
         if not api_key:
             st.info("""
             **🔑 Enable AI Analysis**
-            
+
             Add your Anthropic API key to unlock AI-powered insights:
-            
-            1. Get an API key at [console.anthropic.com](https://console.anthropic.com)
-            2. Add to your `.streamlit/secrets.toml`:
+
+            **Option 1: Environment Variable (Recommended)**
+            ```bash
+            export ANTHROPIC_API_KEY="sk-ant-api03-..."
+            ```
+
+            **Option 2: Streamlit Secrets**
+            Add to `.streamlit/secrets.toml`:
             ```toml
-            [anthropic]
-            api_key = "sk-ant-api03-..."
+            ANTHROPIC_API_KEY = "sk-ant-api03-..."
             ```
             """)
             return
-        
+
         # Initialize Claude
         claude = ClaudeAnalytics(api_key=api_key)
         

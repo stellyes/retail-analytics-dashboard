@@ -388,15 +388,20 @@ def render_ai_analysis_section(claude: ClaudeAnalytics, data: dict):
     if not claude.is_available():
         st.info(f"""
         **Enable AI Analysis**
-        
+
         {claude.get_error() or "Claude AI not configured."}
-        
+
         Add your Anthropic API key to unlock AI-powered insights:
-        1. Get an API key at [console.anthropic.com](https://console.anthropic.com)
-        2. Add to your `.streamlit/secrets.toml`:
+
+        **Option 1: Environment Variable (Recommended)**
+        ```bash
+        export ANTHROPIC_API_KEY="sk-ant-api03-..."
+        ```
+
+        **Option 2: Streamlit Secrets**
+        Add to `.streamlit/secrets.toml`:
         ```toml
-        [anthropic]
-        api_key = "your-api-key-here"
+        ANTHROPIC_API_KEY = "sk-ant-api03-..."
         ```
         """)
         return
