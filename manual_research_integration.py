@@ -909,10 +909,10 @@ def render_findings_tab(analyzer: ManualResearchAnalyzer):
 
         # Metrics
         col1, col2, col3, col4 = st.columns(4)
-        col1.metric("Documents", results['documents_analyzed'])
-        col2.metric("Findings", len(results['all_findings']))
-        col3.metric("Cost", f"${results['total_cost_usd']}")
-        col4.metric("Tokens", f"{results['total_tokens']:,}")
+        col1.metric("Documents", results.get('documents_analyzed', 0))
+        col2.metric("Findings", len(results.get('all_findings', [])))
+        col3.metric("Cost", f"${results.get('total_cost_usd', 0):.2f}")
+        col4.metric("Tokens", f"{results.get('total_tokens', 0):,}")
 
         # Executive summary
         if results.get('executive_summary'):
