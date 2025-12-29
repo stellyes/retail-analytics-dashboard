@@ -972,7 +972,7 @@ class MonthlyResearchSummarizer:
             raise ImportError("anthropic package not installed")
 
         self.client = anthropic.Anthropic(api_key=api_key)
-        self.model = "claude-sonnet-4-5-20251022"  # Sonnet 4.5 for comprehensive analysis
+        self.model = "claude-sonnet-4-20250514"  # Sonnet 4 for comprehensive analysis
         self.bucket_name = bucket_name or S3_BUCKET
 
         # Rate limiting: 30,000 tokens per minute max
