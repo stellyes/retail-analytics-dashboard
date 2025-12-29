@@ -256,10 +256,11 @@ def render_research_page():
                 st.error("⚠️ ANTHROPIC_API_KEY not configured. Cannot perform manual research.")
 
         with tab3:
-            if manual_research_available:
-                render_findings_tab()
+            if manual_research_available and api_key:
+                analyzer = ManualResearchAnalyzer(api_key)
+                render_findings_tab(analyzer)
             else:
-                st.error("Manual research module not available.")
+                st.error("⚠️ ANTHROPIC_API_KEY not configured. Cannot view manual research findings.")
 
         # Historical automated research tabs
         with tab4:

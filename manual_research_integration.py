@@ -505,6 +505,36 @@ Return ONLY valid JSON."""
             st.error(f"Error saving findings: {e}")
             return False
 
+    def load_recent_findings_from_s3(self, bucket: str, days: int = 30) -> List[Dict]:
+        """Load recent analysis findings from S3."""
+
+        try:
+            prefix = S3_PREFIX_FINDINGS
+            paginator = self.s3.get_paginator('list_objects_v2')
+
+            findings = []
+            for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+                for obj in page.get('Contents', []):
+                    if obj['Key'].endswith('.json'):
+                        # Load finding
+                        try:
+                            response = self.s3.get_object(Bucket=bucket, Key=obj['Key'])
+                            finding = json.loads(response['Body'].read().decode('utf-8'))
+                            finding['s3_key'] = obj['Key']
+                            finding['last_modified'] = obj['LastModified'].isoformat()
+                            findings.append(finding)
+                        except:
+                            continue
+
+            # Sort by completion time or last modified
+            findings.sort(key=lambda x: x.get('completed_at', x.get('last_modified', '')), reverse=True)
+
+            return findings
+
+        except Exception as e:
+            st.error(f"Error loading findings from S3: {e}")
+            return []
+
 
 # =============================================================================
 # STREAMLIT UI
@@ -821,17 +851,40 @@ def render_analysis_tab(storage: DocumentStorage, analyzer: ManualResearchAnalyz
                 st.info("💾 Findings saved to S3. View them in the 'View Findings' tab.")
 
 
-def render_findings_tab():
+def render_findings_tab(analyzer: ManualResearchAnalyzer):
     """Tab for viewing analysis findings."""
 
     st.header("📈 Analysis Findings")
 
+    # Load from S3 if not in session state
+    if 'latest_analysis' not in st.session_state:
+        with st.spinner("Loading recent findings from S3..."):
+            findings = analyzer.load_recent_findings_from_s3(S3_BUCKET, days=30)
+            if findings:
+                st.session_state['latest_analysis'] = findings[0]  # Most recent
+                st.session_state['all_findings'] = findings  # All recent findings
+
     # Check if we have recent analysis in session state
     if 'latest_analysis' in st.session_state:
-        results = st.session_state['latest_analysis']
+        # Show selector if we have multiple findings
+        if 'all_findings' in st.session_state and len(st.session_state['all_findings']) > 1:
+            st.subheader("Select Analysis to View")
+            all_findings = st.session_state['all_findings']
 
-        st.subheader("Latest Analysis")
-        st.write(f"Completed: {results.get('completed_at', 'Unknown')[:19]}")
+            # Create options for dropdown
+            options = []
+            for i, f in enumerate(all_findings[:10]):  # Show last 10
+                completed = f.get('completed_at', 'Unknown')[:19]
+                docs = f.get('documents_analyzed', 0)
+                options.append(f"{completed} - {docs} document(s)")
+
+            selected_idx = st.selectbox("Recent analyses:", range(len(options)), format_func=lambda x: options[x])
+            results = all_findings[selected_idx]
+        else:
+            results = st.session_state['latest_analysis']
+
+        st.subheader("Analysis Details")
+        st.write(f"**Completed:** {results.get('completed_at', 'Unknown')[:19]}")
 
         # Metrics
         col1, col2, col3, col4 = st.columns(4)
