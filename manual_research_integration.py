@@ -1173,17 +1173,26 @@ IMPORTANT:
 - Return ONLY valid JSON"""
 
         try:
-            with st.spinner("Generating comprehensive monthly summary..."):
-                response = self.client.messages.create(
-                    model=self.model,
-                    max_tokens=50000,  # Maximum detail
-                    messages=[{"role": "user", "content": prompt}]
-                )
+            # Use streaming to avoid 10-minute timeout on Streamlit Cloud
+            result_text = ""
+            stop_reason = None
 
-            result_text = response.content[0].text
+            with st.spinner("Generating comprehensive monthly summary..."):
+                # Stream the response
+                with self.client.messages.stream(
+                    model=self.model,
+                    max_tokens=50000,
+                    messages=[{"role": "user", "content": prompt}]
+                ) as stream:
+                    for text in stream.text_stream:
+                        result_text += text
+
+                    # Get final message for stop reason
+                    final_message = stream.get_final_message()
+                    stop_reason = final_message.stop_reason
 
             # Check for truncation
-            if response.stop_reason == "max_tokens":
+            if stop_reason == "max_tokens":
                 st.warning("⚠️ Response reached 50K token limit. Summary is complete but could be even more detailed.")
 
             # Clean and parse JSON
@@ -1209,9 +1218,9 @@ IMPORTANT:
             summary['findings_count'] = len(all_key_findings)
             summary['model_used'] = self.model
 
-            # Token usage and cost tracking
-            input_tokens = getattr(response.usage, 'input_tokens', 0)
-            output_tokens = getattr(response.usage, 'output_tokens', 0)
+            # Token usage and cost tracking from streamed response
+            input_tokens = getattr(final_message.usage, 'input_tokens', 0)
+            output_tokens = getattr(final_message.usage, 'output_tokens', 0)
 
             summary['tokens_used'] = {
                 'input': input_tokens,
