@@ -769,12 +769,18 @@ def render_category_details(viewer: SEOFindingsViewer):
             if issues:
                 st.markdown("**Issues:**")
                 for issue in issues:
-                    severity = issue.get('severity', 'medium')
-                    st.markdown(f"""
-                    - **[{severity.upper()}]** {issue.get('issue', 'N/A')}
-                      - Impact: {issue.get('impact', 'N/A')}
-                      - Fix: {issue.get('recommendation', 'N/A')}
-                    """)
+                    # Handle both string and dict formats
+                    if isinstance(issue, str):
+                        st.markdown(f"- ❌ {issue}")
+                    elif isinstance(issue, dict):
+                        severity = issue.get('severity', 'medium')
+                        st.markdown(f"""
+                        - **[{severity.upper()}]** {issue.get('issue', 'N/A')}
+                          - Impact: {issue.get('impact', 'N/A')}
+                          - Fix: {issue.get('recommendation', 'N/A')}
+                        """)
+                    else:
+                        st.markdown(f"- ❌ {str(issue)}")
             
             # Opportunities
             opportunities = cat_data.get('opportunities', [])
@@ -851,7 +857,8 @@ def render_trend_analysis(viewer: SEOFindingsViewer):
             if isinstance(cat_data, dict):
                 issues = cat_data.get('issues', [])
                 total_issues += len(issues)
-                high_issues += len([i for i in issues if i.get('severity') == 'high'])
+                # Count high priority issues (only if issues are dicts with severity)
+                high_issues += len([i for i in issues if isinstance(i, dict) and i.get('severity') == 'high'])
         
         issue_counts.append({
             "Date": date,
