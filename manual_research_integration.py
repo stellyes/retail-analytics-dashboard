@@ -4,6 +4,9 @@ Cost-effective alternative to autonomous web research agents.
 Users upload HTML documents, system analyzes and extracts findings.
 """
 
+# VERSION: 2.0 - Fixed S3 key reconstruction (2025-12-28)
+MANUAL_RESEARCH_VERSION = "2.0"
+
 import streamlit as st
 import boto3
 from botocore.exceptions import ClientError
@@ -668,6 +671,7 @@ def render_analysis_tab(storage: DocumentStorage, analyzer: ManualResearchAnalyz
     """Tab for analyzing uploaded documents."""
 
     st.header("Analyze Uploaded Documents")
+    st.info(f"⚙️ **Code Version {MANUAL_RESEARCH_VERSION}** - If you don't see debug messages below, the code hasn't updated yet.")
 
     # Load available documents
     documents = storage.list_uploaded_documents(days=30)
