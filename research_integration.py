@@ -191,50 +191,130 @@ class ResearchFindingsViewer:
 
 def render_research_page():
     """Render the research findings page in Streamlit."""
-    
+
     st.header("🔬 Industry Research & Trends")
     st.markdown("""
     AI-powered monitoring of cannabis industry trends, regulations, and market developments.
-    The research agent runs automatically to keep you informed of relevant changes.
+    Upload your own research documents or view historical automated findings.
     """)
-    
+
     # Initialize viewer
     viewer = ResearchFindingsViewer()
-    
-    if not viewer.is_available():
-        st.warning("""
-        ⚠️ **Research findings not available**
-        
-        The research agent stores findings in S3. Please ensure:
-        1. AWS credentials are configured in `.streamlit/secrets.toml`
-        2. The research agent has been deployed and run at least once
-        
-        See the setup guide for deployment instructions.
-        """)
-        return
-    
+
+    # Import manual research functionality
+    try:
+        from manual_research_integration import (
+            render_upload_tab,
+            render_analysis_tab,
+            render_findings_tab,
+            DocumentStorage,
+            ManualResearchAnalyzer
+        )
+        manual_research_available = True
+    except ImportError:
+        manual_research_available = False
+
     # Tabs for different views
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "📊 Executive Summary", 
-        "📅 Daily Findings", 
-        "📈 Trend History",
-        "📚 Historical Archives"
-    ])
-    
-    with tab1:
-        render_executive_summary(viewer)
-    
-    with tab2:
-        render_daily_findings(viewer)
-    
-    with tab3:
-        render_trend_history(viewer)
-    
-    with tab4:
-        render_historical_archives(viewer)
+    if manual_research_available:
+        tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+            "📤 Manual Upload",
+            "📊 Manual Analysis",
+            "📈 Manual Findings",
+            "📋 Historical Summary",
+            "📅 Historical Findings",
+            "📚 Historical Archives"
+        ])
+
+        # Manual research tabs
+        with tab1:
+            if manual_research_available:
+                # Get API key
+                api_key = os.environ.get("ANTHROPIC_API_KEY")
+                if not api_key:
+                    try:
+                        api_key = st.secrets.get("ANTHROPIC_API_KEY")
+                    except Exception:
+                        pass
+                if not api_key:
+                    try:
+                        api_key = st.secrets.get("anthropic", {}).get("ANTHROPIC_API_KEY")
+                    except Exception:
+                        pass
+
+                if api_key:
+                    storage = DocumentStorage(viewer.bucket_name)
+                    render_upload_tab(storage)
+                else:
+                    st.error("⚠️ ANTHROPIC_API_KEY not configured. Cannot perform manual research.")
+
+        with tab2:
+            if manual_research_available and api_key:
+                storage = DocumentStorage(viewer.bucket_name)
+                analyzer = ManualResearchAnalyzer(api_key)
+                render_analysis_tab(storage, analyzer)
+            else:
+                st.error("⚠️ ANTHROPIC_API_KEY not configured. Cannot perform manual research.")
+
+        with tab3:
+            if manual_research_available:
+                render_findings_tab()
+            else:
+                st.error("Manual research module not available.")
+
+        # Historical automated research tabs
+        with tab4:
+            if not viewer.is_available():
+                st.info("📭 No historical automated research findings available.")
+            else:
+                _render_executive_summary(viewer)
+
+        with tab5:
+            if not viewer.is_available():
+                st.info("📭 No historical automated research findings available.")
+            else:
+                _render_daily_findings(viewer)
+
+        with tab6:
+            if not viewer.is_available():
+                st.info("📭 No historical automated research findings available.")
+            else:
+                _render_archives(viewer)
+
+    else:
+        # Original layout if manual research not available
+        if not viewer.is_available():
+            st.warning("""
+            ⚠️ **Research findings not available**
+
+            The research agent stores findings in S3. Please ensure:
+            1. AWS credentials are configured in `.streamlit/secrets.toml`
+            2. The research agent has been deployed and run at least once
+
+            See the setup guide for deployment instructions.
+            """)
+            return
+
+        tab1, tab2, tab3, tab4 = st.tabs([
+            "📊 Executive Summary",
+            "📅 Daily Findings",
+            "📈 Trend History",
+            "📚 Historical Archives"
+        ])
+
+        with tab1:
+            _render_executive_summary(viewer)
+
+        with tab2:
+            _render_daily_findings(viewer)
+
+        with tab3:
+            render_trend_history(viewer)
+
+        with tab4:
+            _render_archives(viewer)
 
 
-def render_executive_summary(viewer: ResearchFindingsViewer):
+def _render_executive_summary(viewer: ResearchFindingsViewer):
     """Render the executive summary view."""
     
     summary = viewer.load_latest_summary()
@@ -305,7 +385,7 @@ def render_executive_summary(viewer: ResearchFindingsViewer):
         st.dataframe(tracking_df, use_container_width=True, hide_index=True)
 
 
-def render_daily_findings(viewer: ResearchFindingsViewer):
+def _render_daily_findings(viewer: ResearchFindingsViewer):
     """Render the daily findings view."""
     
     # Date selector
@@ -451,7 +531,7 @@ def render_trend_history(viewer: ResearchFindingsViewer):
                         st.markdown(f"- {item}")
 
 
-def render_historical_archives(viewer: ResearchFindingsViewer):
+def _render_archives(viewer: ResearchFindingsViewer):
     """Render the historical archives and long-term context view."""
     
     st.subheader("📚 Long-Term Industry Context")

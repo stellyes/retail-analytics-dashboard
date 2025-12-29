@@ -847,10 +847,6 @@ def main():
         if RESEARCH_AVAILABLE:
             nav_options.append("🔬 Industry Research")
 
-        # Add manual research if available
-        if MANUAL_RESEARCH_AVAILABLE:
-            nav_options.append("📄 Manual Research")
-
         # Add SEO page if available
         if SEO_AVAILABLE:
             nav_options.append("🔍 SEO Analysis")
@@ -904,12 +900,6 @@ def main():
             render_research_page()
         else:
             st.error("Research integration module not found. Make sure `research_integration.py` is in the same directory.")
-
-    elif page == "📄 Manual Research":
-        if MANUAL_RESEARCH_AVAILABLE:
-            render_manual_research_page()
-        else:
-            st.error("Manual research integration module not found. Make sure `manual_research_integration.py` is in the same directory.")
 
     elif page == "🔍 SEO Analysis":
         if SEO_AVAILABLE:
