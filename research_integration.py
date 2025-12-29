@@ -9,7 +9,7 @@ import boto3
 from botocore.exceptions import ClientError
 import json
 from datetime import datetime, timedelta
-from typing import Optional
+from typing import Optional, Dict
 import os
 
 
