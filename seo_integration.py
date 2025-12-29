@@ -11,6 +11,12 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 import os
 
+try:
+    import anthropic
+    ANTHROPIC_AVAILABLE = True
+except ImportError:
+    ANTHROPIC_AVAILABLE = False
+
 # Configuration
 S3_BUCKET = os.environ.get("S3_BUCKET_NAME", "retail-data-bcgr")
 S3_PREFIX = os.environ.get("SEO_S3_PREFIX", "seo-analysis")
@@ -153,6 +159,162 @@ class SEOFindingsViewer:
         return sorted(dates, reverse=True)
 
 
+class ManualSEOAnalyzer:
+    """Manual SEO analysis triggered from the dashboard."""
+
+    def __init__(self, api_key: str):
+        if not ANTHROPIC_AVAILABLE:
+            raise ImportError("anthropic package not installed")
+
+        self.client = anthropic.Anthropic(api_key=api_key)
+        self.model = "claude-haiku-4-5-20251001"  # Cost-effective for SEO
+        self.s3 = boto3.client('s3')
+        self.bucket = S3_BUCKET
+
+    def analyze_website_seo(self, website: str) -> dict:
+        """
+        Perform SEO analysis on a website.
+        Cost: ~$0.05-0.10 per analysis with Haiku
+        """
+
+        prompt = f"""Analyze the SEO of this website: {website}
+
+Perform a comprehensive SEO analysis covering:
+
+1. **Technical SEO**
+   - Page speed
+   - Mobile responsiveness
+   - HTTPS/SSL
+   - Site structure
+
+2. **On-Page SEO**
+   - Title tags and meta descriptions
+   - Header structure (H1, H2, etc.)
+   - Content quality and keyword usage
+   - Image optimization
+
+3. **Local SEO** (for cannabis dispensary)
+   - Google Business Profile optimization
+   - Local keywords
+   - NAP consistency
+   - Local citations
+
+4. **Content & Keywords**
+   - Keyword targeting
+   - Content gaps
+   - Competitor comparison
+
+5. **User Experience**
+   - Navigation
+   - Call-to-actions
+   - Mobile experience
+
+Return analysis as JSON:
+{{
+    "website": "{website}",
+    "analyzed_at": "{datetime.utcnow().isoformat()}",
+    "overall_score": 0-100,
+    "categories": {{
+        "technical_seo": {{
+            "score": 0-100,
+            "findings": ["finding 1", "finding 2"],
+            "issues": ["issue 1", "issue 2"],
+            "recommendations": ["rec 1", "rec 2"]
+        }},
+        "on_page_seo": {{...}},
+        "local_seo": {{...}},
+        "content": {{...}},
+        "user_experience": {{...}}
+    }},
+    "top_priorities": [
+        {{
+            "priority": "Issue title",
+            "severity": "high/medium/low",
+            "category": "technical/content/local/ux",
+            "action": "Recommended action"
+        }}
+    ],
+    "competitive_insights": "Brief comparison with competitors",
+    "quick_wins": ["Easy fix 1", "Easy fix 2"]
+}}
+
+Focus on actionable recommendations for a cannabis dispensary in San Francisco.
+Return ONLY valid JSON."""
+
+        try:
+            response = self.client.messages.create(
+                model=self.model,
+                max_tokens=3000,
+                messages=[{"role": "user", "content": prompt}]
+            )
+
+            result_text = response.content[0].text
+
+            # Clean JSON
+            if "```json" in result_text:
+                result_text = result_text.split("```json")[1].split("```")[0]
+            elif "```" in result_text:
+                result_text = result_text.split("```")[1].split("```")[0]
+
+            analysis = json.loads(result_text.strip())
+
+            # Add metadata
+            analysis['model_used'] = self.model
+            input_tokens = getattr(response.usage, 'input_tokens', 0)
+            output_tokens = getattr(response.usage, 'output_tokens', 0)
+            analysis['tokens_used'] = {
+                'input': input_tokens,
+                'output': output_tokens,
+                'total': input_tokens + output_tokens
+            }
+
+            # Estimate cost
+            cost = (input_tokens * 0.80 / 1000000) + (output_tokens * 4.00 / 1000000)
+            analysis['estimated_cost_usd'] = round(cost, 4)
+
+            return {
+                'success': True,
+                'analysis': analysis
+            }
+
+        except Exception as e:
+            return {
+                'success': False,
+                'error': str(e)
+            }
+
+    def save_to_s3(self, website: str, analysis: dict) -> bool:
+        """Save SEO analysis results to S3."""
+        try:
+            timestamp = datetime.utcnow()
+            site_folder = url_to_folder(website)
+
+            # Save to dated folder
+            s3_key = f"{S3_PREFIX}/{site_folder}/{timestamp.strftime('%Y/%m/%d')}/seo-findings.json"
+
+            self.s3.put_object(
+                Bucket=self.bucket,
+                Key=s3_key,
+                Body=json.dumps(analysis, indent=2, default=str),
+                ContentType='application/json'
+            )
+
+            # Also save as latest
+            latest_key = f"{S3_PREFIX}/{site_folder}/summary/latest.json"
+            self.s3.put_object(
+                Bucket=self.bucket,
+                Key=latest_key,
+                Body=json.dumps(analysis, indent=2, default=str),
+                ContentType='application/json'
+            )
+
+            return True
+
+        except Exception as e:
+            st.error(f"Error saving to S3: {e}")
+            return False
+
+
 def render_seo_page():
     """Main render function for SEO analysis page."""
     
@@ -238,23 +400,27 @@ def render_seo_page():
     st.info(f"**Viewing SEO analysis for:** [{selected_site_name}]({selected_website})")
     
     # Tabs for different views
-    tab1, tab2, tab3, tab4 = st.tabs([
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
         "📊 Executive Summary",
         "📋 Category Details",
         "📈 Trend Analysis",
+        "🔄 Manual Analysis",
         "📚 Historical Archives"
     ])
-    
+
     with tab1:
         render_executive_summary(viewer)
-    
+
     with tab2:
         render_category_details(viewer)
-    
+
     with tab3:
         render_trend_analysis(viewer)
-    
+
     with tab4:
+        render_manual_analysis_tab(selected_website, selected_site_name)
+
+    with tab5:
         render_historical_archives(viewer)
 
 
@@ -768,6 +934,112 @@ def render_historical_archives(viewer: SEOFindingsViewer):
                 st.markdown(f"- {r}")
         else:
             st.info("No long-term recommendations available.")
+
+
+def render_manual_analysis_tab(website: str, site_name: str):
+    """Render the manual SEO analysis tab."""
+
+    st.subheader("🔄 Run Manual SEO Analysis")
+
+    st.markdown(f"""
+    Perform an on-demand SEO analysis for **{site_name}**.
+
+    This will:
+    - Analyze the website's SEO health
+    - Save results to S3 for birds-eye analysis
+    - Cost: ~$0.05-0.10 per analysis (using Haiku)
+    - Results available immediately in other tabs
+    """)
+
+    # Check for API key
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        st.error("⚠️ ANTHROPIC_API_KEY not configured. Cannot perform analysis.")
+        return
+
+    col1, col2 = st.columns([2, 1])
+
+    with col1:
+        st.markdown("### Analysis Options")
+
+        # Cost estimate
+        st.info("💰 Estimated cost: $0.05-0.10")
+
+        if st.button(f"🔍 Analyze {site_name}", type="primary", key=f"analyze_{website}"):
+            with st.spinner(f"Analyzing {website}... This may take 30-60 seconds."):
+                try:
+                    # Initialize analyzer
+                    analyzer = ManualSEOAnalyzer(api_key)
+
+                    # Run analysis
+                    result = analyzer.analyze_website_seo(website)
+
+                    if result['success']:
+                        analysis = result['analysis']
+
+                        # Save to S3
+                        if analyzer.save_to_s3(website, analysis):
+                            st.success("✅ Analysis complete and saved to S3!")
+
+                            # Display summary
+                            st.markdown("### 📊 Analysis Summary")
+
+                            col_a, col_b, col_c = st.columns(3)
+                            col_a.metric("Overall Score", f"{analysis.get('overall_score', 'N/A')}/100")
+                            col_b.metric("Cost", f"${analysis.get('estimated_cost_usd', 0):.4f}")
+                            col_c.metric("Tokens Used", f"{analysis.get('tokens_used', {}).get('total', 0):,}")
+
+                            # Top priorities
+                            st.markdown("### 🎯 Top Priorities")
+                            priorities = analysis.get('top_priorities', [])
+                            if priorities:
+                                for idx, priority in enumerate(priorities[:5], 1):
+                                    severity = priority.get('severity', 'medium')
+                                    emoji = "🔴" if severity == 'high' else "🟡" if severity == 'medium' else "🟢"
+                                    st.markdown(f"{emoji} **{idx}. {priority.get('priority')}**")
+                                    st.markdown(f"   *Action:* {priority.get('action')}")
+                            else:
+                                st.info("No priorities identified")
+
+                            # Quick wins
+                            st.markdown("### ⚡ Quick Wins")
+                            quick_wins = analysis.get('quick_wins', [])
+                            if quick_wins:
+                                for win in quick_wins:
+                                    st.markdown(f"- {win}")
+                            else:
+                                st.info("No quick wins identified")
+
+                            st.info("💡 View detailed results in the **Executive Summary** and **Category Details** tabs")
+
+                        else:
+                            st.error("Analysis completed but failed to save to S3")
+
+                    else:
+                        st.error(f"Analysis failed: {result.get('error')}")
+
+                except Exception as e:
+                    st.error(f"Error during analysis: {e}")
+
+    with col2:
+        st.markdown("### 📋 Recent Analyses")
+
+        # Show recent analysis history
+        viewer = SEOFindingsViewer(website=website)
+        dates = viewer.list_available_dates()
+
+        if dates:
+            st.write(f"**{len(dates)} analyses on record**")
+            for date in dates[:5]:
+                st.caption(f"📅 {date}")
+        else:
+            st.info("No previous analyses")
+
+        st.markdown("---")
+        st.markdown("### 💡 Tips")
+        st.caption("Run analysis weekly to track SEO progress over time")
+        st.caption("Results are automatically saved for historical comparison")
+        st.caption("Use the comparison view to benchmark against competitors")
 
 
 # Export for use in main dashboard
