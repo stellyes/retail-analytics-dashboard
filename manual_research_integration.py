@@ -1330,6 +1330,29 @@ IMPORTANT:
             st.error(f"Error loading summary: {e}")
             return None
 
+    def recall_summary(self, year: int = None, month: int = None) -> Dict:
+        """
+        Recall a monthly summary. If year/month not specified, loads the most recent.
+
+        Args:
+            year: Year of summary (defaults to most recent)
+            month: Month of summary (defaults to most recent)
+
+        Returns:
+            Dictionary containing the summary, or None if not found
+        """
+        if year is None or month is None:
+            # Get most recent summary
+            summaries = self.list_monthly_summaries()
+            if not summaries:
+                return None
+
+            latest = summaries[0]  # Already sorted by date, most recent first
+            year = latest['year']
+            month = latest['month']
+
+        return self.load_monthly_summary(year, month)
+
 
 # =============================================================================
 # MAIN
