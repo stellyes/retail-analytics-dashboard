@@ -1,89 +1,24 @@
-altair==5.5.0
-altgraph @ file:///AppleInternal/Library/BuildRoots/4~CDlvugAeMYaHcTWIELyAQ2joHAecmlI0GAlKPsw/Library/Caches/com.apple.xbs/Sources/python3/altgraph-0.17.2-py2.py3-none-any.whl
-annotated-types==0.7.0
-anthropic==0.75.0
-anyio==4.12.0
-attrs==25.4.0
-backports.asyncio.runner==1.2.0
-beautifulsoup4==4.14.3
-black==25.11.0
-blinker==1.9.0
-boto3==1.42.15
-botocore==1.42.15
-cachetools==6.2.4
-certifi==2025.11.12
-cffi==2.0.0
-charset-normalizer==3.4.4
-click==8.1.8
-cryptography==46.0.3
-distro==1.9.0
-docstring_parser==0.17.0
-exceptiongroup==1.3.1
-future @ file:///AppleInternal/Library/BuildRoots/4~CDlvugAeMYaHcTWIELyAQ2joHAecmlI0GAlKPsw/Library/Caches/com.apple.xbs/Sources/python3/future-0.18.2-py3-none-any.whl
-gitdb==4.0.12
-GitPython==3.1.45
-greenlet==3.2.4
-h11==0.16.0
-httpcore==1.0.9
-httpx==0.28.1
-idna==3.11
-importlib_metadata==8.7.1
-iniconfig==2.1.0
-isort==6.1.0
-Jinja2==3.1.6
-jiter==0.12.0
-jmespath==1.0.1
-jsonschema==4.25.1
-jsonschema-specifications==2025.9.1
-librt==0.7.4
-macholib @ file:///AppleInternal/Library/BuildRoots/4~CDlvugAeMYaHcTWIELyAQ2joHAecmlI0GAlKPsw/Library/Caches/com.apple.xbs/Sources/python3/macholib-1.15.2-py2.py3-none-any.whl
-MarkupSafe==3.0.3
-moto==5.1.18
-mypy==1.19.1
-mypy_extensions==1.1.0
-narwhals==2.14.0
-numpy==2.0.2
-packaging==25.0
-pandas==2.3.3
-pathspec==0.12.1
-pillow==11.3.0
-platformdirs==4.4.0
-playwright==1.57.0
-plotly==6.5.0
-pluggy==1.6.0
-protobuf==6.33.2
-pyarrow==21.0.0
-pycparser==2.23
-pydantic==2.12.5
-pydantic_core==2.41.5
-pydeck==0.9.1
-pyee==13.0.0
-Pygments==2.19.2
-pytest==8.4.2
-pytest-asyncio==1.2.0
-python-dateutil==2.9.0.post0
-pytokens==0.3.0
-pytz==2025.2
-PyYAML==6.0.3
-qrcode==8.2
-referencing==0.36.2
-requests==2.32.5
-responses==0.25.8
-rpds-py==0.27.1
-s3transfer==0.16.0
-six @ file:///AppleInternal/Library/BuildRoots/4~CDlvugAeMYaHcTWIELyAQ2joHAecmlI0GAlKPsw/Library/Caches/com.apple.xbs/Sources/python3/six-1.15.0-py2.py3-none-any.whl
-smmap==5.0.2
-sniffio==1.3.1
-soupsieve==2.8.1
+# Core Dashboard Framework
 streamlit==1.50.0
-tenacity==9.1.2
-toml==0.10.2
-tomli==2.3.0
-tornado==6.5.4
-typing-inspection==0.4.2
-typing_extensions==4.15.0
-tzdata==2025.3
-urllib3==1.26.20
-Werkzeug==3.1.4
-xmltodict==1.0.2
-zipp==3.23.0
+
+# Data Processing
+pandas==2.3.3
+numpy==2.0.2
+
+# AWS Integration
+boto3==1.42.15
+
+# AI/ML - Anthropic Claude
+anthropic==0.75.0
+
+# Visualization
+plotly==6.5.0
+altair==5.5.0
+
+# QR Code Generation
+qrcode[pil]==8.2
+pillow==11.3.0
+
+# Web Scraping & HTML Parsing
+beautifulsoup4==4.14.3
+requests==2.32.5
