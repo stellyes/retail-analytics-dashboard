@@ -77,17 +77,23 @@ SAMPLE_PREFIXES = ["[DS]", "[SS]"]
 
 def check_password():
     """Returns True if the user has entered a correct password."""
-    
+
     def password_entered():
         """Checks whether a password entered by the user is correct."""
         # In production, use environment variables or AWS Secrets Manager
-        users = st.secrets.get("passwords", {
+        # Default passwords if secrets.toml not configured
+        default_users = {
             "admin": hashlib.sha256("changeme123".encode()).hexdigest(),
             "analyst": hashlib.sha256("viewonly456".encode()).hexdigest()
-        })
-        
+        }
+
+        try:
+            users = st.secrets["passwords"]
+        except:
+            users = default_users
+
         entered_hash = hashlib.sha256(st.session_state["password"].encode()).hexdigest()
-        
+
         if st.session_state["username"] in users and users[st.session_state["username"]] == entered_hash:
             st.session_state["password_correct"] = True
             st.session_state["logged_in_user"] = st.session_state["username"]
@@ -134,14 +140,14 @@ class S3DataManager:
             # Fall back to Streamlit secrets
             if not aws_access_key:
                 try:
-                    aws_secrets = st.secrets.get("aws", {})
+                    aws_secrets = st.secrets["aws"]
                     aws_access_key = aws_secrets.get("access_key_id")
                     aws_secret_key = aws_secrets.get("secret_access_key")
                     aws_region = aws_secrets.get("region", "us-west-2")
                     bucket_name = aws_secrets.get("bucket_name")
                 except Exception as e:
-                    self.connection_error = f"Could not read secrets: {e}"
-                    return
+                    # Secrets not configured, will use IAM role or fail gracefully
+                    pass
             
             if not bucket_name:
                 self.connection_error = "No bucket_name configured in secrets.toml [aws] section"
@@ -1269,14 +1275,14 @@ def render_recommendations(state, analytics):
         if not api_key:
             try:
                 # Try root level first
-                api_key = st.secrets.get("ANTHROPIC_API_KEY")
+                api_key = st.secrets["ANTHROPIC_API_KEY"]
             except Exception:
                 pass
 
         # Try nested anthropic section if still not found
         if not api_key:
             try:
-                api_key = st.secrets.get("anthropic", {}).get("ANTHROPIC_API_KEY")
+                api_key = st.secrets["anthropic"]["ANTHROPIC_API_KEY"]
             except Exception:
                 pass
 
