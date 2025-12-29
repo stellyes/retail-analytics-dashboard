@@ -470,6 +470,22 @@ def render_manual_research_page():
 
     # Check for API key
     api_key = os.environ.get("ANTHROPIC_API_KEY")
+
+    # Fallback to secrets if environment variable not set
+    if not api_key:
+        try:
+            # Try root level first
+            api_key = st.secrets.get("ANTHROPIC_API_KEY")
+        except Exception:
+            pass
+
+    # Try nested anthropic section if still not found
+    if not api_key:
+        try:
+            api_key = st.secrets.get("anthropic", {}).get("ANTHROPIC_API_KEY")
+        except Exception:
+            pass
+
     if not api_key:
         st.error("⚠️ ANTHROPIC_API_KEY not configured. Cannot perform analysis.")
         return

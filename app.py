@@ -1268,7 +1268,15 @@ def render_recommendations(state, analytics):
         # Fallback to secrets if environment variable not set
         if not api_key:
             try:
+                # Try root level first
                 api_key = st.secrets.get("ANTHROPIC_API_KEY")
+            except Exception:
+                pass
+
+        # Try nested anthropic section if still not found
+        if not api_key:
+            try:
+                api_key = st.secrets.get("anthropic", {}).get("ANTHROPIC_API_KEY")
             except Exception:
                 pass
 
