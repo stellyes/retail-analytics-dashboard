@@ -325,7 +325,15 @@ Return ONLY valid JSON."""
             elif "```" in result_text:
                 result_text = result_text.split("```")[1].split("```")[0]
 
-            findings = json.loads(result_text.strip())
+            # Try to parse JSON with better error handling
+            try:
+                findings = json.loads(result_text.strip())
+            except json.JSONDecodeError as json_err:
+                # If JSON parsing fails, return error with details
+                return {
+                    'success': False,
+                    'error': f'JSON parsing failed for {filename}: {str(json_err)}. Response was: {result_text[:500]}...'
+                }
 
             # Add metadata
             findings['analyzed_at'] = datetime.utcnow().isoformat()
@@ -835,7 +843,8 @@ def render_analysis_tab(storage: DocumentStorage, analyzer: ManualResearchAnalyz
 
                 # Executive summary
                 st.subheader("📋 Executive Summary")
-                st.write(summary.get('executive_summary', 'No summary available'))
+                exec_summary = summary.get('executive_summary', 'No summary available')
+                st.write(exec_summary)
 
                 # Top priorities
                 if summary.get('top_priorities'):
