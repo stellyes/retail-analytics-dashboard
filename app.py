@@ -38,13 +38,6 @@ try:
 except ImportError:
     SEO_AVAILABLE = False
 
-# Import Manual Research Integration (optional)
-try:
-    from manual_research_integration import render_manual_research_page
-    MANUAL_RESEARCH_AVAILABLE = True
-except ImportError:
-    MANUAL_RESEARCH_AVAILABLE = False
-
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
