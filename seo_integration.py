@@ -516,12 +516,12 @@ def render_site_comparison():
             if not summary:
                 continue
             
-            issues = summary.get("priority_issues", [])
+            issues = summary.get("top_priorities", [])
             if not issues:
                 st.success("No priority issues! 🎉")
             else:
                 for i, issue in enumerate(issues[:3], 1):
-                    st.markdown(f"{i}. {issue.get('issue', 'Unknown')[:50]}...")
+                    st.markdown(f"{i}. {issue.get('priority', 'Unknown')[:50]}...")
     
     st.markdown("---")
     
@@ -544,7 +544,13 @@ def render_site_comparison():
                 st.info("No quick wins identified")
             else:
                 for win in wins[:3]:
-                    st.markdown(f"⚡ {win.get('action', 'Unknown')[:50]}...")
+                    # Handle both string and dict formats
+                    if isinstance(win, str):
+                        st.markdown(f"⚡ {win[:80]}...")
+                    elif isinstance(win, dict):
+                        st.markdown(f"⚡ {win.get('action', 'Unknown')[:80]}...")
+                    else:
+                        st.markdown(f"⚡ {str(win)[:80]}...")
     
     with tab1:
         render_executive_summary(viewer)
@@ -594,7 +600,7 @@ def render_executive_summary(viewer: SEOFindingsViewer):
             st.metric("Overall SEO Score", "N/A")
     
     with col2:
-        priority_count = len(summary.get('priority_issues', []))
+        priority_count = len(summary.get('top_priorities', []))
         st.metric("Priority Issues", priority_count)
     
     with col3:
@@ -618,8 +624,8 @@ def render_executive_summary(viewer: SEOFindingsViewer):
     
     with col1:
         st.subheader("🚨 Priority Issues")
-        priority_issues = summary.get('priority_issues', [])
-        
+        priority_issues = summary.get('top_priorities', [])
+
         if not priority_issues:
             st.success("No critical issues detected!")
         else:
@@ -629,13 +635,12 @@ def render_executive_summary(viewer: SEOFindingsViewer):
                     "medium": "🟡",
                     "low": "🟢"
                 }.get(issue.get('severity', 'medium'), "⚪")
-                
-                with st.expander(f"{severity_color} #{i}: {issue.get('issue', 'Unknown issue')[:50]}..."):
+
+                with st.expander(f"{severity_color} #{i}: {issue.get('priority', 'Unknown issue')[:50]}..."):
                     st.markdown(f"**Category:** {issue.get('category', 'N/A')}")
-                    st.markdown(f"**Issue:** {issue.get('issue', 'N/A')}")
-                    st.markdown(f"**Business Impact:** {issue.get('business_impact', 'N/A')}")
-                    st.markdown(f"**Effort Required:** {issue.get('effort', 'N/A')}")
-                    st.markdown(f"**Recommendation:** {issue.get('recommendation', 'N/A')}")
+                    st.markdown(f"**Priority:** {issue.get('priority', 'N/A')}")
+                    st.markdown(f"**Severity:** {issue.get('severity', 'N/A')}")
+                    st.markdown(f"**Action:** {issue.get('action', 'N/A')}")
     
     with col2:
         st.subheader("⚡ Quick Wins")
@@ -645,15 +650,21 @@ def render_executive_summary(viewer: SEOFindingsViewer):
             st.info("No quick wins identified at this time.")
         else:
             for win in quick_wins[:5]:
-                st.markdown(f"""
-                **Action:** {win.get('action', 'N/A')}
-                
-                Expected Impact: {win.get('expected_impact', 'N/A')}
-                
-                Effort: {win.get('effort', 'N/A')}
-                
-                ---
-                """)
+                # Handle both string and dict formats
+                if isinstance(win, str):
+                    st.markdown(f"• {win}")
+                elif isinstance(win, dict):
+                    st.markdown(f"""
+                    **Action:** {win.get('action', 'N/A')}
+
+                    Expected Impact: {win.get('expected_impact', 'N/A')}
+
+                    Effort: {win.get('effort', 'N/A')}
+
+                    ---
+                    """)
+                else:
+                    st.markdown(f"• {str(win)}")
     
     # Strategic recommendations
     st.subheader("🎯 Strategic Recommendations")
