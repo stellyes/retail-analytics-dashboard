@@ -67,7 +67,7 @@ class DocumentStorage:
             self.s3 = None
 
     def upload_document(self, file_content: bytes, filename: str,
-                       category: str, source_url: str = None) -> Dict:
+                       category: str, source_url: str = None, custom_category: str = None) -> Dict:
         """Upload a research document to S3."""
 
         # Generate document ID and metadata
@@ -87,6 +87,10 @@ class DocumentStorage:
             'original_filename': filename,
             'doc_id': doc_id,
         }
+
+        # Add custom category if provided (for "Other" category)
+        if custom_category:
+            metadata['custom_category'] = custom_category
 
         if source_url:
             metadata['source_url'] = source_url
@@ -257,7 +261,7 @@ class ManualResearchAnalyzer:
             return html_content  # Fallback to raw content
 
     def analyze_document(self, content: str, category: str,
-                        source_url: str = None, filename: str = None) -> Dict:
+                        source_url: str = None, filename: str = None, custom_category: str = None) -> Dict:
         """
         Analyze a single document and extract findings.
         Cost: ~$0.03-0.08 per document with Haiku (vs $0.50+ with Sonnet + web search)
@@ -281,9 +285,12 @@ class ManualResearchAnalyzer:
         # Increased from 8000 to capture more content from larger documents
         clean_text = clean_text[:20000]
 
+        # Use custom category if provided, otherwise use standard category
+        display_category = custom_category if custom_category else category
+
         prompt = f"""Analyze this cannabis industry document and extract key findings.
 
-Category: {category}
+Category: {display_category}
 Source: {source_url or filename or 'Uploaded document'}
 
 DOCUMENT CONTENT:
@@ -351,6 +358,8 @@ Return ONLY valid JSON with NO additional text or explanations."""
             findings['analyzed_at'] = datetime.utcnow().isoformat()
             findings['source'] = source_url or filename
             findings['category'] = category
+            if custom_category:
+                findings['custom_category'] = custom_category
             findings['model_used'] = self.model
             findings['char_count'] = len(clean_text)
 
@@ -646,6 +655,15 @@ def render_upload_tab(storage: DocumentStorage):
             help="Categorize this research document"
         )
 
+        # Custom category input (shown when "Other" is selected)
+        custom_category = None
+        if category == "Other":
+            custom_category = st.text_input(
+                "Custom Category",
+                placeholder="e.g., Store Operations, Specific Competitor Analysis, etc.",
+                help="Specify a custom category for this document"
+            )
+
         # Optional source URL
         source_url = st.text_input(
             "Source URL (optional)",
@@ -662,7 +680,8 @@ def render_upload_tab(storage: DocumentStorage):
                         file_content=file_content,
                         filename=uploaded_file.name,
                         category=category,
-                        source_url=source_url or None
+                        source_url=source_url or None,
+                        custom_category=custom_category or None
                     )
                     results.append(result)
 
@@ -684,9 +703,12 @@ def render_upload_tab(storage: DocumentStorage):
             st.metric("Total Documents (7 days)", len(documents))
 
             for doc in documents[:5]:
-                with st.expander(f"{doc.get('category', 'Other')}: {doc.get('original_filename', 'Unknown')[:30]}..."):
+                display_category = doc.get('custom_category') or doc.get('category', 'Other')
+                with st.expander(f"{display_category}: {doc.get('original_filename', 'Unknown')[:30]}..."):
                     st.write(f"**Uploaded:** {doc.get('uploaded_at', 'Unknown')[:10]}")
                     st.write(f"**Category:** {doc.get('category', 'Unknown')}")
+                    if doc.get('custom_category'):
+                        st.write(f"**Custom Category:** {doc['custom_category']}")
                     if doc.get('source_url'):
                         st.write(f"**Source:** {doc['source_url']}")
 
@@ -786,7 +808,8 @@ def render_analysis_tab(storage: DocumentStorage, analyzer: ManualResearchAnalyz
                             content=content,
                             category=doc.get('category', 'Other'),
                             source_url=doc.get('source_url'),
-                            filename=doc.get('original_filename')
+                            filename=doc.get('original_filename'),
+                            custom_category=doc.get('custom_category')
                         )
 
                         if analysis['success']:
