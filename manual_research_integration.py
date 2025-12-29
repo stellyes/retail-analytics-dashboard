@@ -4,9 +4,6 @@ Cost-effective alternative to autonomous web research agents.
 Users upload HTML documents, system analyzes and extracts findings.
 """
 
-# VERSION: 2.0 - Fixed S3 key reconstruction (2025-12-28)
-MANUAL_RESEARCH_VERSION = "2.0"
-
 import streamlit as st
 import boto3
 from botocore.exceptions import ClientError
@@ -266,23 +263,17 @@ class ManualResearchAnalyzer:
         Cost: ~$0.02-0.05 per document with Haiku (vs $0.50+ with Sonnet + web search)
         """
 
-        # DEBUG: Log input content
-        st.info(f"📄 DEBUG - analyze_document called:\n- Filename: {filename}\n- Content length: {len(content)} chars\n- Is HTML: {'<html' in content.lower() or '<body' in content.lower()}")
-
         # Extract clean text if HTML
         if '<html' in content.lower() or '<body' in content.lower():
             clean_text = self.extract_text_from_html(content)
-            st.info(f"🔧 DEBUG - After HTML extraction:\n- Clean text length: {len(clean_text)} chars\n- First 200 chars: {clean_text[:200]}")
         else:
             clean_text = content
 
         # Check if we got any meaningful content
         if not clean_text or len(clean_text.strip()) < 100:
-            error_msg = f'Insufficient content extracted from {filename}. Only {len(clean_text)} characters found.'
-            st.error(f"❌ {error_msg}")
             return {
                 'success': False,
-                'error': error_msg
+                'error': f'Insufficient content extracted from {filename}. Only {len(clean_text)} characters found.'
             }
 
         # Limit to first 20000 characters to control costs (~5000 tokens)
@@ -320,8 +311,6 @@ Focus on actionable insights relevant to a San Francisco cannabis dispensary.
 Return ONLY valid JSON."""
 
         try:
-            st.info(f"🤖 DEBUG - Calling Claude API with {len(prompt)} char prompt...")
-
             response = self.client.messages.create(
                 model=self.model,
                 max_tokens=2000,  # Increased for better analysis quality
@@ -329,7 +318,6 @@ Return ONLY valid JSON."""
             )
 
             result_text = response.content[0].text
-            st.info(f"💬 DEBUG - Claude response ({len(result_text)} chars):\n{result_text[:500]}")
 
             # Clean JSON
             if "```json" in result_text:
@@ -338,7 +326,6 @@ Return ONLY valid JSON."""
                 result_text = result_text.split("```")[1].split("```")[0]
 
             findings = json.loads(result_text.strip())
-            st.success(f"✅ DEBUG - Successfully parsed JSON response")
 
             # Add metadata
             findings['analyzed_at'] = datetime.utcnow().isoformat()
@@ -443,19 +430,13 @@ Return ONLY valid JSON."""
         Cost: ~$0.01-0.02
         """
 
-        # DEBUG: Show what we're summarizing
-        st.info(f"🔍 DEBUG - Generating summary:\n- Documents analyzed: {batch_results.get('documents_analyzed', 0)}\n- Categories: {list(batch_results.get('findings_by_category', {}).keys())}\n- Total findings: {len(batch_results.get('all_findings', []))}")
-
         # Compile findings
         findings_text = ""
         for category, findings_list in batch_results.get('findings_by_category', {}).items():
-            st.info(f"📁 DEBUG - Category '{category}' has {len(findings_list)} findings")
             findings_text += f"\n\n## {category}\n"
             for finding in findings_list:
                 findings_text += f"\nSummary: {finding.get('summary', 'N/A')}\n"
                 findings_text += f"Key Facts: {', '.join(finding.get('key_facts', [])[:3])}\n"
-
-        st.info(f"📝 DEBUG - Compiled findings text length: {len(findings_text)} chars\nFirst 500 chars:\n{findings_text[:500]}")
 
         prompt = f"""Create an executive summary from these cannabis industry research findings.
 
@@ -671,7 +652,6 @@ def render_analysis_tab(storage: DocumentStorage, analyzer: ManualResearchAnalyz
     """Tab for analyzing uploaded documents."""
 
     st.header("Analyze Uploaded Documents")
-    st.info(f"⚙️ **Code Version {MANUAL_RESEARCH_VERSION}** - If you don't see debug messages below, the code hasn't updated yet.")
 
     # Load available documents
     documents = storage.list_uploaded_documents(days=30)
@@ -736,16 +716,11 @@ def render_analysis_tab(storage: DocumentStorage, analyzer: ManualResearchAnalyz
                     s3_key = doc.get('s3_key', '')
                     status_text.text(f"Analyzing: {doc_name}")
 
-                    # DEBUG: Show what we're trying to download
-                    st.info(f"🔍 DEBUG - Attempting to load:\n- Bucket: {S3_BUCKET}\n- Key: {s3_key}\n- Size: {len(s3_key)} chars")
-
                     try:
                         # Load from S3
                         content, s3_error = storage.get_document_content(s3_key)
 
-                        # DEBUG: Show download result
                         if s3_error:
-                            st.error(f"❌ S3 Download Failed: {s3_error}")
                             # S3 download failed - show detailed error
                             results['errors'].append({
                                 'document': doc_name,
@@ -755,8 +730,6 @@ def render_analysis_tab(storage: DocumentStorage, analyzer: ManualResearchAnalyz
                             })
                             progress_bar.progress((idx + 1) / len(selected_docs))
                             continue
-                        else:
-                            st.success(f"✅ S3 Download Success: {len(content)} bytes retrieved")
 
                         # Analyze the content
                         analysis = analyzer.analyze_document(
