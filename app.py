@@ -947,6 +947,8 @@ def main():
         st.session_state.product_data = None
     if 'customer_data' not in st.session_state:
         st.session_state.customer_data = None
+    if 'invoice_data' not in st.session_state:
+        st.session_state.invoice_data = None
     if 'brand_product_mapping' not in st.session_state:
         st.session_state.brand_product_mapping = None
     
