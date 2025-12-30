@@ -331,23 +331,131 @@ Be specific with numbers and product names from the data provided."""
         except Exception as e:
             return f"Error generating recommendations: {str(e)}"
     
+    def analyze_customer_segments(self, customer_summary: dict, sales_data: dict = None) -> str:
+        """
+        Analyze customer segmentation and demographics data.
+
+        Args:
+            customer_summary: Dictionary containing customer segment data
+            sales_data: Optional sales data for cross-referencing
+
+        Returns:
+            AI-generated customer insights and recommendations
+        """
+        if not self.is_available():
+            return f"Claude AI not configured: {self.init_error}"
+
+        # Safely serialize the data
+        customer_str = safe_json_dumps(customer_summary)
+
+        # Add sales context if provided
+        sales_context = ""
+        if sales_data:
+            sales_str = safe_json_dumps(sales_data)
+            sales_context = f"\n\nRelated sales performance data:\n{sales_str}\n"
+
+        prompt = f"""You are a customer analytics expert for a cannabis dispensary operation.
+
+Analyze the following customer segmentation and demographic data:
+
+{customer_str}{sales_context}
+
+Please provide:
+1. Key insights about customer segments (VIP, Whale, Regular, etc.)
+2. Demographic patterns and their business implications
+3. Customer retention risks and opportunities (based on recency segments)
+4. Specific recommendations for:
+   - High-value customer retention strategies
+   - Re-engagement campaigns for at-risk customers
+   - Growth opportunities in underserved segments
+5. Suggested personalization or targeting strategies based on customer groups
+
+Focus on actionable recommendations that can improve customer lifetime value and retention.
+Use specific numbers from the data when possible."""
+
+        try:
+            message = self.client.messages.create(
+                model=self.model,
+                max_tokens=1500,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            return message.content[0].text
+        except Exception as e:
+            return f"Error analyzing customer data: {str(e)}"
+
+    def generate_integrated_insights(self, sales_data: dict, customer_data: dict, brand_data: list = None) -> str:
+        """
+        Generate integrated insights combining sales, customer, and brand data.
+
+        Args:
+            sales_data: Sales performance summary
+            customer_data: Customer segmentation and demographic data
+            brand_data: Optional brand performance data
+
+        Returns:
+            AI-generated comprehensive business insights
+        """
+        if not self.is_available():
+            return f"Claude AI not configured: {self.init_error}"
+
+        # Safely serialize all data
+        sales_str = safe_json_dumps(sales_data)
+        customer_str = safe_json_dumps(customer_data)
+
+        brand_context = ""
+        if brand_data:
+            limited_brands = brand_data[:30] if len(brand_data) > 30 else brand_data
+            brand_str = safe_json_dumps(limited_brands)
+            brand_context = f"\n\nBrand Performance:\n{brand_str}\n"
+
+        prompt = f"""You are a comprehensive retail analytics consultant for a cannabis dispensary.
+
+Analyze the following integrated business data:
+
+Sales Performance:
+{sales_str}
+
+Customer Analytics:
+{customer_str}{brand_context}
+
+Please provide:
+1. Cross-functional insights linking customer behavior to sales performance
+2. Which customer segments are driving the most value and how to grow them
+3. Product/brand preferences by customer segment (if brand data available)
+4. Opportunities to increase AOV or frequency in specific customer groups
+5. Strategic recommendations that leverage both customer and sales insights
+6. Specific action items prioritized by potential impact
+
+Focus on insights that emerge from analyzing these data sources together, not separately.
+Be specific and data-driven with your recommendations."""
+
+        try:
+            message = self.client.messages.create(
+                model=self.model,
+                max_tokens=2000,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            return message.content[0].text
+        except Exception as e:
+            return f"Error generating integrated insights: {str(e)}"
+
     def answer_business_question(self, question: str, context_data: dict) -> str:
         """
         Answer ad-hoc business questions using the data context.
-        
+
         Args:
             question: User's business question
             context_data: Relevant data to inform the answer
-        
+
         Returns:
             AI-generated answer
         """
         if not self.is_available():
             return f"Claude AI not configured: {self.init_error}"
-        
+
         # Safely serialize the context data
         context_str = safe_json_dumps(context_data)
-        
+
         prompt = f"""You are a retail analytics assistant for a cannabis dispensary.
 
 Available data context:
@@ -355,7 +463,7 @@ Available data context:
 
 User question: {question}
 
-Please provide a helpful, data-informed answer. If the data doesn't fully answer 
+Please provide a helpful, data-informed answer. If the data doesn't fully answer
 the question, say so and explain what additional data would help.
 
 Be specific and reference actual numbers from the data when possible."""

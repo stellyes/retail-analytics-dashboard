@@ -494,6 +494,66 @@ class DataProcessor:
         df['Net Sales'] = pd.to_numeric(df['Net Sales'], errors='coerce')
         return df.sort_values('Net Sales', ascending=False)
 
+    @staticmethod
+    def clean_customer_data(df: pd.DataFrame) -> pd.DataFrame:
+        """Clean and process customer data."""
+        df = df.copy()
+
+        # Remove BOM if present
+        df.columns = [col.strip().replace('\ufeff', '') for col in df.columns]
+
+        # Extract store identifier
+        df['Store_ID'] = df['Store Name'].apply(lambda x:
+            'grass_roots' if 'Grass Roots' in str(x) else 'barbary_coast'
+        )
+
+        # Convert date columns
+        date_cols = ['Date of Birth', 'Customer Drivers License Expiration Date',
+                     'Sign-Up Date', 'Last Visit Date', 'First Purchase Date',
+                     'Customer Medical Id Expiration Date']
+
+        for col in date_cols:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], errors='coerce')
+
+        # Calculate age from date of birth
+        df['Age'] = (datetime.now() - df['Date of Birth']).dt.days // 365
+
+        # Calculate days since last visit
+        df['Days Since Last Visit'] = (datetime.now() - df['Last Visit Date']).dt.days
+
+        # Calculate customer lifetime (days since sign-up)
+        df['Customer Lifetime Days'] = (datetime.now() - df['Sign-Up Date']).dt.days
+
+        # Convert numeric columns
+        numeric_cols = ['Lifetime In-Store Visits', 'Lifetime Transactions',
+                       'Lifetime Net Sales', 'Lifetime Gross Receipts',
+                       'Lifetime Discounts', 'Lifetime Avg Order Value',
+                       'Rewards Points Balance', 'Reward Points ($) Balance']
+
+        for col in numeric_cols:
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors='coerce')
+
+        # Create customer segments based on lifetime value
+        df['Customer Segment'] = pd.cut(
+            df['Lifetime Net Sales'],
+            bins=[-1, 500, 2000, 5000, 10000, float('inf')],
+            labels=['New/Low', 'Regular', 'Good', 'VIP', 'Whale']
+        )
+
+        # Create recency segments (days since last visit)
+        df['Recency Segment'] = pd.cut(
+            df['Days Since Last Visit'],
+            bins=[-1, 30, 90, 180, 365, float('inf')],
+            labels=['Active', 'Warm', 'Cool', 'Cold', 'Lost']
+        )
+
+        # Parse customer groups
+        df['Customer Group(s)'] = df['Customer Group(s)'].fillna('')
+
+        return df
+
 
 # =============================================================================
 # ANALYTICS ENGINE
@@ -798,6 +858,8 @@ def main():
         st.session_state.brand_data = None
     if 'product_data' not in st.session_state:
         st.session_state.product_data = None
+    if 'customer_data' not in st.session_state:
+        st.session_state.customer_data = None
     if 'brand_product_mapping' not in st.session_state:
         st.session_state.brand_product_mapping = None
     
@@ -843,6 +905,7 @@ def main():
         nav_options = [
             "📊 Dashboard",
             "📈 Sales Analysis",
+            "👥 Customer Analytics",
             "🔗 Brand-Product Mapping",
             "💡 Recommendations",
         ]
@@ -895,6 +958,9 @@ def main():
 
     elif page == "📈 Sales Analysis":
         render_sales_analysis(st.session_state, analytics, selected_store, date_range)
+
+    elif page == "👥 Customer Analytics":
+        render_customer_analytics(st.session_state, analytics, selected_store, date_range)
 
     elif page == "🔗 Brand-Product Mapping":
         render_brand_product_mapping(st.session_state, s3_manager)
@@ -1341,6 +1407,535 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
         st.download_button("📥 Download Data", csv, "sales_data.csv", "text/csv")
 
 
+def render_customer_analytics(state, analytics, store_filter, date_filter=None):
+    """Render comprehensive customer analytics dashboard."""
+    st.header("Customer Analytics")
+
+    if state.customer_data is None:
+        st.warning("Please upload customer data first using the 'Data Upload' page.")
+        st.info("💡 Upload a CSV file containing customer demographics, transaction history, and loyalty information.")
+        return
+
+    df = state.customer_data.copy()
+
+    # Apply store filter
+    if store_filter != "All Stores":
+        store_id = 'barbary_coast' if store_filter == "Barbary Coast" else 'grass_roots'
+        if 'Store_ID' in df.columns:
+            df = df[df['Store_ID'] == store_id]
+
+    st.info(f"📊 Analyzing {len(df)} customers")
+
+    # Create tabs for different analytics views
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+        "📊 Overview",
+        "💎 Customer Segments",
+        "📍 Demographics",
+        "💰 Lifetime Value",
+        "🔄 Recency & Retention",
+        "🔍 Customer Search"
+    ])
+
+    # ===== TAB 1: Overview =====
+    with tab1:
+        st.subheader("Customer Base Overview")
+
+        # Key metrics
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            total_customers = len(df)
+            st.metric("Total Customers", f"{total_customers:,}")
+
+        with col2:
+            if 'Lifetime Net Sales' in df.columns:
+                total_ltv = df['Lifetime Net Sales'].sum()
+                st.metric("Total Lifetime Value", f"${total_ltv:,.0f}")
+
+        with col3:
+            if 'Lifetime Net Sales' in df.columns:
+                avg_ltv = df['Lifetime Net Sales'].mean()
+                st.metric("Avg Customer LTV", f"${avg_ltv:,.0f}")
+
+        with col4:
+            if 'Lifetime Avg Order Value' in df.columns:
+                avg_aov = df['Lifetime Avg Order Value'].mean()
+                st.metric("Avg Order Value", f"${avg_aov:.2f}")
+
+        st.markdown("---")
+
+        # Customer distribution visualizations
+        col1, col2 = st.columns(2)
+
+        with col1:
+            if 'Customer Segment' in df.columns:
+                st.markdown("**Customer Value Distribution**")
+                segment_counts = df['Customer Segment'].value_counts()
+                fig = go.Figure(data=[go.Pie(
+                    labels=segment_counts.index,
+                    values=segment_counts.values,
+                    hole=0.4,
+                    marker=dict(colors=['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7'])
+                )])
+                fig.update_layout(height=350, margin=dict(t=30, b=0, l=0, r=0))
+                st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            if 'Recency Segment' in df.columns:
+                st.markdown("**Customer Activity Status**")
+                recency_counts = df['Recency Segment'].value_counts()
+                fig = go.Figure(data=[go.Pie(
+                    labels=recency_counts.index,
+                    values=recency_counts.values,
+                    hole=0.4,
+                    marker=dict(colors=['#55efc4', '#74b9ff', '#a29bfe', '#fd79a8', '#636e72'])
+                )])
+                fig.update_layout(height=350, margin=dict(t=30, b=0, l=0, r=0))
+                st.plotly_chart(fig, use_container_width=True)
+
+        # Customer growth over time
+        if 'Sign-Up Date' in df.columns:
+            st.markdown("---")
+            st.markdown("**Customer Acquisition Over Time**")
+            df_sorted = df.sort_values('Sign-Up Date')
+            df_sorted['Cumulative Customers'] = range(1, len(df_sorted) + 1)
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=df_sorted['Sign-Up Date'],
+                y=df_sorted['Cumulative Customers'],
+                mode='lines',
+                fill='tozeroy',
+                line=dict(color='#6c5ce7', width=2)
+            ))
+            fig.update_layout(
+                height=300,
+                xaxis_title="Date",
+                yaxis_title="Total Customers",
+                margin=dict(t=30, b=0, l=0, r=0)
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+    # ===== TAB 2: Customer Segments =====
+    with tab2:
+        st.subheader("Customer Segmentation Analysis")
+
+        if 'Customer Segment' not in df.columns or 'Recency Segment' not in df.columns:
+            st.warning("Customer segmentation data not available")
+            return
+
+        # Segment selector
+        segment_type = st.radio(
+            "Segment Type",
+            ["Value Segments", "Recency Segments", "Combined Matrix"],
+            horizontal=True
+        )
+
+        if segment_type == "Value Segments":
+            # Value segment analysis
+            segment_order = ['Whale', 'VIP', 'Good', 'Regular', 'New/Low']
+            segment_data = df.groupby('Customer Segment').agg({
+                'Customer ID': 'count',
+                'Lifetime Net Sales': ['sum', 'mean'],
+                'Lifetime Transactions': 'mean',
+                'Lifetime Avg Order Value': 'mean'
+            }).round(2)
+
+            segment_data.columns = ['Customer Count', 'Total Sales', 'Avg LTV', 'Avg Transactions', 'Avg Order Value']
+            segment_data = segment_data.reindex([s for s in segment_order if s in segment_data.index])
+
+            st.dataframe(segment_data, use_container_width=True)
+
+            # Visualizations
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**Sales Contribution by Segment**")
+                fig = go.Figure(data=[go.Bar(
+                    x=segment_data.index,
+                    y=segment_data['Total Sales'],
+                    marker_color=['#ffeaa7', '#96ceb4', '#45b7d1', '#4ecdc4', '#ff6b6b']
+                )])
+                fig.update_layout(height=300, xaxis_title="Segment", yaxis_title="Total Sales ($)")
+                st.plotly_chart(fig, use_container_width=True)
+
+            with col2:
+                st.markdown("**Average LTV by Segment**")
+                fig = go.Figure(data=[go.Bar(
+                    x=segment_data.index,
+                    y=segment_data['Avg LTV'],
+                    marker_color=['#ffeaa7', '#96ceb4', '#45b7d1', '#4ecdc4', '#ff6b6b']
+                )])
+                fig.update_layout(height=300, xaxis_title="Segment", yaxis_title="Avg LTV ($)")
+                st.plotly_chart(fig, use_container_width=True)
+
+        elif segment_type == "Recency Segments":
+            # Recency segment analysis
+            recency_order = ['Active', 'Warm', 'Cool', 'Cold', 'Lost']
+            recency_data = df.groupby('Recency Segment').agg({
+                'Customer ID': 'count',
+                'Days Since Last Visit': 'mean',
+                'Lifetime Net Sales': ['sum', 'mean']
+            }).round(2)
+
+            recency_data.columns = ['Customer Count', 'Avg Days Since Visit', 'Total Sales', 'Avg LTV']
+            recency_data = recency_data.reindex([s for s in recency_order if s in recency_data.index])
+
+            st.dataframe(recency_data, use_container_width=True)
+
+            # Visualizations
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**Customer Count by Recency**")
+                fig = go.Figure(data=[go.Bar(
+                    x=recency_data.index,
+                    y=recency_data['Customer Count'],
+                    marker_color=['#55efc4', '#74b9ff', '#a29bfe', '#fd79a8', '#636e72']
+                )])
+                fig.update_layout(height=300, xaxis_title="Recency Status", yaxis_title="Customers")
+                st.plotly_chart(fig, use_container_width=True)
+
+            with col2:
+                st.markdown("**Avg Days Since Last Visit**")
+                fig = go.Figure(data=[go.Bar(
+                    x=recency_data.index,
+                    y=recency_data['Avg Days Since Visit'],
+                    marker_color=['#55efc4', '#74b9ff', '#a29bfe', '#fd79a8', '#636e72']
+                )])
+                fig.update_layout(height=300, xaxis_title="Recency Status", yaxis_title="Days")
+                st.plotly_chart(fig, use_container_width=True)
+
+        else:  # Combined Matrix
+            # RFM-style matrix
+            st.markdown("**Customer Segment Matrix (Value × Recency)**")
+            matrix = pd.crosstab(
+                df['Customer Segment'],
+                df['Recency Segment'],
+                values=df['Customer ID'],
+                aggfunc='count',
+                margins=True
+            )
+
+            # Reorder for better visualization
+            segment_order = ['Whale', 'VIP', 'Good', 'Regular', 'New/Low']
+            recency_order = ['Active', 'Warm', 'Cool', 'Cold', 'Lost']
+
+            row_order = [s for s in segment_order if s in matrix.index] + ['All']
+            col_order = [s for s in recency_order if s in matrix.columns] + ['All']
+
+            matrix = matrix.reindex(index=row_order, columns=col_order)
+            st.dataframe(matrix, use_container_width=True)
+
+            # Heatmap
+            matrix_no_totals = matrix.drop('All', errors='ignore').drop('All', axis=1, errors='ignore')
+            fig = go.Figure(data=go.Heatmap(
+                z=matrix_no_totals.values,
+                x=matrix_no_totals.columns,
+                y=matrix_no_totals.index,
+                colorscale='Blues',
+                text=matrix_no_totals.values,
+                texttemplate='%{text}',
+                textfont={"size": 12}
+            ))
+            fig.update_layout(height=400, xaxis_title="Recency", yaxis_title="Value Segment")
+            st.plotly_chart(fig, use_container_width=True)
+
+    # ===== TAB 3: Demographics =====
+    with tab3:
+        st.subheader("Customer Demographics")
+
+        col1, col2, col3 = st.columns(3)
+
+        # Age distribution
+        with col1:
+            if 'Age' in df.columns:
+                st.markdown("**Age Distribution**")
+                avg_age = df['Age'].mean()
+                median_age = df['Age'].median()
+
+                st.metric("Average Age", f"{avg_age:.1f} years")
+                st.metric("Median Age", f"{median_age:.0f} years")
+
+                fig = go.Figure(data=[go.Histogram(
+                    x=df['Age'],
+                    nbinsx=20,
+                    marker_color='#6c5ce7'
+                )])
+                fig.update_layout(height=250, xaxis_title="Age", yaxis_title="Count", margin=dict(t=20, b=0))
+                st.plotly_chart(fig, use_container_width=True)
+
+        # Gender distribution
+        with col2:
+            if 'Gender' in df.columns:
+                st.markdown("**Gender Distribution**")
+                gender_counts = df['Gender'].value_counts()
+
+                for gender, count in gender_counts.items():
+                    pct = (count / len(df)) * 100
+                    st.metric(gender, f"{count} ({pct:.1f}%)")
+
+                fig = go.Figure(data=[go.Pie(
+                    labels=gender_counts.index,
+                    values=gender_counts.values,
+                    hole=0.4
+                )])
+                fig.update_layout(height=250, margin=dict(t=20, b=0, l=0, r=0))
+                st.plotly_chart(fig, use_container_width=True)
+
+        # Customer type
+        with col3:
+            if 'Customer Status' in df.columns:
+                st.markdown("**Customer Type**")
+                type_counts = df['Customer Status'].value_counts()
+
+                for ctype, count in type_counts.items():
+                    pct = (count / len(df)) * 100
+                    st.metric(str(ctype)[:15], f"{count} ({pct:.1f}%)")
+
+                fig = go.Figure(data=[go.Pie(
+                    labels=type_counts.index,
+                    values=type_counts.values,
+                    hole=0.4
+                )])
+                fig.update_layout(height=250, margin=dict(t=20, b=0, l=0, r=0))
+                st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("---")
+
+        # Geographic distribution
+        if 'City' in df.columns:
+            st.markdown("**Geographic Distribution**")
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**Top Cities**")
+                top_cities = df['City'].value_counts().head(10)
+                st.dataframe(top_cities, use_container_width=True)
+
+            with col2:
+                if 'State' in df.columns:
+                    st.markdown("**States/Regions**")
+                    state_counts = df['State'].value_counts().head(10)
+                    fig = go.Figure(data=[go.Bar(
+                        x=state_counts.index,
+                        y=state_counts.values,
+                        marker_color='#00b894'
+                    )])
+                    fig.update_layout(height=300, xaxis_title="State", yaxis_title="Customers")
+                    st.plotly_chart(fig, use_container_width=True)
+
+    # ===== TAB 4: Lifetime Value =====
+    with tab4:
+        st.subheader("Customer Lifetime Value Analysis")
+
+        if 'Lifetime Net Sales' not in df.columns:
+            st.warning("Lifetime value data not available")
+            return
+
+        # LTV metrics
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            total_ltv = df['Lifetime Net Sales'].sum()
+            st.metric("Total LTV", f"${total_ltv:,.0f}")
+
+        with col2:
+            avg_ltv = df['Lifetime Net Sales'].mean()
+            st.metric("Average LTV", f"${avg_ltv:,.0f}")
+
+        with col3:
+            median_ltv = df['Lifetime Net Sales'].median()
+            st.metric("Median LTV", f"${median_ltv:,.0f}")
+
+        with col4:
+            top_10_pct_ltv = df.nlargest(int(len(df) * 0.1), 'Lifetime Net Sales')['Lifetime Net Sales'].sum()
+            top_10_pct = (top_10_pct_ltv / total_ltv) * 100
+            st.metric("Top 10% Contribution", f"{top_10_pct:.1f}%")
+
+        st.markdown("---")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**LTV Distribution**")
+            fig = go.Figure(data=[go.Histogram(
+                x=df['Lifetime Net Sales'],
+                nbinsx=50,
+                marker_color='#fdcb6e'
+            )])
+            fig.update_layout(height=300, xaxis_title="Lifetime Value ($)", yaxis_title="Customers")
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            st.markdown("**Top 20 Customers by LTV**")
+            top_customers = df.nlargest(20, 'Lifetime Net Sales')[
+                ['Customer Name', 'Lifetime Net Sales', 'Customer Segment']
+            ] if 'Customer Name' in df.columns else df.nlargest(20, 'Lifetime Net Sales')[
+                ['Lifetime Net Sales', 'Customer Segment']
+            ]
+            st.dataframe(top_customers, use_container_width=True, height=300)
+
+        # LTV by segment
+        if 'Customer Segment' in df.columns:
+            st.markdown("---")
+            st.markdown("**LTV Distribution by Customer Segment**")
+
+            fig = go.Figure()
+            for segment in df['Customer Segment'].unique():
+                segment_data = df[df['Customer Segment'] == segment]['Lifetime Net Sales']
+                fig.add_trace(go.Box(
+                    y=segment_data,
+                    name=segment,
+                    boxmean='sd'
+                ))
+
+            fig.update_layout(height=400, yaxis_title="Lifetime Value ($)", xaxis_title="Segment")
+            st.plotly_chart(fig, use_container_width=True)
+
+    # ===== TAB 5: Recency & Retention =====
+    with tab5:
+        st.subheader("Customer Recency & Retention")
+
+        if 'Days Since Last Visit' not in df.columns:
+            st.warning("Recency data not available")
+            return
+
+        # Recency metrics
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            active_customers = len(df[df['Days Since Last Visit'] <= 30]) if 'Days Since Last Visit' in df.columns else 0
+            st.metric("Active (30d)", active_customers)
+
+        with col2:
+            at_risk = len(df[df['Days Since Last Visit'] > 90]) if 'Days Since Last Visit' in df.columns else 0
+            st.metric("At Risk (90d+)", at_risk)
+
+        with col3:
+            avg_days_since = df['Days Since Last Visit'].mean()
+            st.metric("Avg Days Since Visit", f"{avg_days_since:.0f}")
+
+        with col4:
+            if 'Lifetime In-Store Visits' in df.columns:
+                avg_visits = df['Lifetime In-Store Visits'].mean()
+                st.metric("Avg Lifetime Visits", f"{avg_visits:.1f}")
+
+        st.markdown("---")
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**Days Since Last Visit Distribution**")
+            fig = go.Figure(data=[go.Histogram(
+                x=df['Days Since Last Visit'],
+                nbinsx=30,
+                marker_color='#e17055'
+            )])
+            fig.update_layout(height=300, xaxis_title="Days Since Last Visit", yaxis_title="Customers")
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            if 'Lifetime In-Store Visits' in df.columns:
+                st.markdown("**Visit Frequency Distribution**")
+                fig = go.Figure(data=[go.Histogram(
+                    x=df['Lifetime In-Store Visits'],
+                    nbinsx=30,
+                    marker_color='#00b894'
+                )])
+                fig.update_layout(height=300, xaxis_title="Lifetime Visits", yaxis_title="Customers")
+                st.plotly_chart(fig, use_container_width=True)
+
+        # Churn risk analysis
+        st.markdown("---")
+        st.markdown("**Churn Risk Analysis**")
+
+        if 'Recency Segment' in df.columns and 'Customer Segment' in df.columns:
+            # At-risk high value customers
+            at_risk_vip = df[
+                (df['Recency Segment'].isin(['Cold', 'Lost'])) &
+                (df['Customer Segment'].isin(['VIP', 'Whale']))
+            ]
+
+            if len(at_risk_vip) > 0:
+                st.warning(f"⚠️ {len(at_risk_vip)} high-value customers are at risk of churning!")
+
+                cols = ['Customer Name', 'Customer Segment', 'Recency Segment',
+                       'Lifetime Net Sales', 'Days Since Last Visit']
+                display_cols = [c for c in cols if c in at_risk_vip.columns]
+
+                st.dataframe(
+                    at_risk_vip[display_cols].head(20),
+                    use_container_width=True
+                )
+
+    # ===== TAB 6: Customer Search =====
+    with tab6:
+        st.subheader("Customer Search & Filter")
+
+        # Search and filter options
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            if 'Customer Name' in df.columns:
+                search_name = st.text_input("Search by Name", "")
+
+        with col2:
+            if 'Customer Segment' in df.columns:
+                segment_filter = st.multiselect(
+                    "Filter by Segment",
+                    options=df['Customer Segment'].unique().tolist(),
+                    default=[]
+                )
+
+        with col3:
+            if 'Recency Segment' in df.columns:
+                recency_filter = st.multiselect(
+                    "Filter by Recency",
+                    options=df['Recency Segment'].unique().tolist(),
+                    default=[]
+                )
+
+        # Apply filters
+        filtered_df = df.copy()
+
+        if 'Customer Name' in df.columns and search_name:
+            filtered_df = filtered_df[
+                filtered_df['Customer Name'].str.contains(search_name, case=False, na=False)
+            ]
+
+        if segment_filter and 'Customer Segment' in df.columns:
+            filtered_df = filtered_df[filtered_df['Customer Segment'].isin(segment_filter)]
+
+        if recency_filter and 'Recency Segment' in df.columns:
+            filtered_df = filtered_df[filtered_df['Recency Segment'].isin(recency_filter)]
+
+        st.info(f"Showing {len(filtered_df)} of {len(df)} customers")
+
+        # Display filtered results
+        display_cols = [
+            'Customer Name', 'Email', 'Phone', 'Customer Segment', 'Recency Segment',
+            'Lifetime Net Sales', 'Lifetime Transactions', 'Days Since Last Visit',
+            'Age', 'Gender', 'City', 'State'
+        ]
+        display_cols = [c for c in display_cols if c in filtered_df.columns]
+
+        st.dataframe(
+            filtered_df[display_cols],
+            use_container_width=True,
+            height=400
+        )
+
+        # Download filtered data
+        csv = filtered_df.to_csv(index=False)
+        st.download_button(
+            "📥 Download Filtered Customer Data",
+            csv,
+            "filtered_customers.csv",
+            "text/csv"
+        )
+
+
 def render_brand_analysis(state, analytics, store_filter, date_filter=None):
     """Render brand performance analysis page."""
     st.header("Brand Performance Analysis")
@@ -1661,14 +2256,35 @@ def render_recommendations(state, analytics):
                 
                 brand_by_category = category_agg.to_dict('records')
         
+        # Prepare customer data summary if available
+        customer_summary = {}
+        if state.customer_data is not None:
+            df = state.customer_data
+            customer_summary = {
+                'total_customers': len(df),
+                'total_lifetime_value': float(df['Lifetime Net Sales'].sum()) if 'Lifetime Net Sales' in df.columns else 0,
+                'avg_lifetime_value': float(df['Lifetime Net Sales'].mean()) if 'Lifetime Net Sales' in df.columns else 0,
+                'avg_order_value': float(df['Lifetime Avg Order Value'].mean()) if 'Lifetime Avg Order Value' in df.columns else 0,
+                'segments': df['Customer Segment'].value_counts().to_dict() if 'Customer Segment' in df.columns else {},
+                'recency_segments': df['Recency Segment'].value_counts().to_dict() if 'Recency Segment' in df.columns else {},
+                'avg_age': float(df['Age'].mean()) if 'Age' in df.columns else None,
+                'gender_distribution': df['Gender'].value_counts().to_dict() if 'Gender' in df.columns else {},
+                'avg_days_since_visit': float(df['Days Since Last Visit'].mean()) if 'Days Since Last Visit' in df.columns else None,
+                'active_customers_30d': int((df['Days Since Last Visit'] <= 30).sum()) if 'Days Since Last Visit' in df.columns else 0,
+                'at_risk_customers': int((df['Days Since Last Visit'] > 90).sum()) if 'Days Since Last Visit' in df.columns else 0,
+            }
+
         # AI Analysis Buttons
+        st.markdown("**Analysis Options:**")
+
+        # Row 1: Core analytics
         col1, col2, col3, col4 = st.columns(4)
-        
+
         # Initialize session state for AI analysis result
         if 'ai_analysis_result' not in st.session_state:
             st.session_state.ai_analysis_result = None
             st.session_state.ai_analysis_title = None
-        
+
         with col1:
             if st.button("📊 Analyze Sales Trends", use_container_width=True):
                 with st.spinner("Claude is analyzing your sales data..."):
@@ -1676,7 +2292,7 @@ def render_recommendations(state, analytics):
                     st.session_state.ai_analysis_title = "📊 Sales Analysis"
                     st.session_state.ai_analysis_result = analysis
                     st.rerun()
-        
+
         with col2:
             if st.button("🏷️ Brand Recommendations", use_container_width=True):
                 if not brand_summary:
@@ -1687,7 +2303,7 @@ def render_recommendations(state, analytics):
                         st.session_state.ai_analysis_title = "🏷️ Brand Analysis"
                         st.session_state.ai_analysis_result = analysis
                         st.rerun()
-        
+
         with col3:
             if st.button("📦 Category Insights", use_container_width=True):
                 if not brand_by_category:
@@ -1698,7 +2314,7 @@ def render_recommendations(state, analytics):
                         st.session_state.ai_analysis_title = "📦 Category Analysis"
                         st.session_state.ai_analysis_result = analysis
                         st.rerun()
-        
+
         with col4:
             if st.button("🎯 Deal Suggestions", use_container_width=True):
                 if state.brand_data is None:
@@ -1709,15 +2325,41 @@ def render_recommendations(state, analytics):
                         slow_df = state.brand_data.nsmallest(15, 'Net Sales')[['Brand', 'Net Sales', 'Gross Margin %']].copy()
                         slow_df['Product_Category'] = slow_df['Brand'].map(brand_product_mapping).fillna('Unmapped')
                         slow_movers = slow_df.to_dict('records')
-                        
+
                         high_df = state.brand_data[state.brand_data['Gross Margin %'] > 0.6].nlargest(15, 'Net Sales')[['Brand', 'Net Sales', 'Gross Margin %']].copy()
                         high_df['Product_Category'] = high_df['Brand'].map(brand_product_mapping).fillna('Unmapped')
                         high_margin = high_df.to_dict('records')
-                        
+
                         analysis = claude.generate_deal_recommendations(slow_movers, high_margin)
                         st.session_state.ai_analysis_title = "🎯 Deal Recommendations"
                         st.session_state.ai_analysis_result = analysis
                         st.rerun()
+
+        # Row 2: Customer analytics (if customer data available)
+        if customer_summary:
+            col5, col6, col7 = st.columns([1, 1, 1])
+
+            with col5:
+                if st.button("👥 Customer Insights", use_container_width=True):
+                    with st.spinner("Claude is analyzing customer segments..."):
+                        analysis = claude.analyze_customer_segments(customer_summary, sales_summary)
+                        st.session_state.ai_analysis_title = "👥 Customer Analysis"
+                        st.session_state.ai_analysis_result = analysis
+                        st.rerun()
+
+            with col6:
+                if st.button("🔄 Integrated Analysis", use_container_width=True):
+                    with st.spinner("Claude is generating integrated insights..."):
+                        analysis = claude.generate_integrated_insights(
+                            sales_summary,
+                            customer_summary,
+                            brand_summary if brand_summary else None
+                        )
+                        st.session_state.ai_analysis_title = "🔄 Integrated Business Insights"
+                        st.session_state.ai_analysis_result = analysis
+                        st.rerun()
+        else:
+            st.caption("💡 Upload customer data to unlock customer analytics and integrated insights")
         
         # Display AI analysis result at full width
         if st.session_state.ai_analysis_result:
@@ -1739,19 +2381,20 @@ def render_recommendations(state, analytics):
         # Free-form Q&A
         st.markdown("---")
         st.subheader("💬 Ask Claude About Your Business")
-        
-        question = st.text_input("Ask anything about your sales, brands, or business strategy:")
-        
+
+        question = st.text_input("Ask anything about your sales, brands, customers, or business strategy:")
+
         if question:
-            # Prepare context with mapping
+            # Prepare context with mapping and customer data
             context = {
                 'sales_summary': sales_summary,
                 'top_brands': brand_summary[:20] if brand_summary else [],
                 'product_mix': state.product_data.to_dict('records') if state.product_data is not None else [],
                 'brand_by_category': brand_by_category if brand_by_category else [],
-                'brand_product_mapping_sample': dict(list(brand_product_mapping.items())[:30]) if brand_product_mapping else {}
+                'brand_product_mapping_sample': dict(list(brand_product_mapping.items())[:30]) if brand_product_mapping else {},
+                'customer_summary': customer_summary if customer_summary else {}
             }
-            
+
             with st.spinner("Thinking..."):
                 answer = claude.answer_business_question(question, context)
                 st.markdown("### Answer")
@@ -2446,6 +3089,122 @@ def render_upload_page(s3_manager, processor):
                 st.info("No invoices uploaded yet")
         else:
             st.warning("S3 not connected - cannot view uploaded invoices")
+
+    # Customer Data Upload
+    st.markdown("---")
+    st.subheader("👥 Customer Data Upload")
+
+    st.markdown("""
+    Upload customer data to enable demographic analysis and customer segmentation insights.
+    This data will be analyzed alongside sales and product data for comprehensive business intelligence.
+    """)
+
+    customer_file = st.file_uploader(
+        "Upload Customer Data CSV",
+        type=['csv'],
+        key='customer_upload',
+        help="Upload a CSV file containing customer demographic and transaction history data"
+    )
+
+    if customer_file:
+        df = pd.read_csv(customer_file)
+        st.success(f"✅ Loaded {len(df)} customer records")
+
+        # Preview
+        with st.expander("Preview Customer Data"):
+            st.dataframe(df.head(10), use_container_width=True)
+            st.caption(f"Columns: {', '.join(df.columns.tolist()[:10])}{'...' if len(df.columns) > 10 else ''}")
+
+        if st.button("Process Customer Data", key="process_customer"):
+            with st.spinner("Processing customer data..."):
+                # Clean and process customer data
+                processed = processor.clean_customer_data(df)
+
+                # Add metadata
+                processed['Upload_Store'] = store_id
+                processed['Upload_Date'] = pd.to_datetime(datetime.now())
+
+                # Merge with existing data or replace
+                if st.session_state.customer_data is not None:
+                    # Merge by Customer ID, keeping latest version
+                    customer_id_col = 'Customer ID' if 'Customer ID' in processed.columns else 'id'
+                    st.session_state.customer_data = pd.concat([
+                        st.session_state.customer_data,
+                        processed
+                    ]).drop_duplicates(subset=[customer_id_col], keep='last')
+                else:
+                    st.session_state.customer_data = processed
+
+                # Upload to S3
+                customer_file.seek(0)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                s3_key = f"raw-uploads/{store_id}/customers_{timestamp}.csv"
+
+                success, message = s3_manager.upload_file(customer_file, s3_key)
+                if success:
+                    st.success(f"✅ {message}")
+                else:
+                    st.warning(f"⚠️ S3 upload failed: {message}")
+                    st.info("Data processed locally but NOT saved to S3")
+
+                # Show processing summary
+                st.success("✅ Customer data processed!")
+
+                # Show segments summary
+                if 'Customer Segment' in processed.columns:
+                    segment_counts = processed['Customer Segment'].value_counts()
+                    st.markdown("**Customer Segments:**")
+                    seg_cols = st.columns(5)
+                    for idx, (seg, count) in enumerate(segment_counts.items()):
+                        with seg_cols[idx % 5]:
+                            st.metric(seg, count)
+
+                if 'Recency Segment' in processed.columns:
+                    recency_counts = processed['Recency Segment'].value_counts()
+                    st.markdown("**Recency Segments:**")
+                    rec_cols = st.columns(5)
+                    for idx, (seg, count) in enumerate(recency_counts.items()):
+                        with rec_cols[idx % 5]:
+                            st.metric(seg, count)
+
+                st.rerun()
+
+    # Customer data status
+    if st.session_state.customer_data is not None:
+        with st.expander("📊 Customer Data Status"):
+            df = st.session_state.customer_data
+            st.success(f"✅ {len(df)} customer records loaded")
+
+            cols = st.columns(4)
+            with cols[0]:
+                if 'Customer Segment' in df.columns:
+                    st.caption("**Value Segments:**")
+                    for seg, count in df['Customer Segment'].value_counts().items():
+                        st.text(f"{seg}: {count}")
+
+            with cols[1]:
+                if 'Recency Segment' in df.columns:
+                    st.caption("**Recency:**")
+                    for seg, count in df['Recency Segment'].value_counts().items():
+                        st.text(f"{seg}: {count}")
+
+            with cols[2]:
+                if 'Age' in df.columns:
+                    avg_age = df['Age'].mean()
+                    st.caption("**Demographics:**")
+                    st.text(f"Avg Age: {avg_age:.1f}")
+                    if 'Gender' in df.columns:
+                        gender_dist = df['Gender'].value_counts()
+                        for gender, count in gender_dist.items():
+                            st.text(f"{gender}: {count}")
+
+            with cols[3]:
+                if 'Lifetime Net Sales' in df.columns:
+                    total_ltv = df['Lifetime Net Sales'].sum()
+                    avg_ltv = df['Lifetime Net Sales'].mean()
+                    st.caption("**Lifetime Value:**")
+                    st.text(f"Total: ${total_ltv:,.0f}")
+                    st.text(f"Avg: ${avg_ltv:,.0f}")
 
     # Data management section
     st.markdown("---")
