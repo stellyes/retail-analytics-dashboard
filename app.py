@@ -3288,6 +3288,94 @@ def render_upload_page(s3_manager, processor):
         else:
             st.warning("S3 not connected - cannot view uploaded invoices")
 
+    # Extracted Invoice Data Upload (CSV)
+    st.markdown("---")
+    st.subheader("📊 Extracted Invoice Data Upload (CSV)")
+
+    st.markdown("""
+    Upload extracted invoice data in CSV format (from `invoice_extraction.py` tool).
+    This data will be available for cost/margin analysis and will persist across sessions.
+
+    **Required columns**: vendor, invoice_number, invoice_date, item_name, brand, quantity, unit_price, total_price
+    """)
+
+    invoice_csv_file = st.file_uploader(
+        "Upload Extracted Invoice CSV",
+        type=['csv'],
+        key='invoice_csv_upload',
+        help="Upload the CSV output from invoice_extraction.py"
+    )
+
+    if invoice_csv_file:
+        st.success(f"✅ File selected: {invoice_csv_file.name}")
+
+        # Preview the data
+        try:
+            preview_df = pd.read_csv(invoice_csv_file)
+            st.write(f"**Preview** ({len(preview_df)} rows):")
+            st.dataframe(preview_df.head(10))
+            invoice_csv_file.seek(0)  # Reset file pointer
+
+            # Upload button
+            if st.button("📤 Upload Invoice Data", type="primary", key="upload_invoice_csv_btn"):
+                if not s3_connected:
+                    st.error("❌ S3 not connected. Cannot upload data.")
+                else:
+                    # Create filename with timestamp
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    s3_key = f"raw-uploads/{store_id}/invoices_{timestamp}.csv"
+
+                    # Upload to S3
+                    success, message = s3_manager.upload_file(invoice_csv_file, s3_key)
+
+                    if success:
+                        st.success(f"✅ Invoice data uploaded successfully!")
+                        st.info(f"📁 Saved to: {s3_key}")
+
+                        # Reload data
+                        with st.spinner("Reloading invoice data..."):
+                            loaded_data = s3_manager.load_all_data_from_s3(processor)
+                            if loaded_data['invoice'] is not None:
+                                st.session_state.invoice_data = loaded_data['invoice']
+                                st.success(f"✅ Loaded {len(st.session_state.invoice_data)} invoice line items from S3")
+
+                        st.balloons()
+                    else:
+                        st.error(f"❌ Upload failed: {message}")
+
+        except Exception as e:
+            st.error(f"❌ Error reading CSV: {e}")
+            st.info("Make sure the CSV file is properly formatted with the required columns.")
+
+    # View uploaded invoice CSVs
+    with st.expander("📋 View Uploaded Invoice Data Files"):
+        if s3_connected:
+            invoice_csv_files = [f for f in s3_manager.list_files(prefix="raw-uploads/")
+                                 if '/invoices_' in f and f.endswith('.csv')]
+
+            if invoice_csv_files:
+                # Group by store
+                from collections import defaultdict
+                by_store = defaultdict(list)
+
+                for f in invoice_csv_files:
+                    store_id = s3_manager._extract_store_from_path(f)
+                    store_name = STORE_DISPLAY_NAMES.get(store_id, store_id.replace('_', ' ').title())
+                    by_store[store_name].append(f)
+
+                for store_name, files in sorted(by_store.items()):
+                    st.markdown(f"**{store_name}** ({len(files)} files)")
+                    # Show most recent 5
+                    for f in sorted(files, reverse=True)[:5]:
+                        filename = f.split('/')[-1]
+                        st.text(f"  • {filename}")
+                    if len(files) > 5:
+                        st.text(f"  ... and {len(files) - 5} more")
+            else:
+                st.info("No invoice CSV files uploaded yet")
+        else:
+            st.warning("S3 not connected - cannot view uploaded files")
+
     # Customer Data Upload
     st.markdown("---")
     st.subheader("👥 Customer Data Upload")
