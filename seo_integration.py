@@ -724,15 +724,27 @@ def render_category_details(viewer: SEOFindingsViewer):
     
     # Detailed category analysis
     st.subheader("📋 Detailed Analysis by Category")
-    
+
     for cat_id, cat_data in categories.items():
         if not isinstance(cat_data, dict):
             continue
-        
-        cat_name = cat_data.get('name', cat_id)
-        cat_status = cat_data.get('status', 'unknown')
-        cat_score = cat_data.get('score', 'N/A')
-        
+
+        # Get category name - make it readable
+        cat_name = cat_data.get('name', cat_id.replace('_', ' ').title())
+        cat_score = cat_data.get('score', 0)
+
+        # Determine status based on score if not provided
+        cat_status = cat_data.get('status')
+        if not cat_status:
+            if cat_score >= 70:
+                cat_status = 'good'
+            elif cat_score >= 50:
+                cat_status = 'warning'
+            elif cat_score > 0:
+                cat_status = 'critical'
+            else:
+                cat_status = 'unknown'
+
         status_emoji = {
             "good": "✅",
             "warning": "⚠️",
@@ -740,15 +752,23 @@ def render_category_details(viewer: SEOFindingsViewer):
             "unknown": "❓",
             "skipped": "⏭️"
         }.get(cat_status, "❓")
-        
-        with st.expander(f"{status_emoji} {cat_name} (Score: {cat_score})"):
+
+        # Display score properly
+        score_display = f"{cat_score}/100" if isinstance(cat_score, (int, float)) and cat_score > 0 else "Not Scored"
+
+        with st.expander(f"{status_emoji} {cat_name} (Score: {score_display})"):
             if cat_status == "skipped":
                 st.info(f"Skipped: {cat_data.get('reason', 'No significant changes detected')}")
                 continue
-            
-            # Current state
-            st.markdown("**Current State:**")
-            st.markdown(cat_data.get('current_state', 'N/A'))
+
+            # Findings (main content)
+            findings = cat_data.get('findings', [])
+            if findings:
+                st.markdown("**Key Findings:**")
+                for finding in findings:
+                    st.markdown(f"- {finding}")
+            else:
+                st.info("No specific findings recorded for this category.")
             
             # Strengths
             strengths = cat_data.get('strengths', [])
@@ -767,33 +787,38 @@ def render_category_details(viewer: SEOFindingsViewer):
             # Issues
             issues = cat_data.get('issues', [])
             if issues:
-                st.markdown("**Issues:**")
+                st.markdown("**Issues Found:**")
                 for issue in issues:
                     # Handle both string and dict formats
                     if isinstance(issue, str):
                         st.markdown(f"- ❌ {issue}")
                     elif isinstance(issue, dict):
                         severity = issue.get('severity', 'medium')
-                        st.markdown(f"""
-                        - **[{severity.upper()}]** {issue.get('issue', 'N/A')}
-                          - Impact: {issue.get('impact', 'N/A')}
-                          - Fix: {issue.get('recommendation', 'N/A')}
-                        """)
+                        st.markdown(f"- **[{severity.upper()}]** {issue.get('issue', 'Issue not specified')}")
+                        if issue.get('impact'):
+                            st.markdown(f"  - *Impact:* {issue['impact']}")
+                        if issue.get('recommendation'):
+                            st.markdown(f"  - *Fix:* {issue['recommendation']}")
                     else:
                         st.markdown(f"- ❌ {str(issue)}")
-            
+
+            # Recommendations
+            recommendations = cat_data.get('recommendations', [])
+            if recommendations:
+                st.markdown("**📌 Recommendations:**")
+                for rec in recommendations:
+                    st.markdown(f"- {rec}")
+
             # Opportunities
             opportunities = cat_data.get('opportunities', [])
             if opportunities:
-                st.markdown("**Opportunities:**")
+                st.markdown("**💡 Opportunities:**")
                 for o in opportunities:
-                    st.markdown(f"- 💡 {o}")
-            
-            # Changes since last
-            changes = cat_data.get('changes_since_last')
-            if changes:
-                st.markdown("**Changes Since Last Analysis:**")
-                st.markdown(changes)
+                    st.markdown(f"- {o}")
+
+            # If no actionable data at all
+            if not findings and not issues and not recommendations and not strengths and not weaknesses and not opportunities:
+                st.warning("No detailed analysis data available for this category. Run a manual analysis to populate this section.")
 
 
 def render_trend_analysis(viewer: SEOFindingsViewer):
@@ -875,102 +900,283 @@ def render_trend_analysis(viewer: SEOFindingsViewer):
 
 
 def render_historical_archives(viewer: SEOFindingsViewer):
-    """Render historical archives and long-term context."""
-    
-    st.subheader("📚 Historical SEO Context")
-    
-    historical = viewer.load_historical_context()
-    
-    if not historical:
-        st.info("""
-        No historical archives available yet.
-        
-        The archival system automatically condenses findings older than 30 days into monthly summaries.
-        Check back after the first monthly archive cycle runs.
-        """)
-        return
-    
-    # Last updated
-    last_updated = historical.get('last_updated', 'Unknown')
-    st.caption(f"Historical context last updated: {last_updated}")
-    
-    # Site overview
-    st.markdown("### 🌐 Site Overview")
-    st.markdown(historical.get('site_overview', 'No overview available.'))
-    
-    st.markdown("---")
-    
-    # Long-term trends
-    st.markdown("### 📈 Long-Term Trends")
-    
-    trends = historical.get('long_term_trends', {})
-    if trends:
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            st.markdown("**Technical SEO:**")
-            st.markdown(trends.get('technical_seo', 'N/A'))
-            
-            st.markdown("**Content Performance:**")
-            st.markdown(trends.get('content_performance', 'N/A'))
-        
-        with col2:
-            st.markdown("**Backlink Growth:**")
-            st.markdown(trends.get('backlink_growth', 'N/A'))
-            
-            st.markdown("**Competitive Position:**")
-            st.markdown(trends.get('competitive_position', 'N/A'))
-    
-    st.markdown("---")
-    
-    # Historical timeline
-    st.markdown("### 📅 Historical Timeline")
-    
-    timeline = historical.get('historical_timeline', [])
-    if timeline:
-        for event in timeline:
-            st.markdown(f"**{event.get('period', 'N/A')}:** {event.get('event', 'N/A')}")
-    else:
-        st.info("No timeline events recorded yet.")
-    
-    st.markdown("---")
-    
-    # Patterns and strategies
-    col1, col2 = st.columns(2)
-    
+    """Render historical archives with manual monthly summarization."""
+
+    st.subheader("📚 Historical SEO Archives")
+
+    st.markdown("""
+    Generate monthly summaries by analyzing all SEO findings for a specific month.
+    Uses AI to synthesize trends, patterns, and actionable recommendations.
+    """)
+
+    # Month selector
+    col1, col2, col3 = st.columns([2, 2, 1])
+
     with col1:
-        st.markdown("### 🔄 Recurring Patterns")
-        patterns = historical.get('recurring_patterns', [])
-        if patterns:
-            for p in patterns:
-                st.markdown(f"- {p}")
-        else:
-            st.info("No patterns identified yet.")
-        
-        st.markdown("### ✅ Successful Strategies")
-        strategies = historical.get('successful_strategies', [])
-        if strategies:
-            for s in strategies:
-                st.markdown(f"- {s}")
-        else:
-            st.info("No successful strategies recorded yet.")
-    
+        current_year = datetime.now().year
+        year = st.selectbox("Year", range(current_year, current_year - 3, -1))
+
     with col2:
-        st.markdown("### ⚠️ Persistent Challenges")
-        challenges = historical.get('persistent_challenges', [])
-        if challenges:
-            for c in challenges:
-                st.markdown(f"- {c}")
-        else:
-            st.info("No persistent challenges identified.")
-        
-        st.markdown("### 🎯 Strategic Recommendations")
-        recs = historical.get('strategic_recommendations', [])
-        if recs:
-            for r in recs:
-                st.markdown(f"- {r}")
-        else:
-            st.info("No long-term recommendations available.")
+        month = st.selectbox("Month", range(1, 13), format_func=lambda x: datetime(2000, x, 1).strftime('%B'))
+
+    with col3:
+        st.write("")  # Spacing
+        st.write("")  # Spacing
+        generate_button = st.button("🔍 Generate Summary", type="primary")
+
+    # Check if summary already exists
+    summary_key = f"{viewer.prefix}/monthly-summaries/{year}/{month:02d}/summary.json"
+    summary_exists = False
+    try:
+        viewer.s3.head_object(Bucket=viewer.bucket, Key=summary_key)
+        summary_exists = True
+    except:
+        pass
+
+    if summary_exists:
+        st.info(f"✅ Summary exists for {datetime(year, month, 1).strftime('%B %Y')}. Click Generate to recreate or view below.")
+
+    # Generate summary if button clicked
+    if generate_button:
+        # Check for API key
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            try:
+                api_key = st.secrets["ANTHROPIC_API_KEY"]
+            except:
+                pass
+            if not api_key:
+                try:
+                    api_key = st.secrets["anthropic"]["ANTHROPIC_API_KEY"]
+                except:
+                    pass
+
+        if not api_key:
+            st.error("⚠️ ANTHROPIC_API_KEY not configured. Cannot generate summary.")
+            return
+
+        with st.spinner(f"Generating comprehensive SEO summary for {datetime(year, month, 1).strftime('%B %Y')}..."):
+            summary = _generate_monthly_seo_summary(viewer, year, month, api_key)
+
+            if summary.get('success'):
+                # Save to S3
+                try:
+                    viewer.s3.put_object(
+                        Bucket=viewer.bucket,
+                        Key=summary_key,
+                        Body=json.dumps(summary['data'], indent=2, default=str),
+                        ContentType='application/json'
+                    )
+                    st.success("✅ Monthly summary generated and saved!")
+                except Exception as e:
+                    st.error(f"Failed to save summary: {e}")
+
+                # Display the summary
+                _display_monthly_seo_summary(summary['data'])
+            else:
+                st.error(f"❌ Failed to generate summary: {summary.get('error')}")
+
+    # Load and display existing summary
+    elif summary_exists:
+        try:
+            response = viewer.s3.get_object(Bucket=viewer.bucket, Key=summary_key)
+            summary_data = json.loads(response['Body'].read().decode('utf-8'))
+            st.markdown("---")
+            st.subheader(f"📊 Summary for {datetime(year, month, 1).strftime('%B %Y')}")
+            _display_monthly_seo_summary(summary_data)
+        except Exception as e:
+            st.error(f"Error loading summary: {e}")
+    else:
+        st.info(f"No summary available for {datetime(year, month, 1).strftime('%B %Y')}. Click 'Generate Summary' to create one.")
+
+
+def _generate_monthly_seo_summary(viewer: SEOFindingsViewer, year: int, month: int, api_key: str) -> dict:
+    """Generate a comprehensive monthly SEO summary using Claude."""
+
+    # Load all findings for the month
+    findings = []
+    prefix = f"{viewer.prefix}/{year}/{month:02d}/"
+
+    try:
+        paginator = viewer.s3.get_paginator('list_objects_v2')
+        for page in paginator.paginate(Bucket=viewer.bucket, Prefix=prefix):
+            for obj in page.get('Contents', []):
+                if obj['Key'].endswith('.json'):
+                    try:
+                        response = viewer.s3.get_object(Bucket=viewer.bucket, Key=obj['Key'])
+                        finding = json.loads(response['Body'].read().decode('utf-8'))
+                        findings.append(finding)
+                    except:
+                        continue
+    except Exception as e:
+        return {'success': False, 'error': f'Failed to load findings: {e}'}
+
+    if not findings:
+        return {'success': False, 'error': f'No SEO analysis data found for {year}-{month:02d}'}
+
+    # Build consolidated findings text
+    findings_text = f"## SEO Analysis Data for {datetime(year, month, 1).strftime('%B %Y')}\n\n"
+    findings_text += f"Total Analyses: {len(findings)}\n"
+    findings_text += f"Website: {viewer.website}\n\n"
+
+    for idx, finding in enumerate(findings, 1):
+        findings_text += f"### Analysis {idx} - {finding.get('analyzed_at', 'Unknown')[:10]}\n"
+        findings_text += f"Overall Score: {finding.get('overall_score', 'N/A')}/100\n\n"
+
+        categories = finding.get('categories', {})
+        for cat_id, cat_data in categories.items():
+            if isinstance(cat_data, dict):
+                cat_name = cat_data.get('name', cat_id.replace('_', ' ').title())
+                score = cat_data.get('score', 0)
+                findings_text += f"**{cat_name}** (Score: {score}/100)\n"
+
+                for key in ['findings', 'issues', 'recommendations']:
+                    items = cat_data.get(key, [])
+                    if items:
+                        findings_text += f"- {key.title()}: {', '.join([str(i) for i in items[:3]])}\n"
+
+        findings_text += "\n"
+
+    # Generate summary with Claude
+    client = anthropic.Anthropic(api_key=api_key)
+
+    prompt = f"""Analyze the following SEO data and create a comprehensive monthly summary.
+
+{findings_text[:15000]}  # Limit to avoid token issues
+
+Generate a detailed JSON summary:
+{{
+    "executive_summary": "2-3 paragraph overview of SEO performance this month",
+    "overall_trend": "improving/declining/stable",
+    "key_achievements": ["achievement 1", "achievement 2"],
+    "critical_issues": [
+        {{
+            "issue": "Issue description",
+            "severity": "high/medium/low",
+            "impact": "Business impact",
+            "recommendation": "How to fix"
+        }}
+    ],
+    "category_performance": {{
+        "technical_seo": "Brief assessment",
+        "on_page_seo": "Brief assessment",
+        "local_seo": "Brief assessment",
+        "content": "Brief assessment",
+        "user_experience": "Brief assessment"
+    }},
+    "month_over_month_changes": ["change 1", "change 2"],
+    "quick_wins": ["easy fix 1", "easy fix 2"],
+    "long_term_recommendations": ["strategic rec 1", "strategic rec 2"],
+    "competitive_insights": "Comparison with competitors if available"
+}}
+
+Focus on actionable insights for a cannabis dispensary website.
+Return ONLY valid JSON."""
+
+    try:
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=3000,
+            messages=[{"role": "user", "content": prompt}]
+        )
+
+        result_text = response.content[0].text
+
+        # Clean JSON
+        if "```json" in result_text:
+            result_text = result_text.split("```json")[1].split("```")[0]
+        elif "```" in result_text:
+            result_text = result_text.split("```")[1].split("```")[0]
+
+        summary = json.loads(result_text.strip())
+
+        # Add metadata
+        summary['generated_at'] = datetime.utcnow().isoformat()
+        summary['year'] = year
+        summary['month'] = month
+        summary['month_name'] = datetime(year, month, 1).strftime('%B %Y')
+        summary['analyses_count'] = len(findings)
+        summary['website'] = viewer.website
+
+        return {'success': True, 'data': summary}
+
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
+
+
+def _display_monthly_seo_summary(summary: dict):
+    """Display a monthly SEO summary."""
+
+    # Metadata
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Month", summary.get('month_name', 'Unknown'))
+    col2.metric("Analyses", summary.get('analyses_count', 0))
+    col3.metric("Trend", summary.get('overall_trend', 'Unknown').title())
+
+    st.markdown("---")
+
+    # Executive Summary
+    st.subheader("📋 Executive Summary")
+    st.markdown(summary.get('executive_summary', 'No summary available'))
+
+    st.markdown("---")
+
+    # Key Achievements
+    if summary.get('key_achievements'):
+        st.subheader("✅ Key Achievements")
+        for achievement in summary['key_achievements']:
+            st.markdown(f"- {achievement}")
+
+        st.markdown("---")
+
+    # Critical Issues
+    if summary.get('critical_issues'):
+        st.subheader("⚠️ Critical Issues")
+        for issue in summary['critical_issues']:
+            severity = issue.get('severity', 'medium')
+            emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(severity, "⚪")
+
+            with st.expander(f"{emoji} {issue.get('issue', 'Unknown Issue')}"):
+                st.markdown(f"**Severity:** {severity.title()}")
+                st.markdown(f"**Impact:** {issue.get('impact', 'Not specified')}")
+                st.markdown(f"**Recommendation:** {issue.get('recommendation', 'Not specified')}")
+
+        st.markdown("---")
+
+    # Category Performance
+    if summary.get('category_performance'):
+        st.subheader("📊 Category Performance")
+        cats = summary['category_performance']
+
+        for cat_name, assessment in cats.items():
+            if assessment:
+                st.markdown(f"**{cat_name.replace('_', ' ').title()}:** {assessment}")
+
+        st.markdown("---")
+
+    # Quick Wins
+    if summary.get('quick_wins'):
+        st.subheader("🎯 Quick Wins")
+        for win in summary['quick_wins']:
+            st.markdown(f"- {win}")
+
+        st.markdown("---")
+
+    # Long-term Recommendations
+    if summary.get('long_term_recommendations'):
+        st.subheader("🚀 Long-Term Recommendations")
+        for rec in summary['long_term_recommendations']:
+            st.markdown(f"- {rec}")
+
+    # Download button
+    st.markdown("---")
+    json_data = json.dumps(summary, indent=2, default=str)
+    st.download_button(
+        label="📥 Download Summary (JSON)",
+        data=json_data,
+        file_name=f"seo_summary_{summary.get('year')}_{summary.get('month'):02d}.json",
+        mime="application/json"
+    )
 
 
 def render_manual_analysis_tab(website: str, site_name: str):
