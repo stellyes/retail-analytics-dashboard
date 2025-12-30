@@ -554,11 +554,20 @@ Return ONLY valid JSON."""
                             response = self.s3.get_object(Bucket=bucket, Key=obj['Key'])
                             finding = json.loads(response['Body'].read().decode('utf-8'))
 
-                            # Only include valid analyses with at least 1 document analyzed
+                            # Only include valid analyses with:
+                            # 1. At least 1 document analyzed
+                            # 2. At least 1 actual finding in all_findings
                             if finding.get('documents_analyzed', 0) > 0:
-                                finding['s3_key'] = obj['Key']
-                                finding['last_modified'] = obj['LastModified'].isoformat()
-                                findings.append(finding)
+                                all_findings = finding.get('all_findings', [])
+                                # Check if there are any actual findings with content
+                                has_findings = any(
+                                    f.get('key_findings') and len(f.get('key_findings', [])) > 0
+                                    for f in all_findings
+                                )
+                                if has_findings:
+                                    finding['s3_key'] = obj['Key']
+                                    finding['last_modified'] = obj['LastModified'].isoformat()
+                                    findings.append(finding)
                         except:
                             continue
 
@@ -927,8 +936,18 @@ def render_findings_tab(analyzer: ManualResearchAnalyzer):
             st.subheader("Select Analysis to View")
             all_findings = st.session_state['all_findings']
 
-            # Filter to only valid findings
-            valid_findings = [f for f in all_findings if f.get('documents_analyzed', 0) > 0]
+            # Filter to only valid findings with actual content
+            valid_findings = []
+            for f in all_findings:
+                if f.get('documents_analyzed', 0) > 0:
+                    all_findings_list = f.get('all_findings', [])
+                    # Check if there are any actual findings with content
+                    has_findings = any(
+                        finding.get('key_findings') and len(finding.get('key_findings', [])) > 0
+                        for finding in all_findings_list
+                    )
+                    if has_findings:
+                        valid_findings.append(f)
 
             if not valid_findings:
                 st.info("No valid analysis results found. Please analyze some documents first.")
@@ -951,6 +970,16 @@ def render_findings_tab(analyzer: ManualResearchAnalyzer):
             st.error("⚠️ This analysis has no valid results. Please run a new analysis.")
             return
 
+        # Additional validation: check for actual findings
+        all_findings_list = results.get('all_findings', [])
+        has_findings = any(
+            finding.get('key_findings') and len(finding.get('key_findings', [])) > 0
+            for finding in all_findings_list
+        )
+        if not has_findings:
+            st.error("⚠️ This analysis has no findings. The documents may not have contained analyzable content. Please run a new analysis.")
+            return
+
         st.subheader("Analysis Details")
         st.write(f"**Completed:** {results.get('completed_at', 'Unknown')[:19]}")
 
@@ -965,12 +994,18 @@ def render_findings_tab(analyzer: ManualResearchAnalyzer):
         if results.get('executive_summary'):
             st.subheader("📋 Executive Summary")
             summary = results['executive_summary']
-            st.write(summary.get('executive_summary', 'No summary'))
 
-            if summary.get('trends_identified'):
-                st.write("**Trends Identified:**")
-                for trend in summary['trends_identified']:
-                    st.write(f"- {trend}")
+            # Handle both dict and string formats
+            if isinstance(summary, dict):
+                st.write(summary.get('executive_summary', 'No summary'))
+
+                if summary.get('trends_identified'):
+                    st.write("**Trends Identified:**")
+                    for trend in summary['trends_identified']:
+                        st.write(f"- {trend}")
+            else:
+                # If it's a string, just display it
+                st.write(summary)
 
         # Findings by category
         st.subheader("🔍 Findings by Category")

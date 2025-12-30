@@ -551,18 +551,6 @@ def render_site_comparison():
                         st.markdown(f"⚡ {win.get('action', 'Unknown')[:80]}...")
                     else:
                         st.markdown(f"⚡ {str(win)[:80]}...")
-    
-    with tab1:
-        render_executive_summary(viewer)
-    
-    with tab2:
-        render_category_details(viewer)
-    
-    with tab3:
-        render_trend_analysis(viewer)
-    
-    with tab4:
-        render_historical_archives(viewer)
 
 
 def render_executive_summary(viewer: SEOFindingsViewer):

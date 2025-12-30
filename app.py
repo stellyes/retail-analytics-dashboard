@@ -843,8 +843,6 @@ def main():
         nav_options = [
             "📊 Dashboard",
             "📈 Sales Analysis",
-            "🏷️ Brand Performance",
-            "📦 Product Categories",
             "🔗 Brand-Product Mapping",
             "💡 Recommendations",
         ]
@@ -863,8 +861,13 @@ def main():
 
         nav_options.append("📤 Data Upload")
 
-        page = st.radio("Navigation", nav_options)
-        
+        # Handle navigation override from dashboard buttons
+        if 'nav_override' in st.session_state:
+            page = st.session_state['nav_override']
+            del st.session_state['nav_override']
+        else:
+            page = st.radio("Navigation", nav_options)
+
         st.markdown("---")
         
         # Store filter (global)
@@ -889,16 +892,10 @@ def main():
     # Page routing
     if page == "📊 Dashboard":
         render_dashboard(st.session_state, analytics, selected_store)
-    
+
     elif page == "📈 Sales Analysis":
-        render_sales_analysis(st.session_state, selected_store)
-    
-    elif page == "🏷️ Brand Performance":
-        render_brand_analysis(st.session_state, analytics, selected_store, date_range)
-    
-    elif page == "📦 Product Categories":
-        render_product_analysis(st.session_state, selected_store, date_range)
-    
+        render_sales_analysis(st.session_state, analytics, selected_store, date_range)
+
     elif page == "🔗 Brand-Product Mapping":
         render_brand_product_mapping(st.session_state, s3_manager)
     
@@ -980,62 +977,365 @@ def render_dashboard(state, analytics, store_filter):
         fig = plot_category_breakdown(state.product_data)
         st.plotly_chart(fig, use_container_width=True)
 
+    st.markdown("---")
 
-def render_sales_analysis(state, store_filter):
-    """Render detailed sales analysis page."""
+    # SEO & Industry Research Preview
+    st.subheader("📈 Business Intelligence Preview")
+
+    col1, col2 = st.columns(2)
+
+    # SEO Preview
+    with col1:
+        st.markdown("### 🔍 SEO Status")
+        if SEO_AVAILABLE:
+            try:
+                from seo_integration import SEOFindingsViewer
+
+                # Try to load latest SEO summary
+                viewer = SEOFindingsViewer(website="https://barbarycoastsf.com")
+                summary = viewer.load_latest_summary()
+
+                if summary:
+                    score = summary.get("overall_score", 0)
+
+                    # Display score with color
+                    if score >= 70:
+                        st.success(f"**Overall Score: {score}/100** ✅")
+                    elif score >= 50:
+                        st.warning(f"**Overall Score: {score}/100** ⚠️")
+                    else:
+                        st.error(f"**Overall Score: {score}/100** ❌")
+
+                    # Top priority
+                    priorities = summary.get("top_priorities", [])
+                    if priorities:
+                        st.markdown("**Top Priority:**")
+                        st.markdown(f"- {priorities[0].get('priority', 'N/A')[:80]}...")
+
+                    # Quick wins
+                    wins = summary.get("quick_wins", [])
+                    if wins:
+                        st.markdown("**Quick Win:**")
+                        win_text = wins[0] if isinstance(wins[0], str) else wins[0].get('action', 'N/A')
+                        st.markdown(f"⚡ {win_text[:80]}...")
+
+                    st.markdown(f"*Last analyzed: {summary.get('analyzed_at', 'Unknown')[:10]}*")
+
+                    if st.button("View Full SEO Analysis →", key="seo_button"):
+                        st.session_state['nav_override'] = "🔍 SEO Analysis"
+                        st.rerun()
+                else:
+                    st.info("No SEO data available yet. Run an SEO analysis to get started.")
+            except Exception as e:
+                st.info("SEO module available. Click to view analysis.")
+        else:
+            st.info("SEO module not installed.")
+
+    # Industry Research Preview
+    with col2:
+        st.markdown("### 🔬 Industry Insights")
+        if RESEARCH_AVAILABLE:
+            try:
+                from manual_research_integration import MonthlyResearchSummarizer
+
+                # Get API key
+                api_key = os.environ.get("ANTHROPIC_API_KEY")
+                if not api_key:
+                    try:
+                        api_key = st.secrets.get("ANTHROPIC_API_KEY") or st.secrets.get("anthropic", {}).get("ANTHROPIC_API_KEY")
+                    except:
+                        pass
+
+                if api_key:
+                    summarizer = MonthlyResearchSummarizer(api_key)
+
+                    # Load most recent summary
+                    recent_summary = summarizer.recall_summary()
+
+                    if recent_summary:
+                        month_name = recent_summary.get('month_name', 'Recent')
+                        docs = recent_summary.get('documents_analyzed', 0)
+
+                        st.markdown(f"**Latest: {month_name}**")
+                        st.metric("Documents Analyzed", docs)
+
+                        # Top insight
+                        insights = recent_summary.get('key_insights', [])
+                        if insights:
+                            top_insight = insights[0]
+                            importance = top_insight.get('importance', 'medium')
+                            emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(importance, "⚪")
+                            st.markdown(f"{emoji} **Top Insight:**")
+                            st.markdown(f"{top_insight.get('insight', 'N/A')[:100]}...")
+
+                        if st.button("View Full Research →", key="research_button"):
+                            st.session_state['nav_override'] = "🔬 Industry Research"
+                            st.rerun()
+                    else:
+                        st.info("No industry research available yet. Upload documents to get started.")
+                else:
+                    st.info("Configure ANTHROPIC_API_KEY to view research.")
+            except Exception as e:
+                st.info("Research module available. Click to view insights.")
+        else:
+            st.info("Research module not installed.")
+
+
+def render_sales_analysis(state, analytics, store_filter, date_filter=None):
+    """Render comprehensive sales analysis page with all sales-related insights."""
     st.header("Sales Analysis")
-    
+
     if state.sales_data is None:
         st.warning("Please upload sales data first.")
         return
+
+    # Tabs for different sales views
+    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+        "📈 Sales Trends",
+        "🏷️ Brand Performance",
+        "📦 Product Categories",
+        "📊 Daily Breakdown",
+        "🔍 Raw Data"
+    ])
     
-    df = state.sales_data.copy()
-    
-    # Apply store filter
-    if store_filter != "All Stores":
-        store_id = [k for k, v in STORE_DISPLAY_NAMES.items() if v == store_filter]
-        if store_id:
-            df = df[df['Store_ID'] == store_id[0]]
-    
-    # Tabs for different views
-    tab1, tab2, tab3 = st.tabs(["📈 Trends", "📊 Daily Breakdown", "🔍 Raw Data"])
-    
+    # ===== TAB 1: Sales Trends =====
     with tab1:
+        df = state.sales_data.copy()
+
+        # Apply store filter
+        if store_filter != "All Stores":
+            store_id = [k for k, v in STORE_DISPLAY_NAMES.items() if v == store_filter]
+            if store_id:
+                df = df[df['Store_ID'] == store_id[0]]
+
         col1, col2 = st.columns(2)
-        
+
         with col1:
             # Sales trend
             fig = px.line(df, x='Date', y='Net Sales', color='Store_ID',
                          title='Daily Net Sales Trend')
             st.plotly_chart(fig, use_container_width=True)
-        
+
         with col2:
             # Customer trend
             fig = px.line(df, x='Date', y='Customers Count', color='Store_ID',
                          title='Daily Customer Count')
             st.plotly_chart(fig, use_container_width=True)
-        
+
         # Margin trend
         fig = px.line(df, x='Date', y='Gross Margin %', color='Store_ID',
                      title='Gross Margin % Trend')
         st.plotly_chart(fig, use_container_width=True)
-    
+
+    # ===== TAB 2: Brand Performance =====
     with tab2:
+        if state.brand_data is None:
+            st.warning("Please upload brand data to view brand performance.")
+        else:
+            df_brand = state.brand_data.copy()
+
+            # Show available date ranges in the data
+            if 'Upload_Start_Date' in df_brand.columns and 'Upload_End_Date' in df_brand.columns:
+                date_ranges = df_brand.groupby(['Upload_Start_Date', 'Upload_End_Date', 'Upload_Store']).size().reset_index(name='records')
+
+                with st.expander("📅 Available Data Periods", expanded=False):
+                    for _, row in date_ranges.iterrows():
+                        start = row['Upload_Start_Date'].strftime('%m/%d/%Y') if pd.notna(row['Upload_Start_Date']) else 'Unknown'
+                        end = row['Upload_End_Date'].strftime('%m/%d/%Y') if pd.notna(row['Upload_End_Date']) else 'Unknown'
+                        store = row['Upload_Store']
+                        st.text(f"  • {store}: {start} - {end} ({row['records']} brands)")
+
+                # Filter by date range if provided
+                if date_filter and len(date_filter) == 2:
+                    filter_start, filter_end = date_filter
+                    filter_start = pd.to_datetime(filter_start)
+                    filter_end = pd.to_datetime(filter_end)
+
+                    # Keep data where upload period overlaps with filter period
+                    df_brand = df_brand[
+                        (df_brand['Upload_Start_Date'] <= filter_end) &
+                        (df_brand['Upload_End_Date'] >= filter_start)
+                    ]
+
+                    if len(df_brand) == 0:
+                        st.warning(f"No brand data available for the selected date range ({filter_start.strftime('%m/%d/%Y')} - {filter_end.strftime('%m/%d/%Y')})")
+                    else:
+                        st.info(f"📅 Showing data for: {filter_start.strftime('%m/%d/%Y')} - {filter_end.strftime('%m/%d/%Y')}")
+
+            # Filter by store if specified
+            if store_filter and store_filter != 'All Stores':
+                store_id = [k for k, v in STORE_DISPLAY_NAMES.items() if v == store_filter]
+                if store_id and 'Upload_Store' in df_brand.columns:
+                    df_brand = df_brand[df_brand['Upload_Store'] == store_id[0]]
+
+            if len(df_brand) > 0:
+                # Top performers
+                st.subheader("Top Performing Brands")
+                top_n = st.slider("Number of brands to show", 10, 50, 20, key="brand_top_n")
+
+                fig = plot_brand_performance(df_brand, top_n)
+                st.plotly_chart(fig, use_container_width=True)
+
+                # Brand table
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    st.subheader("🏆 Top Brands by Revenue")
+                    top_brands = analytics.identify_top_brands(df_brand, 10, store_filter)
+                    st.dataframe(top_brands, use_container_width=True)
+
+                with col2:
+                    st.subheader("⚠️ Low Margin Brands")
+                    underperformers = analytics.identify_underperformers(df_brand)
+                    st.dataframe(underperformers, use_container_width=True)
+
+                # Margin vs Sales scatter
+                st.subheader("Margin vs. Sales Analysis")
+
+                # Filter to significant brands
+                significant_brands = df_brand[df_brand['Net Sales'] > 10000].copy()
+                significant_brands['Margin_Pct'] = significant_brands['Gross Margin %'] * 100
+
+                # Color by margin performance
+                fig = px.scatter(
+                    significant_brands,
+                    x='Net Sales',
+                    y='Margin_Pct',
+                    hover_name='Brand',
+                    color='Margin_Pct',
+                    color_continuous_scale='RdYlGn',  # Red (low) to Green (high)
+                    size='Net Sales',
+                    size_max=30,
+                    title='Brand Positioning: Sales vs Margin',
+                    log_x=True,
+                    labels={'Margin_Pct': 'Gross Margin %', 'Net Sales': 'Net Sales ($)'}
+                )
+
+                # Add quadrant lines
+                fig.add_hline(
+                    y=55,
+                    line_dash="dash",
+                    line_color="rgba(255,255,255,0.5)",
+                    annotation_text="55% Target Margin",
+                    annotation_position="right"
+                )
+
+                fig.update_layout(
+                    height=500,
+                    coloraxis_colorbar=dict(title="Margin %")
+                )
+
+                st.plotly_chart(fig, use_container_width=True)
+
+                # Add interpretation help
+                with st.expander("📖 How to read this chart"):
+                    st.markdown("""
+                    - **X-axis (horizontal)**: Net Sales in dollars (log scale)
+                    - **Y-axis (vertical)**: Gross Margin percentage
+                    - **Bubble size**: Larger = higher sales volume
+                    - **Color**: Green = high margin, Red = low margin
+
+                    **Quadrants:**
+                    - **Top-right**: Stars (high sales + high margin) ✅
+                    - **Top-left**: Niche winners (low sales but high margin)
+                    - **Bottom-right**: Volume drivers (high sales but low margin) - watch closely
+                    - **Bottom-left**: Consider discontinuing ⚠️
+                    """)
+
+    # ===== TAB 3: Product Categories =====
+    with tab3:
+        if state.product_data is None:
+            st.warning("Please upload product data to view category analysis.")
+        else:
+            df_product = state.product_data.copy()
+
+            # Show available date ranges in the data
+            if 'Upload_Start_Date' in df_product.columns and 'Upload_End_Date' in df_product.columns:
+                date_ranges = df_product.groupby(['Upload_Start_Date', 'Upload_End_Date', 'Upload_Store']).size().reset_index(name='records')
+
+                with st.expander("📅 Available Data Periods", expanded=False):
+                    for _, row in date_ranges.iterrows():
+                        start = row['Upload_Start_Date'].strftime('%m/%d/%Y') if pd.notna(row['Upload_Start_Date']) else 'Unknown'
+                        end = row['Upload_End_Date'].strftime('%m/%d/%Y') if pd.notna(row['Upload_End_Date']) else 'Unknown'
+                        store = row['Upload_Store']
+                        st.text(f"  • {store}: {start} - {end} ({row['records']} categories)")
+
+                # Filter by date range if provided
+                if date_filter and len(date_filter) == 2:
+                    filter_start, filter_end = date_filter
+                    filter_start = pd.to_datetime(filter_start)
+                    filter_end = pd.to_datetime(filter_end)
+
+                    # Keep data where upload period overlaps with filter period
+                    df_product = df_product[
+                        (df_product['Upload_Start_Date'] <= filter_end) &
+                        (df_product['Upload_End_Date'] >= filter_start)
+                    ]
+
+                    if len(df_product) == 0:
+                        st.warning(f"No product data available for the selected date range ({filter_start.strftime('%m/%d/%Y')} - {filter_end.strftime('%m/%d/%Y')})")
+                    else:
+                        st.info(f"📅 Showing data for: {filter_start.strftime('%m/%d/%Y')} - {filter_end.strftime('%m/%d/%Y')}")
+
+            # Filter by store if specified
+            if store_filter and store_filter != 'All Stores':
+                store_id = [k for k, v in STORE_DISPLAY_NAMES.items() if v == store_filter]
+                if store_id and 'Upload_Store' in df_product.columns:
+                    df_product = df_product[df_product['Upload_Store'] == store_id[0]]
+
+            if len(df_product) > 0:
+                col1, col2 = st.columns(2)
+
+                with col1:
+                    fig = plot_category_breakdown(df_product)
+                    st.plotly_chart(fig, use_container_width=True)
+
+                with col2:
+                    st.subheader("Category Details")
+                    df_product['Sales Share %'] = (df_product['Net Sales'] / df_product['Net Sales'].sum() * 100).round(2)
+                    st.dataframe(df_product, use_container_width=True)
+
+                # Category bar chart
+                fig = px.bar(df_product, x='Product Type', y='Net Sales',
+                            title='Net Sales by Product Category',
+                            color='Net Sales',
+                            color_continuous_scale='Blues')
+                st.plotly_chart(fig, use_container_width=True)
+
+    # ===== TAB 4: Daily Breakdown =====
+    with tab4:
+        df = state.sales_data.copy()
+
+        # Apply store filter
+        if store_filter != "All Stores":
+            store_id = [k for k, v in STORE_DISPLAY_NAMES.items() if v == store_filter]
+            if store_id:
+                df = df[df['Store_ID'] == store_id[0]]
+
         # Day of week analysis
         df['Day_of_Week'] = df['Date'].dt.day_name()
         day_order = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
-        
+
         dow_sales = df.groupby(['Day_of_Week', 'Store_ID'])['Net Sales'].mean().reset_index()
         dow_sales['Day_of_Week'] = pd.Categorical(dow_sales['Day_of_Week'], categories=day_order, ordered=True)
         dow_sales = dow_sales.sort_values('Day_of_Week')
-        
+
         fig = px.bar(dow_sales, x='Day_of_Week', y='Net Sales', color='Store_ID',
                     barmode='group', title='Average Sales by Day of Week')
         st.plotly_chart(fig, use_container_width=True)
-    
-    with tab3:
+
+    # ===== TAB 5: Raw Data =====
+    with tab5:
+        df = state.sales_data.copy()
+
+        # Apply store filter
+        if store_filter != "All Stores":
+            store_id = [k for k, v in STORE_DISPLAY_NAMES.items() if v == store_filter]
+            if store_id:
+                df = df[df['Store_ID'] == store_id[0]]
+
         st.dataframe(df.sort_values('Date', ascending=False), use_container_width=True)
-        
+
         # Download button
         csv = df.to_csv(index=False)
         st.download_button("📥 Download Data", csv, "sales_data.csv", "text/csv")
@@ -2048,6 +2348,105 @@ def render_upload_page(s3_manager, processor):
         else:
             st.warning("❌ No product data loaded")
     
+    # Invoice/Purchase Order Upload
+    st.markdown("---")
+    st.subheader("📄 Invoice & Purchase Order Upload")
+
+    st.markdown("""
+    Upload invoices and purchase orders to enable AI-powered buying insights.
+    These documents will be analyzed alongside sales data and industry research to generate weekly recommendations.
+    """)
+
+    invoice_file = st.file_uploader(
+        "Upload Invoice/PO (PDF, Image, or Text)",
+        type=['pdf', 'png', 'jpg', 'jpeg', 'txt'],
+        accept_multiple_files=True,
+        key='invoice_upload'
+    )
+
+    if invoice_file:
+        st.success(f"✅ {len(invoice_file)} file(s) selected")
+
+        # Vendor/supplier info
+        col1, col2 = st.columns(2)
+        with col1:
+            vendor_name = st.text_input("Vendor/Supplier Name", placeholder="e.g., ABC Distributors")
+        with col2:
+            invoice_date = st.date_input("Invoice Date", value=datetime.now())
+
+        # Category
+        invoice_category = st.selectbox(
+            "Category",
+            ["Flower", "Edibles", "Concentrates", "Vapes", "Accessories", "Other"],
+            help="Product category for this invoice"
+        )
+
+        if st.button("📤 Upload Invoice(s)", type="primary"):
+            if not vendor_name:
+                st.error("Please enter a vendor name")
+            else:
+                # Upload to S3 under invoices folder
+                uploaded_count = 0
+                for idx, file in enumerate(invoice_file):
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    file_ext = file.name.split('.')[-1]
+                    s3_key = f"invoices/{vendor_name.replace(' ', '_')}/{invoice_date.strftime('%Y%m%d')}_{timestamp}_{idx}.{file_ext}"
+
+                    # Add metadata as JSON sidecar
+                    metadata = {
+                        'vendor': vendor_name,
+                        'invoice_date': invoice_date.isoformat(),
+                        'category': invoice_category,
+                        'uploaded_at': datetime.now().isoformat(),
+                        'uploaded_by': st.session_state.get('logged_in_user', 'Unknown'),
+                        'original_filename': file.name
+                    }
+
+                    # Upload file
+                    success, message = s3_manager.upload_file(file, s3_key)
+
+                    if success:
+                        # Upload metadata
+                        metadata_key = s3_key + ".metadata.json"
+                        import io
+                        metadata_file = io.BytesIO(json.dumps(metadata, indent=2).encode())
+                        s3_manager.upload_file(metadata_file, metadata_key)
+                        uploaded_count += 1
+
+                if uploaded_count > 0:
+                    st.success(f"✅ Uploaded {uploaded_count} invoice(s) successfully!")
+                    st.info("💡 Use the 'Buying Insights' feature (coming soon) to analyze these invoices with sales and research data.")
+                else:
+                    st.error("❌ Failed to upload invoices. Check S3 connection.")
+
+    # View uploaded invoices
+    with st.expander("📋 View Uploaded Invoices"):
+        if s3_connected:
+            invoice_files = [f for f in s3_manager.list_files() if f.startswith('invoices/')]
+
+            if invoice_files:
+                # Group by vendor
+                from collections import defaultdict
+                by_vendor = defaultdict(list)
+
+                for f in invoice_files:
+                    if not f.endswith('.metadata.json'):
+                        parts = f.split('/')
+                        if len(parts) >= 2:
+                            vendor = parts[1].replace('_', ' ')
+                            by_vendor[vendor].append(f)
+
+                for vendor, files in sorted(by_vendor.items()):
+                    st.markdown(f"**{vendor}** ({len(files)} invoices)")
+                    for f in files[:5]:  # Show first 5
+                        st.text(f"  • {f.split('/')[-1]}")
+                    if len(files) > 5:
+                        st.text(f"  ... and {len(files) - 5} more")
+            else:
+                st.info("No invoices uploaded yet")
+        else:
+            st.warning("S3 not connected - cannot view uploaded invoices")
+
     # Data management section
     st.markdown("---")
     st.subheader("🗂️ Data Management")
