@@ -1641,6 +1641,107 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
             fig.update_layout(height=400, xaxis_title="Recency", yaxis_title="Value Segment")
             st.plotly_chart(fig, use_container_width=True)
 
+        # Demographics by Segment Analysis
+        st.markdown("---")
+        st.subheader("📊 Demographics by Customer Segment")
+
+        if 'Age' in df.columns and 'Gender' in df.columns:
+            col1, col2 = st.columns(2)
+
+            with col1:
+                st.markdown("**Average Age by Customer Segment**")
+                age_by_segment = df.groupby('Customer Segment')['Age'].mean().reindex(segment_order)
+                fig = go.Figure(data=[go.Bar(
+                    x=age_by_segment.index,
+                    y=age_by_segment.values,
+                    marker_color=['#ffeaa7', '#96ceb4', '#45b7d1', '#4ecdc4', '#ff6b6b'],
+                    text=[f"{v:.1f}" for v in age_by_segment.values],
+                    textposition='auto'
+                )])
+                fig.update_layout(height=300, xaxis_title="Segment", yaxis_title="Average Age")
+                st.plotly_chart(fig, use_container_width=True)
+
+            with col2:
+                st.markdown("**Gender Distribution by Segment**")
+                # Calculate gender percentages for each segment
+                segment_gender = pd.crosstab(df['Customer Segment'], df['Gender'], normalize='index') * 100
+                segment_gender = segment_gender.reindex([s for s in segment_order if s in segment_gender.index])
+
+                fig = go.Figure()
+                for gender in segment_gender.columns:
+                    fig.add_trace(go.Bar(
+                        name=gender,
+                        x=segment_gender.index,
+                        y=segment_gender[gender],
+                        text=[f"{v:.1f}%" for v in segment_gender[gender]],
+                        textposition='auto'
+                    ))
+
+                fig.update_layout(
+                    height=300,
+                    barmode='stack',
+                    xaxis_title="Segment",
+                    yaxis_title="Percentage (%)",
+                    showlegend=True
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+        # More demographic comparisons
+        if 'Age' in df.columns:
+            st.markdown("---")
+            st.markdown("**Age Distribution Across Segments**")
+
+            fig = go.Figure()
+            for segment in [s for s in segment_order if s in df['Customer Segment'].unique()]:
+                segment_data = df[df['Customer Segment'] == segment]['Age']
+                fig.add_trace(go.Box(
+                    y=segment_data,
+                    name=segment,
+                    boxmean='sd'
+                ))
+
+            fig.update_layout(height=350, yaxis_title="Age", xaxis_title="Customer Segment")
+            st.plotly_chart(fig, use_container_width=True)
+
+        # Geographic distribution by segment
+        if 'City' in df.columns:
+            st.markdown("---")
+            st.markdown("**Top Cities by Customer Segment**")
+
+            # Get top 5 cities overall
+            top_cities = df['City'].value_counts().head(5).index.tolist()
+
+            # Count customers by segment and city
+            city_segment_data = []
+            for city in top_cities:
+                for segment in [s for s in segment_order if s in df['Customer Segment'].unique()]:
+                    count = len(df[(df['City'] == city) & (df['Customer Segment'] == segment)])
+                    city_segment_data.append({
+                        'City': city,
+                        'Segment': segment,
+                        'Count': count
+                    })
+
+            city_df = pd.DataFrame(city_segment_data)
+
+            fig = go.Figure()
+            for segment in [s for s in segment_order if s in df['Customer Segment'].unique()]:
+                segment_data = city_df[city_df['Segment'] == segment]
+                fig.add_trace(go.Bar(
+                    name=segment,
+                    x=segment_data['City'],
+                    y=segment_data['Count']
+                ))
+
+            fig.update_layout(
+                height=350,
+                barmode='group',
+                xaxis_title="City",
+                yaxis_title="Customer Count",
+                showlegend=True
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
     # ===== TAB 3: Demographics =====
     with tab3:
         st.subheader("Customer Demographics")
