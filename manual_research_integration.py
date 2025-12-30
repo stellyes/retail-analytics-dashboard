@@ -518,6 +518,10 @@ Return ONLY valid JSON."""
     def save_findings_to_s3(self, findings: Dict, bucket: str) -> bool:
         """Save analysis findings to S3."""
 
+        # Don't save if no documents were successfully analyzed
+        if not findings or findings.get('documents_analyzed', 0) == 0:
+            return False
+
         try:
             timestamp = datetime.utcnow()
             s3_key = f"{S3_PREFIX_FINDINGS}{timestamp.strftime('%Y/%m/%d')}/analysis_{timestamp.strftime('%H%M%S')}.json"
@@ -549,9 +553,12 @@ Return ONLY valid JSON."""
                         try:
                             response = self.s3.get_object(Bucket=bucket, Key=obj['Key'])
                             finding = json.loads(response['Body'].read().decode('utf-8'))
-                            finding['s3_key'] = obj['Key']
-                            finding['last_modified'] = obj['LastModified'].isoformat()
-                            findings.append(finding)
+
+                            # Only include valid analyses with at least 1 document analyzed
+                            if finding.get('documents_analyzed', 0) > 0:
+                                finding['s3_key'] = obj['Key']
+                                finding['last_modified'] = obj['LastModified'].isoformat()
+                                findings.append(finding)
                         except:
                             continue
 
@@ -852,14 +859,19 @@ def render_analysis_tab(storage: DocumentStorage, analyzer: ManualResearchAnalyz
                         'generated_at': datetime.utcnow().isoformat()
                     }
 
-                # Save to S3
-                analyzer.save_findings_to_s3(results, S3_BUCKET)
+                # Save to S3 (only if we have valid results)
+                saved = analyzer.save_findings_to_s3(results, S3_BUCKET)
 
                 # Show results
                 progress_bar.empty()
                 status_text.empty()
 
-                st.success(f"✅ Analysis complete! Processed {results['documents_analyzed']} documents")
+                if results['documents_analyzed'] > 0:
+                    st.success(f"✅ Analysis complete! Processed {results['documents_analyzed']} documents")
+                    if saved:
+                        st.info("📁 Results saved to S3")
+                else:
+                    st.error("❌ No documents were successfully analyzed. Results were not saved.")
 
                 # Display errors if any
                 if results['errors']:
@@ -915,17 +927,29 @@ def render_findings_tab(analyzer: ManualResearchAnalyzer):
             st.subheader("Select Analysis to View")
             all_findings = st.session_state['all_findings']
 
+            # Filter to only valid findings
+            valid_findings = [f for f in all_findings if f.get('documents_analyzed', 0) > 0]
+
+            if not valid_findings:
+                st.info("No valid analysis results found. Please analyze some documents first.")
+                return
+
             # Create options for dropdown
             options = []
-            for i, f in enumerate(all_findings[:10]):  # Show last 10
+            for i, f in enumerate(valid_findings[:10]):  # Show last 10
                 completed = f.get('completed_at', 'Unknown')[:19]
                 docs = f.get('documents_analyzed', 0)
                 options.append(f"{completed} - {docs} document(s)")
 
             selected_idx = st.selectbox("Recent analyses:", range(len(options)), format_func=lambda x: options[x])
-            results = all_findings[selected_idx]
+            results = valid_findings[selected_idx]
         else:
             results = st.session_state['latest_analysis']
+
+        # Validate the selected results
+        if not results or results.get('documents_analyzed', 0) == 0:
+            st.error("⚠️ This analysis has no valid results. Please run a new analysis.")
+            return
 
         st.subheader("Analysis Details")
         st.write(f"**Completed:** {results.get('completed_at', 'Unknown')[:19]}")
