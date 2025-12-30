@@ -34,7 +34,7 @@ class ResearchFindingsViewer:
             # Fall back to Streamlit secrets
             if not aws_access_key:
                 try:
-                    aws_secrets = st.secrets.get("aws", {})
+                    aws_secrets = st.secrets["aws"]
                     aws_access_key = aws_secrets.get("access_key_id")
                     aws_secret_key = aws_secrets.get("secret_access_key")
                     aws_region = aws_secrets.get("region", "us-west-2")
@@ -233,12 +233,12 @@ def render_research_page():
                 api_key = os.environ.get("ANTHROPIC_API_KEY")
                 if not api_key:
                     try:
-                        api_key = st.secrets.get("ANTHROPIC_API_KEY")
+                        api_key = st.secrets["ANTHROPIC_API_KEY"]
                     except Exception:
                         pass
                 if not api_key:
                     try:
-                        api_key = st.secrets.get("anthropic", {}).get("ANTHROPIC_API_KEY")
+                        api_key = st.secrets["anthropic"]["ANTHROPIC_API_KEY"]
                     except Exception:
                         pass
 
@@ -269,12 +269,12 @@ def render_research_page():
             api_key = os.environ.get("ANTHROPIC_API_KEY")
             if not api_key:
                 try:
-                    api_key = st.secrets.get("ANTHROPIC_API_KEY")
+                    api_key = st.secrets["ANTHROPIC_API_KEY"]
                 except Exception:
                     pass
             if not api_key:
                 try:
-                    api_key = st.secrets.get("anthropic", {}).get("ANTHROPIC_API_KEY")
+                    api_key = st.secrets["anthropic"]["ANTHROPIC_API_KEY"]
                 except Exception:
                     pass
 

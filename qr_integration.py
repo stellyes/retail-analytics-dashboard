@@ -177,7 +177,7 @@ def get_dynamodb_client():
                     aws_access_key_id=st.secrets['aws'].get("access_key_id"),
                     aws_secret_access_key=st.secrets['aws'].get("secret_access_key")
                 )
-            elif st.secrets.get("aws_region"):
+            elif "aws_region" in st.secrets:
                 # Legacy format
                 return boto3.resource(
                     'dynamodb',
@@ -203,8 +203,8 @@ def get_qr_codes_table(dynamodb):
                 table_name = st.secrets['qr_aws'].get("qr_table", "qr_codes")
             elif 'dynamodb' in st.secrets:
                 table_name = st.secrets['dynamodb'].get("dynamodb_qr_table", "qr_codes")
-            elif st.secrets.get("dynamodb_qr_table"):
-                table_name = st.secrets.get("dynamodb_qr_table")
+            elif "dynamodb_qr_table" in st.secrets:
+                table_name = st.secrets["dynamodb_qr_table"]
 
             return dynamodb.Table(table_name)
         except:
@@ -223,8 +223,8 @@ def get_clicks_table(dynamodb):
                 table_name = st.secrets['qr_aws'].get("clicks_table", "qr_clicks")
             elif 'dynamodb' in st.secrets:
                 table_name = st.secrets['dynamodb'].get("dynamodb_clicks_table", "qr_clicks")
-            elif st.secrets.get("dynamodb_clicks_table"):
-                table_name = st.secrets.get("dynamodb_clicks_table")
+            elif "dynamodb_clicks_table" in st.secrets:
+                table_name = st.secrets["dynamodb_clicks_table"]
 
             return dynamodb.Table(table_name)
         except:
@@ -392,8 +392,8 @@ def render_qr_page():
         redirect_base_url = st.secrets['qr_aws'].get("redirect_base_url", redirect_base_url)
     elif 'redirect-url' in st.secrets:
         redirect_base_url = st.secrets['redirect-url'].get("redirect_base_url", redirect_base_url)
-    elif st.secrets.get("redirect_base_url"):
-        redirect_base_url = st.secrets.get("redirect_base_url")
+    elif "redirect_base_url" in st.secrets:
+        redirect_base_url = st.secrets["redirect_base_url"]
 
     # Create tabs for different QR functions
     tab1, tab2, tab3, tab4 = st.tabs(["🎨 Generate QR Code", "📊 Analytics Dashboard", "📋 Manage QR Codes", "⚙️ Settings"])
@@ -867,8 +867,8 @@ def settings_tab():
         redirect_url = st.secrets['qr_aws'].get("redirect_base_url", redirect_url)
     elif 'redirect-url' in st.secrets:
         redirect_url = st.secrets['redirect-url'].get("redirect_base_url", redirect_url)
-    elif st.secrets.get("redirect_base_url"):
-        redirect_url = st.secrets.get("redirect_base_url")
+    elif "redirect_base_url" in st.secrets:
+        redirect_url = st.secrets["redirect_base_url"]
 
     st.write(f"**Current Redirect Base URL:** `{redirect_url}`")
 

@@ -591,14 +591,14 @@ def render_manual_research_page():
     if not api_key:
         try:
             # Try root level first
-            api_key = st.secrets.get("ANTHROPIC_API_KEY")
+            api_key = st.secrets["ANTHROPIC_API_KEY"]
         except Exception:
             pass
 
     # Try nested anthropic section if still not found
     if not api_key:
         try:
-            api_key = st.secrets.get("anthropic", {}).get("ANTHROPIC_API_KEY")
+            api_key = st.secrets["anthropic"]["ANTHROPIC_API_KEY"]
         except Exception:
             pass
 
