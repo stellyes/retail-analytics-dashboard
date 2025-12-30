@@ -1,24 +1,24 @@
 # Core Dashboard Framework
-streamlit==1.50.0
+streamlit>=1.28.0
 
 # Data Processing
-pandas==2.3.3
-numpy==2.0.2
+pandas>=2.0.0
+numpy>=1.24.0
 
 # AWS Integration
-boto3==1.42.15
+boto3>=1.28.0
 
 # AI/ML - Anthropic Claude
-anthropic==0.75.0
+anthropic>=0.18.0
 
 # Visualization
-plotly==6.5.0
-altair==5.5.0
+plotly>=5.14.0
+altair>=5.0.0
 
 # QR Code Generation
-qrcode[pil]==8.2
-pillow==11.3.0
+qrcode>=7.4
+pillow>=9.5.0
 
 # Web Scraping & HTML Parsing
-beautifulsoup4==4.14.3
-requests==2.32.5
+beautifulsoup4>=4.12.0
+requests>=2.31.0

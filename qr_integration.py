@@ -179,11 +179,24 @@ def get_dynamodb_client():
                 )
             elif "aws_region" in st.secrets:
                 # Legacy format
+                try:
+                    region = st.secrets["aws_region"]
+                except:
+                    region = "us-west-1"
+                try:
+                    access_key = st.secrets["aws_access_key_id"]
+                except:
+                    access_key = None
+                try:
+                    secret_key = st.secrets["aws_secret_access_key"]
+                except:
+                    secret_key = None
+
                 return boto3.resource(
                     'dynamodb',
-                    region_name=st.secrets.get("aws_region", "us-east-1"),
-                    aws_access_key_id=st.secrets.get("aws_access_key_id"),
-                    aws_secret_access_key=st.secrets.get("aws_secret_access_key")
+                    region_name=region,
+                    aws_access_key_id=access_key,
+                    aws_secret_access_key=secret_key
                 )
     except Exception as e:
         st.warning(f"AWS DynamoDB not configured for QR tracking: {e}")
