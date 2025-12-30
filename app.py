@@ -280,17 +280,17 @@ class S3DataManager:
     def load_all_data_from_s3(self, processor) -> dict:
         """
         Load all uploaded data from S3 and return merged DataFrames.
-        
+
         Args:
             processor: DataProcessor instance for cleaning data
-            
+
         Returns:
-            Dict with 'sales', 'brand', 'product' DataFrames (or None if no data)
+            Dict with 'sales', 'brand', 'product', 'customer', 'invoice' DataFrames (or None if no data)
         """
         if not self.is_configured():
-            return {'sales': None, 'brand': None, 'product': None}
-        
-        result = {'sales': None, 'brand': None, 'product': None}
+            return {'sales': None, 'brand': None, 'product': None, 'customer': None, 'invoice': None}
+
+        result = {'sales': None, 'brand': None, 'product': None, 'customer': None, 'invoice': None}
         
         try:
             # List all files in raw-uploads
@@ -303,6 +303,8 @@ class S3DataManager:
             sales_files = [f for f in files if '/sales_' in f and f.endswith('.csv')]
             brand_files = [f for f in files if '/brand_' in f and f.endswith('.csv')]
             product_files = [f for f in files if '/product_' in f and f.endswith('.csv')]
+            customer_files = [f for f in files if '/customers_' in f and f.endswith('.csv')]
+            invoice_files = [f for f in files if '/invoices_' in f and f.endswith('.csv')]
             
             # Load and merge sales data
             if sales_files:
@@ -387,13 +389,72 @@ class S3DataManager:
                     # Remove duplicates
                     if 'Upload_Start_Date' in result['product'].columns:
                         result['product'] = result['product'].drop_duplicates(
-                            subset=['Product Type', 'Upload_Store', 'Upload_Start_Date'], 
+                            subset=['Product Type', 'Upload_Store', 'Upload_Start_Date'],
                             keep='last'
                         )
-        
+
+            # Load and merge customer data
+            if customer_files:
+                customer_dfs = []
+                for f in customer_files:
+                    try:
+                        df = self.download_file(f)
+                        if df is not None and not df.empty:
+                            store_id = self._extract_store_from_path(f)
+
+                            df = processor.clean_customer_data(df)
+                            df['Upload_Store'] = store_id
+                            df['Upload_Date'] = pd.to_datetime(datetime.now())
+
+                            customer_dfs.append(df)
+                    except Exception as e:
+                        print(f"Error loading {f}: {e}")
+                        continue
+
+                if customer_dfs:
+                    result['customer'] = pd.concat(customer_dfs, ignore_index=True)
+                    # Remove duplicates based on Customer ID, keeping latest
+                    customer_id_col = 'Customer ID' if 'Customer ID' in result['customer'].columns else 'id'
+                    if customer_id_col in result['customer'].columns:
+                        result['customer'] = result['customer'].drop_duplicates(
+                            subset=[customer_id_col],
+                            keep='last'
+                        )
+
+            # Load and merge invoice data
+            if invoice_files:
+                invoice_dfs = []
+                for f in invoice_files:
+                    try:
+                        df = self.download_file(f)
+                        if df is not None and not df.empty:
+                            store_id = self._extract_store_from_path(f)
+                            date_range = self._extract_date_range_from_path(f)
+
+                            df = processor.clean_invoice_data(df)
+                            df['Upload_Store'] = store_id
+
+                            if date_range:
+                                df['Upload_Start_Date'] = pd.to_datetime(date_range[0])
+                                df['Upload_End_Date'] = pd.to_datetime(date_range[1])
+
+                            invoice_dfs.append(df)
+                    except Exception as e:
+                        print(f"Error loading {f}: {e}")
+                        continue
+
+                if invoice_dfs:
+                    result['invoice'] = pd.concat(invoice_dfs, ignore_index=True)
+                    # Remove duplicates
+                    if 'Upload_Start_Date' in result['invoice'].columns and 'Invoice Number' in result['invoice'].columns:
+                        result['invoice'] = result['invoice'].drop_duplicates(
+                            subset=['Invoice Number', 'Upload_Store', 'Upload_Start_Date'],
+                            keep='last'
+                        )
+
         except Exception as e:
             print(f"Error loading data from S3: {e}")
-        
+
         return result
     
     def _extract_store_from_path(self, path: str) -> str:
@@ -551,6 +612,32 @@ class DataProcessor:
 
         # Parse customer groups
         df['Customer Group(s)'] = df['Customer Group(s)'].fillna('')
+
+        return df
+
+    @staticmethod
+    def clean_invoice_data(df: pd.DataFrame) -> pd.DataFrame:
+        """Clean and process invoice/purchase order data."""
+        df = df.copy()
+
+        # Remove BOM if present
+        df.columns = [col.strip().replace('\ufeff', '') for col in df.columns]
+
+        # Convert date columns if present
+        date_cols = ['Invoice Date', 'Order Date', 'Delivery Date', 'Due Date']
+        for col in date_cols:
+            if col in df.columns:
+                df[col] = pd.to_datetime(df[col], errors='coerce')
+
+        # Convert numeric columns if present
+        numeric_cols = ['Total Amount', 'Subtotal', 'Tax', 'Shipping', 'Discount',
+                       'Quantity', 'Unit Price', 'Line Total']
+        for col in numeric_cols:
+            if col in df.columns:
+                # Remove currency symbols and commas
+                if df[col].dtype == 'object':
+                    df[col] = df[col].str.replace('$', '').str.replace(',', '')
+                df[col] = pd.to_numeric(df[col], errors='coerce')
 
         return df
 
@@ -871,16 +958,20 @@ def main():
             
             # Load all CSV data
             loaded_data = s3_manager.load_all_data_from_s3(processor)
-            
+
             if loaded_data['sales'] is not None:
                 st.session_state.sales_data = loaded_data['sales']
             if loaded_data['brand'] is not None:
                 st.session_state.brand_data = loaded_data['brand']
             if loaded_data['product'] is not None:
                 st.session_state.product_data = loaded_data['product']
-            
+            if loaded_data['customer'] is not None:
+                st.session_state.customer_data = loaded_data['customer']
+            if loaded_data['invoice'] is not None:
+                st.session_state.invoice_data = loaded_data['invoice']
+
             st.session_state.data_loaded_from_s3 = True
-            
+
             # Show what was loaded
             loaded_items = []
             if st.session_state.sales_data is not None:
@@ -889,9 +980,13 @@ def main():
                 loaded_items.append(f"Brands ({len(st.session_state.brand_data)} records)")
             if st.session_state.product_data is not None:
                 loaded_items.append(f"Products ({len(st.session_state.product_data)} records)")
+            if st.session_state.customer_data is not None:
+                loaded_items.append(f"Customers ({len(st.session_state.customer_data)} records)")
+            if st.session_state.invoice_data is not None:
+                loaded_items.append(f"Invoices ({len(st.session_state.invoice_data)} records)")
             if st.session_state.brand_product_mapping:
                 loaded_items.append(f"Mappings ({len(st.session_state.brand_product_mapping)} brands)")
-            
+
             if loaded_items:
                 st.toast(f"✅ Loaded: {', '.join(loaded_items)}", icon="📊")
     
@@ -3307,6 +3402,41 @@ def render_upload_page(s3_manager, processor):
                     st.text(f"Total: ${total_ltv:,.0f}")
                     st.text(f"Avg: ${avg_ltv:,.0f}")
 
+    # View uploaded customer files from S3
+    with st.expander("📋 View Uploaded Customer Files"):
+        if s3_connected:
+            customer_files = [f for f in s3_manager.list_files(prefix="raw-uploads/") if '/customers_' in f and f.endswith('.csv')]
+
+            if customer_files:
+                st.success(f"✅ {len(customer_files)} customer data file(s) in S3")
+
+                # Group by store
+                from collections import defaultdict
+                by_store = defaultdict(list)
+
+                for f in customer_files:
+                    store_id = s3_manager._extract_store_from_path(f)
+                    store_name = STORE_DISPLAY_NAMES.get(store_id, store_id.replace('_', ' ').title())
+                    by_store[store_name].append(f)
+
+                for store, files in sorted(by_store.items()):
+                    st.markdown(f"**{store}** ({len(files)} upload(s))")
+                    for f in sorted(files, reverse=True)[:5]:  # Show 5 most recent
+                        filename = f.split('/')[-1]
+                        # Extract timestamp from filename
+                        try:
+                            timestamp_str = filename.split('_')[-1].replace('.csv', '')
+                            timestamp = datetime.strptime(timestamp_str, '%Y%m%d_%H%M%S')
+                            st.text(f"  • {timestamp.strftime('%m/%d/%Y %I:%M %p')}")
+                        except:
+                            st.text(f"  • {filename}")
+                    if len(files) > 5:
+                        st.text(f"  ... and {len(files) - 5} more")
+            else:
+                st.info("No customer data uploaded yet")
+        else:
+            st.warning("S3 not connected - cannot view uploaded customer files")
+
     # Data management section
     st.markdown("---")
     st.subheader("🗂️ Data Management")
@@ -3318,17 +3448,21 @@ def render_upload_page(s3_manager, processor):
             with st.spinner("Reloading data from S3..."):
                 # Reload all data from S3
                 loaded_data = s3_manager.load_all_data_from_s3(processor)
-                
+
                 if loaded_data['sales'] is not None:
                     st.session_state.sales_data = loaded_data['sales']
                 if loaded_data['brand'] is not None:
                     st.session_state.brand_data = loaded_data['brand']
                 if loaded_data['product'] is not None:
                     st.session_state.product_data = loaded_data['product']
-                
+                if loaded_data['customer'] is not None:
+                    st.session_state.customer_data = loaded_data['customer']
+                if loaded_data['invoice'] is not None:
+                    st.session_state.invoice_data = loaded_data['invoice']
+
                 # Also reload mappings
                 st.session_state.brand_product_mapping = s3_manager.load_brand_product_mapping()
-                
+
                 # Show what was loaded
                 loaded_items = []
                 if st.session_state.sales_data is not None:
@@ -3337,7 +3471,11 @@ def render_upload_page(s3_manager, processor):
                     loaded_items.append(f"Brands ({len(st.session_state.brand_data)})")
                 if st.session_state.product_data is not None:
                     loaded_items.append(f"Products ({len(st.session_state.product_data)})")
-                
+                if st.session_state.customer_data is not None:
+                    loaded_items.append(f"Customers ({len(st.session_state.customer_data)})")
+                if st.session_state.invoice_data is not None:
+                    loaded_items.append(f"Invoices ({len(st.session_state.invoice_data)})")
+
                 if loaded_items:
                     st.success(f"✅ Reloaded: {', '.join(loaded_items)}")
                 else:
@@ -3349,6 +3487,8 @@ def render_upload_page(s3_manager, processor):
             st.session_state.sales_data = None
             st.session_state.brand_data = None
             st.session_state.product_data = None
+            st.session_state.customer_data = None
+            st.session_state.invoice_data = None
             st.session_state.data_loaded_from_s3 = False
             st.success("Session data cleared! (S3 data preserved)")
             st.rerun()
