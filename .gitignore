@@ -24,6 +24,7 @@ ENV/
 # Data files (upload these separately, don't commit to git)
 *.csv
 *.json
+*.pdf
 data/
 
 # OS

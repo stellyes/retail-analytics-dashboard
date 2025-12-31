@@ -1,57 +1,47 @@
 """
-Invoice Extraction Module
-Extracts structured data from vendor invoice PDFs using Claude's vision capabilities.
-Works with both text-based and image-based PDFs.
+Invoice Extraction Module - Direct PDF Parsing
+Extracts structured data from Treez invoice PDFs using PDF parsing libraries.
+No Claude API calls needed - saves costs and improves speed.
 
 Usage:
     # Single invoice
     python invoice_extraction.py "path/to/invoice.pdf"
 
-    # Batch extract all invoices
-    from invoice_extraction import InvoiceExtractor
-    extractor = InvoiceExtractor(api_key="your-key")
-    df = extractor.extract_from_directory("invoices/")
-    df.to_csv("invoices_extracted.csv", index=False)
+    # Batch extract and store in DynamoDB
+    python invoice_extraction.py --batch invoices/
 
-The extracted CSV can be uploaded to the dashboard via the Data Upload page.
+    # Extract and save to JSON
+    python invoice_extraction.py --batch invoices/ --output invoices.json
 """
 
 import os
+import re
 import json
-import base64
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 from datetime import datetime
-import pandas as pd
+from decimal import Decimal
+import PyPDF2
 
 try:
-    import anthropic
-    ANTHROPIC_AVAILABLE = True
+    import boto3
+    from boto3.dynamodb.conditions import Key, Attr
+    BOTO3_AVAILABLE = True
 except ImportError:
-    ANTHROPIC_AVAILABLE = False
+    BOTO3_AVAILABLE = False
 
 
-class InvoiceExtractor:
+class TreezInvoiceParser:
     """
-    Extract invoice data using Claude's vision capabilities.
-    Works with both text-based and image-based PDFs.
+    Parser for Treez-formatted invoice PDFs.
+    Extracts data using PDF text extraction and regex patterns.
     """
 
-    def __init__(self, api_key: Optional[str] = None):
-        """Initialize Claude client."""
-        if not ANTHROPIC_AVAILABLE:
-            raise ImportError("anthropic package required. Install with: pip install anthropic")
-
-        key = api_key or os.environ.get("ANTHROPIC_API_KEY")
-        if not key:
-            raise ValueError("ANTHROPIC_API_KEY not found in environment")
-
-        self.client = anthropic.Anthropic(api_key=key)
-        self.model = "claude-3-5-haiku-20241022"  # Haiku 3.5 - fast and cost-effective
+    def __init__(self):
         self.extraction_errors = []
 
     def extract_from_pdf(self, pdf_path: str) -> Dict:
         """
-        Extract invoice data from a PDF using Claude's vision.
+        Extract invoice data from a Treez PDF invoice.
 
         Args:
             pdf_path: Path to the PDF invoice file
@@ -60,46 +50,20 @@ class InvoiceExtractor:
             Dictionary containing structured invoice data
         """
         try:
-            # Read PDF and convert to base64
+            # Read PDF text
             with open(pdf_path, 'rb') as f:
-                pdf_data = base64.standard_b64encode(f.read()).decode('utf-8')
+                pdf_reader = PyPDF2.PdfReader(f)
+                text = ""
+                for page in pdf_reader.pages:
+                    text += page.extract_text() + "\n"
 
-            # Create the prompt for structured extraction
-            prompt = self._create_extraction_prompt()
-
-            # Call Claude with the PDF
-            message = self.client.messages.create(
-                model=self.model,
-                max_tokens=4000,
-                messages=[{
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "document",
-                            "source": {
-                                "type": "base64",
-                                "media_type": "application/pdf",
-                                "data": pdf_data
-                            }
-                        },
-                        {
-                            "type": "text",
-                            "text": prompt
-                        }
-                    ]
-                }]
-            )
-
-            # Parse the response
-            response_text = message.content[0].text
-
-            # Extract JSON from response
-            invoice_data = self._parse_claude_response(response_text)
+            # Parse the invoice
+            invoice_data = self._parse_treez_invoice(text)
 
             # Add metadata
             invoice_data['source_file'] = os.path.basename(pdf_path)
             invoice_data['extracted_at'] = datetime.now().isoformat()
-            invoice_data['extraction_method'] = 'claude_vision'
+            invoice_data['extraction_method'] = 'pdf_parsing'
 
             return invoice_data
 
@@ -107,340 +71,602 @@ class InvoiceExtractor:
             self.extraction_errors.append(f"Error extracting {pdf_path}: {str(e)}")
             return {
                 'error': str(e),
-                'source_file': os.path.basename(pdf_path)
+                'source_file': os.path.basename(pdf_path),
+                'extracted_at': datetime.now().isoformat()
             }
 
-    def _create_extraction_prompt(self) -> str:
-        """Create the prompt for Claude to extract invoice data."""
-        return """You are an expert at extracting structured data from cannabis dispensary vendor invoices.
+    def _parse_treez_invoice(self, text: str) -> Dict:
+        """Parse Treez invoice format from extracted text."""
 
-Please analyze this invoice PDF and extract ALL the data in the following JSON format. Be thorough and accurate.
-
-CRITICAL: Return ONLY valid JSON, no markdown formatting, no explanation text. Start with { and end with }.
-
-{
-  "vendor": "Vendor company name",
-  "vendor_license": "Vendor cannabis license number (if present)",
-  "invoice_number": "Invoice or order number",
-  "invoice_date": "YYYY-MM-DD format",
-  "customer_name": "Customer/buyer name",
-  "customer_license": "Customer cannabis license",
-  "customer_address": "Full address",
-  "customer_contact": "Contact name",
-  "customer_phone": "Phone number",
-  "delivery_date": "YYYY-MM-DD or null",
-  "payment_due_date": "YYYY-MM-DD or null",
-  "payment_terms": "e.g., NET30, Cash on delivery, etc.",
-  "sales_rep": "Sales representative name",
-  "invoice_subtotal": 0.00,
-  "invoice_discount": 0.00,
-  "invoice_delivery_fee": 0.00,
-  "invoice_tax": 0.00,
-  "invoice_total": 0.00,
-  "currency": "USD",
-  "line_items": [
-    {
-      "line_number": 1,
-      "product_code": "Product SKU or code",
-      "item_name": "Full product description",
-      "brand": "Brand name",
-      "strain": "Strain name or null",
-      "product_type": "e.g., Gummies, Concentrate, Flower, Vape, etc.",
-      "thc_content": "THC info if present",
-      "cbd_content": "CBD info if present",
-      "unit_size": "e.g., 1g, 100mg, 10ct",
-      "quantity": 0,
-      "unit_of_measure": "Each, Package, Case, etc.",
-      "list_price": 0.00,
-      "discount_percentage": 0,
-      "discount_amount": 0.00,
-      "unit_price": 0.00,
-      "total_price": 0.00,
-      "license_number": "Track-and-trace license # if present",
-      "batch_number": "Batch or lot number if present"
-    }
-  ],
-  "payment_info": {
-    "bank_name": "Bank name if present",
-    "account_number": "Account # if present",
-    "routing_number": "Routing # if present"
-  },
-  "notes": "Any special notes, terms, or conditions from the invoice"
-}
-
-IMPORTANT INSTRUCTIONS:
-1. Extract ALL line items from the invoice, not just the first few
-2. For dates, use YYYY-MM-DD format. If year is 2-digit, assume 20XX
-3. For prices, extract as decimal numbers (no dollar signs or commas)
-4. If a field is not present on the invoice, use null for strings or 0.00 for numbers
-5. For the brand field, extract from the product name (e.g., "CBX", "WYLD", "Highatus")
-6. Calculate totals accurately - sum all line item totals should match invoice subtotal
-7. Return ONLY the JSON object, no other text
-
-Now extract the data from this invoice:"""
-
-    def _parse_claude_response(self, response_text: str) -> Dict:
-        """Parse Claude's response and extract the JSON."""
-        try:
-            # Try to find JSON in the response
-            # Sometimes Claude adds markdown formatting despite instructions
-            response_text = response_text.strip()
-
-            # Remove markdown code blocks if present
-            if response_text.startswith('```json'):
-                response_text = response_text[7:]
-            elif response_text.startswith('```'):
-                response_text = response_text[3:]
-
-            if response_text.endswith('```'):
-                response_text = response_text[:-3]
-
-            response_text = response_text.strip()
-
-            # Parse JSON
-            data = json.loads(response_text)
-            return data
-
-        except json.JSONDecodeError as e:
-            # If JSON parsing fails, try to extract just the JSON object
-            import re
-            json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
-            if json_match:
-                try:
-                    return json.loads(json_match.group(0))
-                except:
-                    pass
-
-            raise ValueError(f"Could not parse JSON from Claude response: {e}\nResponse: {response_text[:500]}")
-
-    def extract_from_directory(self, directory_path: str, limit: Optional[int] = None) -> pd.DataFrame:
-        """
-        Extract invoice data from all PDFs in a directory.
-
-        Args:
-            directory_path: Path to directory containing invoice PDFs
-            limit: Optional limit on number of files to process
-
-        Returns:
-            DataFrame with combined invoice data
-        """
-        all_invoices = []
-        processed_count = 0
-
-        pdf_files = [f for f in os.listdir(directory_path) if f.lower().endswith('.pdf')]
-
-        if limit:
-            pdf_files = pdf_files[:limit]
-
-        print(f"Processing {len(pdf_files)} invoice PDFs...")
-
-        for i, filename in enumerate(pdf_files, 1):
-            pdf_path = os.path.join(directory_path, filename)
-
-            print(f"\n[{i}/{len(pdf_files)}] Extracting: {filename}")
-
-            try:
-                invoice_data = self.extract_from_pdf(pdf_path)
-
-                if 'error' not in invoice_data:
-                    all_invoices.append(invoice_data)
-                    processed_count += 1
-
-                    # Show preview
-                    print(f"  ✓ Invoice: {invoice_data.get('invoice_number', 'N/A')}")
-                    print(f"  ✓ Vendor: {invoice_data.get('vendor', 'N/A')}")
-                    print(f"  ✓ Total: ${invoice_data.get('invoice_total', 0):,.2f}")
-                    print(f"  ✓ Line items: {len(invoice_data.get('line_items', []))}")
-                else:
-                    print(f"  ✗ Error: {invoice_data.get('error')}")
-
-            except Exception as e:
-                self.extraction_errors.append(f"Failed to process {filename}: {str(e)}")
-                print(f"  ✗ Exception: {str(e)}")
-
-        print(f"\n{'='*60}")
-        print(f"Successfully processed {processed_count}/{len(pdf_files)} invoices")
-
-        if self.extraction_errors:
-            print(f"Errors: {len(self.extraction_errors)}")
-
-        # Convert to DataFrame
-        if all_invoices:
-            return self._invoices_to_dataframe(all_invoices)
-        else:
-            return pd.DataFrame()
-
-    def _invoices_to_dataframe(self, invoices: List[Dict]) -> pd.DataFrame:
-        """
-        Convert list of invoice dictionaries to a flat DataFrame.
-        Each row is an invoice line item with header info repeated.
-        """
-        rows = []
-
-        for invoice in invoices:
-            # Extract header info
-            header_info = {
-                'vendor': invoice.get('vendor'),
-                'vendor_license': invoice.get('vendor_license'),
-                'invoice_number': invoice.get('invoice_number'),
-                'invoice_date': invoice.get('invoice_date'),
-                'customer_name': invoice.get('customer_name'),
-                'customer_license': invoice.get('customer_license'),
-                'customer_address': invoice.get('customer_address'),
-                'customer_contact': invoice.get('customer_contact'),
-                'customer_phone': invoice.get('customer_phone'),
-                'delivery_date': invoice.get('delivery_date'),
-                'payment_due_date': invoice.get('payment_due_date'),
-                'payment_terms': invoice.get('payment_terms'),
-                'sales_rep': invoice.get('sales_rep'),
-                'invoice_subtotal': invoice.get('invoice_subtotal'),
-                'invoice_discount': invoice.get('invoice_discount'),
-                'invoice_delivery_fee': invoice.get('invoice_delivery_fee'),
-                'invoice_tax': invoice.get('invoice_tax'),
-                'invoice_total': invoice.get('invoice_total'),
-                'currency': invoice.get('currency', 'USD'),
-                'notes': invoice.get('notes'),
-                'source_file': invoice.get('source_file'),
-                'extracted_at': invoice.get('extracted_at'),
-                'extraction_method': invoice.get('extraction_method')
-            }
-
-            # Create a row for each line item
-            for line_item in invoice.get('line_items', []):
-                row = {**header_info, **line_item}
-                rows.append(row)
-
-            # If no line items, still create one row with header info
-            if not invoice.get('line_items'):
-                rows.append(header_info)
-
-        return pd.DataFrame(rows)
-
-    def get_extraction_summary(self, invoices_df: pd.DataFrame) -> Dict:
-        """Generate summary statistics from extracted invoice data."""
-        if invoices_df.empty:
-            return {'error': 'No data to summarize'}
-
-        summary = {
-            'total_invoices': invoices_df['invoice_number'].nunique() if 'invoice_number' in invoices_df.columns else 0,
-            'total_line_items': len(invoices_df),
-            'total_value': invoices_df['invoice_total'].sum() if 'invoice_total' in invoices_df.columns else 0,
-            'avg_invoice_value': invoices_df.groupby('invoice_number')['invoice_total'].first().mean() if 'invoice_number' in invoices_df.columns else 0,
-            'vendors': invoices_df['vendor'].unique().tolist() if 'vendor' in invoices_df.columns else [],
-            'brands': invoices_df['brand'].value_counts().head(10).to_dict() if 'brand' in invoices_df.columns else {},
-            'date_range': {
-                'earliest': invoices_df['invoice_date'].min() if 'invoice_date' in invoices_df.columns else None,
-                'latest': invoices_df['invoice_date'].max() if 'invoice_date' in invoices_df.columns else None
-            },
-            'extraction_errors': self.extraction_errors,
-            'extraction_method': 'Claude Vision API'
+        # Initialize invoice data
+        invoice = {
+            'vendor': None,
+            'vendor_license': None,
+            'vendor_address': None,
+            'customer_name': None,
+            'customer_address': None,
+            'invoice_number': None,
+            'invoice_id': None,
+            'invoice_date': None,
+            'created_by': None,
+            'payment_terms': None,
+            'status': None,
+            'invoice_subtotal': 0.0,
+            'invoice_discount': 0.0,
+            'invoice_fees': 0.0,
+            'invoice_tax': 0.0,
+            'invoice_total': 0.0,
+            'payments': 0.0,
+            'balance': 0.0,
+            'currency': 'USD',
+            'line_items': []
         }
 
-        return summary
+        lines = text.split('\n')
+
+        # Extract vendor info (top left section)
+        vendor_pattern = r'^([A-Z][A-Z\s,\.]+LLC|[A-Z][A-Z\s,\.]+INC)'
+        for i, line in enumerate(lines):
+            if re.match(vendor_pattern, line.strip()):
+                invoice['vendor'] = line.strip()
+                # Next lines are likely address and license
+                if i + 1 < len(lines):
+                    invoice['vendor_address'] = lines[i + 1].strip()
+                if i + 2 < len(lines):
+                    license_match = re.search(r'C\d{2}-\d{7}', lines[i + 2])
+                    if license_match:
+                        invoice['vendor_license'] = license_match.group(0)
+                break
+
+        # Extract customer info
+        customer_pattern = r'(Barbary Coast Dispensary|[\w\s]+Dispensary)'
+        for i, line in enumerate(lines):
+            if re.search(customer_pattern, line):
+                invoice['customer_name'] = re.search(customer_pattern, line).group(1).strip()
+                # Next line is likely address
+                if i + 1 < len(lines):
+                    addr_match = re.search(r'\d+\s+[\w\s]+,\s*[\w\s]+,\s*[A-Z]{2}', lines[i + 1])
+                    if addr_match:
+                        invoice['customer_address'] = addr_match.group(0).strip()
+                break
+
+        # Extract invoice number and ID
+        # Try multiple patterns for invoice number
+        invoice_num_match = re.search(r'INVOICE#?\s*(\d+)', text)
+        if not invoice_num_match:
+            # Try alternate pattern with newlines
+            invoice_num_match = re.search(r'INVOICE\s*#?\s*(\d+)', text, re.MULTILINE)
+
+        if invoice_num_match:
+            invoice['invoice_number'] = invoice_num_match.group(1)
+            invoice['invoice_id'] = invoice_num_match.group(1)
+
+        # Extract status
+        if 'FULFILLED' in text:
+            invoice['status'] = 'FULFILLED'
+
+        # Extract dates - try multiple patterns
+        date_pattern = r'Created:\s*(\d{1,2})/(\d{1,2})/(\d{4})'
+        date_match = re.search(date_pattern, text)
+        if not date_match:
+            # Try alternate pattern
+            date_pattern = r'Created:\s*(\d{1,2})\s*/\s*(\d{1,2})\s*/\s*(\d{4})'
+            date_match = re.search(date_pattern, text, re.MULTILINE)
+
+        if date_match:
+            month, day, year = date_match.groups()
+            invoice['invoice_date'] = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+
+        # Extract created by
+        created_by_match = re.search(r'Created by:\s*([\w\s]+)', text)
+        if created_by_match:
+            invoice['created_by'] = created_by_match.group(1).strip()
+
+        # Extract payment terms
+        cod_match = re.search(r'COD\s*-\s*\d{1,2}/\d{1,2}/\d{4}', text)
+        if cod_match:
+            invoice['payment_terms'] = 'COD'
+
+        # Extract line items using table parsing
+        invoice['line_items'] = self._extract_line_items(text)
+
+        # Extract totals from bottom of invoice
+        subtotal_match = re.search(r'Subtotal\s+\$?([\d,]+\.\d{2})', text)
+        if subtotal_match:
+            invoice['invoice_subtotal'] = float(subtotal_match.group(1).replace(',', ''))
+
+        discount_match = re.search(r'Discounts\s+\$?([\d,]+\.\d{2})', text)
+        if discount_match:
+            invoice['invoice_discount'] = float(discount_match.group(1).replace(',', ''))
+
+        fees_match = re.search(r'Fees\s+\$?([\d,]+\.\d{2})', text)
+        if fees_match:
+            invoice['invoice_fees'] = float(fees_match.group(1).replace(',', ''))
+
+        tax_match = re.search(r'Excise Tax\s+\$?([\d,]+\.\d{2})', text)
+        if tax_match:
+            invoice['invoice_tax'] = float(tax_match.group(1).replace(',', ''))
+
+        total_match = re.search(r'Total Cost\s+\$?([\d,]+\.\d{2})', text)
+        if total_match:
+            invoice['invoice_total'] = float(total_match.group(1).replace(',', ''))
+
+        payments_match = re.search(r'Payments\s+\$?([\d,]+\.\d{2})', text)
+        if payments_match:
+            invoice['payments'] = float(payments_match.group(1).replace(',', ''))
+
+        balance_match = re.search(r'Balance\s+\$?([\d,]+\.\d{2})', text)
+        if balance_match:
+            invoice['balance'] = float(balance_match.group(1).replace(',', ''))
+
+        return invoice
+
+    def _extract_line_items(self, text: str) -> List[Dict]:
+        """Extract line items from invoice text."""
+        line_items = []
+
+        # Pattern to match line items in the table
+        # Item # | Brand | Product | Type-Subtype | Trace Treez ID | SKU | Units | Cost | Excise/unit | Total Cost | Total Cost w/Excise
+        item_pattern = r'(\d+)\s+([A-Z][A-Z\s&]+?)\s+(.+?)\s+(PREROLL|EXTRACT|FLOWER|CARTRIDGE)\s*-\s*(\w+)\s+(1A\w+)\s+(\d+)\s+\$?([\d,]+\.\d{2})\s+\$?([\d,]+\.\d{2})\s+\$?([\d,]+\.\d{2})\s+\$?([\d,]+\.\d{2})'
+
+        matches = re.finditer(item_pattern, text, re.MULTILINE)
+
+        for match in matches:
+            item_num, brand, product, prod_type, subtype, trace_id, units, cost, excise, total_cost, total_w_excise = match.groups()
+
+            # Clean up brand name
+            brand = brand.strip()
+
+            # Determine if promo item
+            is_promo = '[PROMO]' in product or 'PROMO' in product
+
+            # Extract product name and details
+            product_clean = product.strip()
+
+            # Extract strain/flavor from product name
+            strain = None
+            strain_match = re.search(r'([A-Z][A-Z\s]+?)(?:\[|$)', product_clean)
+            if strain_match:
+                strain = strain_match.group(1).strip()
+
+            # Extract size
+            size_match = re.search(r'(\d+\.?\d*[GM])', product_clean, re.IGNORECASE)
+            unit_size = size_match.group(1) if size_match else None
+
+            line_item = {
+                'line_number': int(item_num),
+                'brand': brand,
+                'product_name': product_clean,
+                'product_type': prod_type,
+                'product_subtype': subtype,
+                'strain': strain,
+                'unit_size': unit_size,
+                'trace_id': trace_id,
+                'sku_units': int(units),
+                'unit_cost': float(cost.replace(',', '')),
+                'excise_per_unit': float(excise.replace(',', '')),
+                'total_cost': float(total_cost.replace(',', '')),
+                'total_cost_with_excise': float(total_w_excise.replace(',', '')),
+                'is_promo': is_promo
+            }
+
+            line_items.append(line_item)
+
+        return line_items
+
+
+class InvoiceDataService:
+    """
+    Service for storing and retrieving invoice data from DynamoDB.
+    Provides cost-efficient data access for Claude analysis.
+    """
+
+    def __init__(self, aws_access_key: str = None, aws_secret_key: str = None, region: str = 'us-west-1'):
+        """Initialize DynamoDB client."""
+        if not BOTO3_AVAILABLE:
+            raise ImportError("boto3 required. Install with: pip install boto3")
+
+        # Initialize boto3 client
+        session_kwargs = {'region_name': region}
+        if aws_access_key and aws_secret_key:
+            session_kwargs['aws_access_key_id'] = aws_access_key
+            session_kwargs['aws_secret_access_key'] = aws_secret_key
+
+        self.dynamodb = boto3.resource('dynamodb', **session_kwargs)
+        self.region = region
+
+        # Table names
+        self.invoices_table_name = 'retail-invoices'
+        self.line_items_table_name = 'retail-invoice-line-items'
+        self.aggregations_table_name = 'retail-invoice-aggregations'
+
+    def create_tables(self):
+        """Create DynamoDB tables if they don't exist."""
+        # Invoices table
+        try:
+            invoices_table = self.dynamodb.create_table(
+                TableName=self.invoices_table_name,
+                KeySchema=[
+                    {'AttributeName': 'invoice_id', 'KeyType': 'HASH'},
+                ],
+                AttributeDefinitions=[
+                    {'AttributeName': 'invoice_id', 'AttributeType': 'S'},
+                    {'AttributeName': 'invoice_date', 'AttributeType': 'S'},
+                    {'AttributeName': 'vendor', 'AttributeType': 'S'},
+                ],
+                GlobalSecondaryIndexes=[
+                    {
+                        'IndexName': 'date-index',
+                        'KeySchema': [
+                            {'AttributeName': 'invoice_date', 'KeyType': 'HASH'},
+                        ],
+                        'Projection': {'ProjectionType': 'ALL'},
+                        'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                    },
+                    {
+                        'IndexName': 'vendor-date-index',
+                        'KeySchema': [
+                            {'AttributeName': 'vendor', 'KeyType': 'HASH'},
+                            {'AttributeName': 'invoice_date', 'KeyType': 'RANGE'},
+                        ],
+                        'Projection': {'ProjectionType': 'ALL'},
+                        'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                    }
+                ],
+                ProvisionedThroughput={'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+            )
+            print(f"Creating {self.invoices_table_name} table...")
+            invoices_table.wait_until_exists()
+        except self.dynamodb.meta.client.exceptions.ResourceInUseException:
+            print(f"Table {self.invoices_table_name} already exists")
+
+        # Line items table
+        try:
+            line_items_table = self.dynamodb.create_table(
+                TableName=self.line_items_table_name,
+                KeySchema=[
+                    {'AttributeName': 'invoice_id', 'KeyType': 'HASH'},
+                    {'AttributeName': 'line_number', 'KeyType': 'RANGE'},
+                ],
+                AttributeDefinitions=[
+                    {'AttributeName': 'invoice_id', 'AttributeType': 'S'},
+                    {'AttributeName': 'line_number', 'AttributeType': 'N'},
+                    {'AttributeName': 'brand', 'AttributeType': 'S'},
+                    {'AttributeName': 'product_type', 'AttributeType': 'S'},
+                ],
+                GlobalSecondaryIndexes=[
+                    {
+                        'IndexName': 'brand-index',
+                        'KeySchema': [
+                            {'AttributeName': 'brand', 'KeyType': 'HASH'},
+                        ],
+                        'Projection': {'ProjectionType': 'ALL'},
+                        'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                    },
+                    {
+                        'IndexName': 'product-type-index',
+                        'KeySchema': [
+                            {'AttributeName': 'product_type', 'KeyType': 'HASH'},
+                        ],
+                        'Projection': {'ProjectionType': 'ALL'},
+                        'ProvisionedThroughput': {'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+                    }
+                ],
+                ProvisionedThroughput={'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+            )
+            print(f"Creating {self.line_items_table_name} table...")
+            line_items_table.wait_until_exists()
+        except self.dynamodb.meta.client.exceptions.ResourceInUseException:
+            print(f"Table {self.line_items_table_name} already exists")
+
+        # Aggregations table (for pre-computed summaries)
+        try:
+            agg_table = self.dynamodb.create_table(
+                TableName=self.aggregations_table_name,
+                KeySchema=[
+                    {'AttributeName': 'agg_type', 'KeyType': 'HASH'},
+                    {'AttributeName': 'agg_key', 'KeyType': 'RANGE'},
+                ],
+                AttributeDefinitions=[
+                    {'AttributeName': 'agg_type', 'AttributeType': 'S'},
+                    {'AttributeName': 'agg_key', 'AttributeType': 'S'},
+                ],
+                ProvisionedThroughput={'ReadCapacityUnits': 5, 'WriteCapacityUnits': 5}
+            )
+            print(f"Creating {self.aggregations_table_name} table...")
+            agg_table.wait_until_exists()
+        except self.dynamodb.meta.client.exceptions.ResourceInUseException:
+            print(f"Table {self.aggregations_table_name} already exists")
+
+        print("All tables ready!")
+
+    def store_invoice(self, invoice_data: Dict) -> bool:
+        """Store invoice and line items in DynamoDB."""
+        if 'error' in invoice_data:
+            return False
+
+        try:
+            invoices_table = self.dynamodb.Table(self.invoices_table_name)
+            line_items_table = self.dynamodb.Table(self.line_items_table_name)
+
+            # Prepare invoice header
+            invoice_header = {
+                'invoice_id': invoice_data['invoice_id'] or invoice_data['invoice_number'],
+                'invoice_number': invoice_data['invoice_number'],
+                'vendor': invoice_data['vendor'],
+                'vendor_license': invoice_data.get('vendor_license'),
+                'vendor_address': invoice_data.get('vendor_address'),
+                'customer_name': invoice_data.get('customer_name'),
+                'customer_address': invoice_data.get('customer_address'),
+                'invoice_date': invoice_data.get('invoice_date'),
+                'created_by': invoice_data.get('created_by'),
+                'payment_terms': invoice_data.get('payment_terms'),
+                'status': invoice_data.get('status'),
+                'subtotal': Decimal(str(invoice_data.get('invoice_subtotal', 0))),
+                'discount': Decimal(str(invoice_data.get('invoice_discount', 0))),
+                'fees': Decimal(str(invoice_data.get('invoice_fees', 0))),
+                'tax': Decimal(str(invoice_data.get('invoice_tax', 0))),
+                'total': Decimal(str(invoice_data.get('invoice_total', 0))),
+                'balance': Decimal(str(invoice_data.get('balance', 0))),
+                'source_file': invoice_data.get('source_file'),
+                'extracted_at': invoice_data.get('extracted_at'),
+                'line_item_count': len(invoice_data.get('line_items', []))
+            }
+
+            # Store invoice header
+            invoices_table.put_item(Item=invoice_header)
+
+            # Store line items
+            invoice_id = invoice_header['invoice_id']
+            for item in invoice_data.get('line_items', []):
+                line_item = {
+                    'invoice_id': invoice_id,
+                    'line_number': item['line_number'],
+                    'brand': item['brand'],
+                    'product_name': item['product_name'],
+                    'product_type': item['product_type'],
+                    'product_subtype': item['product_subtype'],
+                    'strain': item.get('strain'),
+                    'unit_size': item.get('unit_size'),
+                    'trace_id': item['trace_id'],
+                    'sku_units': item['sku_units'],
+                    'unit_cost': Decimal(str(item['unit_cost'])),
+                    'excise_per_unit': Decimal(str(item['excise_per_unit'])),
+                    'total_cost': Decimal(str(item['total_cost'])),
+                    'total_cost_with_excise': Decimal(str(item['total_cost_with_excise'])),
+                    'is_promo': item.get('is_promo', False),
+                    'invoice_date': invoice_data.get('invoice_date')
+                }
+                line_items_table.put_item(Item=line_item)
+
+            return True
+
+        except Exception as e:
+            print(f"Error storing invoice: {e}")
+            return False
+
+    def get_invoice_summary(self, start_date: str = None, end_date: str = None) -> Dict:
+        """
+        Get aggregated invoice summary for Claude analysis.
+        Returns only the essential data needed for analysis.
+        """
+        invoices_table = self.dynamodb.Table(self.invoices_table_name)
+
+        # Query invoices
+        if start_date and end_date:
+            response = invoices_table.query(
+                IndexName='date-index',
+                KeyConditionExpression=Key('invoice_date').between(start_date, end_date)
+            )
+        else:
+            response = invoices_table.scan()
+
+        invoices = response.get('Items', [])
+
+        # Calculate summary statistics
+        total_invoices = len(invoices)
+        total_value = sum(float(inv.get('total', 0)) for inv in invoices)
+        total_items = sum(int(inv.get('line_item_count', 0)) for inv in invoices)
+
+        vendors = {}
+        for inv in invoices:
+            vendor = inv.get('vendor')
+            if vendor:
+                if vendor not in vendors:
+                    vendors[vendor] = {'count': 0, 'total': 0}
+                vendors[vendor]['count'] += 1
+                vendors[vendor]['total'] += float(inv.get('total', 0))
+
+        return {
+            'total_invoices': total_invoices,
+            'total_value': total_value,
+            'avg_invoice_value': total_value / total_invoices if total_invoices > 0 else 0,
+            'total_line_items': total_items,
+            'vendors': vendors,
+            'date_range': {
+                'start': start_date,
+                'end': end_date
+            }
+        }
+
+    def get_product_summary(self, start_date: str = None, end_date: str = None) -> Dict:
+        """Get product-level aggregations for Claude analysis."""
+        line_items_table = self.dynamodb.Table(self.line_items_table_name)
+
+        response = line_items_table.scan()
+        items = response.get('Items', [])
+
+        # Filter by date if specified
+        if start_date or end_date:
+            filtered = []
+            for item in items:
+                item_date = item.get('invoice_date')
+                if item_date:
+                    if start_date and item_date < start_date:
+                        continue
+                    if end_date and item_date > end_date:
+                        continue
+                filtered.append(item)
+            items = filtered
+
+        # Aggregate by brand
+        brands = {}
+        for item in items:
+            brand = item.get('brand')
+            if brand:
+                if brand not in brands:
+                    brands[brand] = {
+                        'total_units': 0,
+                        'total_cost': 0,
+                        'product_count': 0
+                    }
+                brands[brand]['total_units'] += int(item.get('sku_units', 0))
+                brands[brand]['total_cost'] += float(item.get('total_cost', 0))
+                brands[brand]['product_count'] += 1
+
+        # Aggregate by product type
+        product_types = {}
+        for item in items:
+            ptype = item.get('product_type')
+            if ptype:
+                if ptype not in product_types:
+                    product_types[ptype] = {
+                        'total_units': 0,
+                        'total_cost': 0,
+                        'product_count': 0
+                    }
+                product_types[ptype]['total_units'] += int(item.get('sku_units', 0))
+                product_types[ptype]['total_cost'] += float(item.get('total_cost', 0))
+                product_types[ptype]['product_count'] += 1
+
+        return {
+            'brands': brands,
+            'product_types': product_types,
+            'total_items': len(items)
+        }
 
 
 # =============================================================================
-# DEMO/TEST FUNCTIONS
+# CLI FUNCTIONS
 # =============================================================================
 
-def test_single_invoice(pdf_path: str, api_key: Optional[str] = None):
-    """Test extraction on a single invoice and display results."""
-    print("=" * 80)
-    print("INVOICE EXTRACTION TEST")
-    print("=" * 80)
-    print(f"File: {pdf_path}")
-    print()
+def extract_single_invoice(pdf_path: str, store_dynamodb: bool = False,
+                          aws_config: Dict = None) -> Dict:
+    """Extract a single invoice and optionally store in DynamoDB."""
+    print(f"Extracting invoice: {pdf_path}")
 
-    extractor = InvoiceExtractor(api_key=api_key)
-    result = extractor.extract_from_pdf(pdf_path)
+    parser = TreezInvoiceParser()
+    invoice_data = parser.extract_from_pdf(pdf_path)
 
-    if 'error' in result:
-        print(f"ERROR: {result['error']}")
-        return None
+    if 'error' in invoice_data:
+        print(f"  Error: {invoice_data['error']}")
+        return invoice_data
 
-    # Display results
-    print(f"Invoice Number: {result.get('invoice_number')}")
-    print(f"Vendor: {result.get('vendor')}")
-    print(f"Date: {result.get('invoice_date')}")
-    print(f"Total: ${result.get('invoice_total', 0):,.2f}")
-    print(f"Payment Terms: {result.get('payment_terms')}")
-    print()
-    print(f"Line Items ({len(result.get('line_items', []))}):")
-    print("-" * 80)
+    # Display summary
+    print(f"  Invoice #: {invoice_data.get('invoice_number')}")
+    print(f"  Vendor: {invoice_data.get('vendor')}")
+    print(f"  Date: {invoice_data.get('invoice_date')}")
+    print(f"  Total: ${invoice_data.get('invoice_total', 0):,.2f}")
+    print(f"  Line Items: {len(invoice_data.get('line_items', []))}")
 
-    for i, item in enumerate(result.get('line_items', []), 1):
-        print(f"{i}. {item.get('item_name', 'N/A')}")
-        print(f"   Brand: {item.get('brand', 'N/A')} | SKU: {item.get('product_code', 'N/A')}")
-        print(f"   Qty: {item.get('quantity', 0)} @ ${item.get('unit_price', 0):.2f} = ${item.get('total_price', 0):.2f}")
+    # Store in DynamoDB if requested
+    if store_dynamodb and aws_config:
+        service = InvoiceDataService(**aws_config)
+        if service.store_invoice(invoice_data):
+            print("  Stored in DynamoDB")
+
+    return invoice_data
+
+
+def batch_extract_invoices(directory_path: str, store_dynamodb: bool = False,
+                          aws_config: Dict = None, output_file: str = None):
+    """Extract all invoices in a directory."""
+    parser = TreezInvoiceParser()
+
+    pdf_files = [f for f in os.listdir(directory_path) if f.lower().endswith('.pdf')]
+    print(f"Found {len(pdf_files)} PDF files\n")
+
+    all_invoices = []
+    success_count = 0
+
+    # Initialize DynamoDB service if needed
+    service = None
+    if store_dynamodb and aws_config:
+        service = InvoiceDataService(**aws_config)
+        print("Ensuring DynamoDB tables exist...")
+        service.create_tables()
         print()
 
-    print("=" * 80)
+    for i, filename in enumerate(pdf_files, 1):
+        pdf_path = os.path.join(directory_path, filename)
+        print(f"[{i}/{len(pdf_files)}] {filename}")
 
-    # Save JSON
-    json_filename = pdf_path.replace('.pdf', '_extracted.json')
-    with open(json_filename, 'w') as f:
-        json.dump(result, f, indent=2, default=str)
-    print(f"Saved detailed JSON to: {json_filename}")
+        invoice_data = parser.extract_from_pdf(pdf_path)
 
-    return result
+        if 'error' not in invoice_data:
+            all_invoices.append(invoice_data)
+            success_count += 1
 
+            print(f"  Invoice #: {invoice_data.get('invoice_number')}")
+            print(f"  Total: ${invoice_data.get('invoice_total', 0):,.2f}")
+            print(f"  Items: {len(invoice_data.get('line_items', []))}")
 
-def batch_extract_invoices(directory_path: str, output_csv: str = "invoices_extracted.csv",
-                           api_key: Optional[str] = None, limit: Optional[int] = None):
-    """Extract all invoices in a directory and save to CSV."""
-    extractor = InvoiceExtractor(api_key=api_key)
+            # Store in DynamoDB
+            if service:
+                if service.store_invoice(invoice_data):
+                    print("  Stored in DynamoDB")
+        else:
+            print(f"  Error: {invoice_data.get('error')}")
 
-    invoices_df = extractor.extract_from_directory(directory_path, limit=limit)
+        print()
 
-    if not invoices_df.empty:
-        # Save to CSV
-        invoices_df.to_csv(output_csv, index=False)
-        print(f"\n✓ Saved extracted data to: {output_csv}")
+    print(f"\n{'='*60}")
+    print(f"Successfully extracted {success_count}/{len(pdf_files)} invoices")
 
-        # Print summary
-        summary = extractor.get_extraction_summary(invoices_df)
-        print(f"\n{'='*60}")
-        print("EXTRACTION SUMMARY")
-        print('='*60)
-        print(f"Total Invoices: {summary['total_invoices']}")
-        print(f"Total Line Items: {summary['total_line_items']}")
-        print(f"Total Value: ${summary['total_value']:,.2f}")
-        print(f"Average Invoice: ${summary['avg_invoice_value']:,.2f}")
-        print(f"Vendors: {', '.join(summary['vendors'])}")
-        print(f"Date Range: {summary['date_range']['earliest']} to {summary['date_range']['latest']}")
+    # Save to JSON if requested
+    if output_file and all_invoices:
+        with open(output_file, 'w') as f:
+            json.dump(all_invoices, f, indent=2, default=str)
+        print(f"Saved to {output_file}")
 
-        if summary['brands']:
-            print(f"\nTop Brands:")
-            for brand, count in list(summary['brands'].items())[:5]:
-                print(f"  - {brand}: {count} items")
-
-        if summary['extraction_errors']:
-            print(f"\n⚠ Errors ({len(summary['extraction_errors'])}):")
-            for error in summary['extraction_errors'][:5]:
-                print(f"  - {error}")
-
-        return invoices_df
-    else:
-        print("\n✗ No invoices extracted")
-        return None
+    return all_invoices
 
 
 if __name__ == "__main__":
     import sys
+    import argparse
 
-    if len(sys.argv) > 1:
-        # Test single invoice
-        pdf_path = sys.argv[1]
-        test_single_invoice(pdf_path)
+    parser = argparse.ArgumentParser(description='Extract data from Treez invoice PDFs')
+    parser.add_argument('path', nargs='?', help='Path to PDF file or directory')
+    parser.add_argument('--batch', action='store_true', help='Batch process directory')
+    parser.add_argument('--dynamodb', action='store_true', help='Store in DynamoDB')
+    parser.add_argument('--output', help='Output JSON file path')
+    parser.add_argument('--aws-key', help='AWS access key ID')
+    parser.add_argument('--aws-secret', help='AWS secret access key')
+    parser.add_argument('--aws-region', default='us-west-1', help='AWS region')
+
+    args = parser.parse_args()
+
+    if not args.path:
+        parser.print_help()
+        sys.exit(1)
+
+    # Prepare AWS config
+    aws_config = None
+    if args.dynamodb:
+        aws_config = {
+            'aws_access_key': args.aws_key,
+            'aws_secret_key': args.aws_secret,
+            'region': args.aws_region
+        }
+
+    if args.batch or os.path.isdir(args.path):
+        batch_extract_invoices(args.path, args.dynamodb, aws_config, args.output)
     else:
-        # Batch extract from invoices directory
-        print("Usage:")
-        print("  Single invoice: python invoice_extraction.py <path_to_invoice.pdf>")
-        print("  Batch extract:  python invoice_extraction.py")
-        print()
+        invoice = extract_single_invoice(args.path, args.dynamodb, aws_config)
 
-        invoices_dir = "invoices"
-        if os.path.exists(invoices_dir):
-            batch_extract_invoices(invoices_dir)
-        else:
-            print(f"Error: {invoices_dir} directory not found")
+        # Save to JSON
+        if args.output:
+            with open(args.output, 'w') as f:
+                json.dump(invoice, f, indent=2, default=str)
+            print(f"\nSaved to {args.output}")
