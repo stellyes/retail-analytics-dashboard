@@ -65,6 +65,18 @@ class TreezInvoiceParser:
             invoice_data['extracted_at'] = datetime.now().isoformat()
             invoice_data['extraction_method'] = 'pdf_parsing'
 
+            # Fallback: Use filename for invoice number if not extracted
+            if not invoice_data.get('invoice_number') or not invoice_data.get('invoice_id'):
+                # Try to extract from filename (e.g., invoice_13911_20251230_164442.pdf)
+                filename = os.path.basename(pdf_path)
+                filename_match = re.search(r'invoice[_\s-]*(\d+)', filename, re.IGNORECASE)
+                if filename_match:
+                    fallback_number = filename_match.group(1)
+                    if not invoice_data.get('invoice_number'):
+                        invoice_data['invoice_number'] = fallback_number
+                    if not invoice_data.get('invoice_id'):
+                        invoice_data['invoice_id'] = fallback_number
+
             return invoice_data
 
         except Exception as e:
@@ -136,6 +148,9 @@ class TreezInvoiceParser:
         if not invoice_num_match:
             # Try alternate pattern with newlines
             invoice_num_match = re.search(r'INVOICE\s*#?\s*(\d+)', text, re.MULTILINE)
+        if not invoice_num_match:
+            # Try pattern with more whitespace tolerance
+            invoice_num_match = re.search(r'INVOICE[\s#]*(\d+)', text, re.IGNORECASE)
 
         if invoice_num_match:
             invoice['invoice_number'] = invoice_num_match.group(1)
