@@ -178,9 +178,11 @@ def process_invoices(uploaded_files: List, parser: TreezInvoiceParser,
                             'invoice_date': invoice_data.get('invoice_date')
                         })
                     else:
+                        # Get detailed error if available
+                        error_detail = getattr(invoice_service, 'last_error', 'Failed to store in DynamoDB')
                         results['failed'].append({
                             'filename': filename,
-                            'error': 'Failed to store in DynamoDB',
+                            'error': error_detail,
                             'stage': 'storage'
                         })
 

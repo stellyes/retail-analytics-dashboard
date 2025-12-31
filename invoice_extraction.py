@@ -887,11 +887,16 @@ class InvoiceDataService:
             invoices_table = self.dynamodb.Table(self.invoices_table_name)
             line_items_table = self.dynamodb.Table(self.line_items_table_name)
 
-            # Prepare invoice header
+            # Prepare invoice header - remove None values for DynamoDB
             invoice_header = {
-                'invoice_id': invoice_data['invoice_id'] or invoice_data['invoice_number'],
-                'invoice_number': invoice_data['invoice_number'],
-                'vendor': invoice_data['vendor'],
+                'invoice_id': invoice_data.get('invoice_id') or invoice_data.get('invoice_number') or 'UNKNOWN',
+                'invoice_number': invoice_data.get('invoice_number') or 'UNKNOWN',
+                'line_item_count': len(invoice_data.get('line_items', []))
+            }
+
+            # Add optional fields only if they have non-None values
+            optional_fields = {
+                'vendor': invoice_data.get('vendor'),
                 'vendor_license': invoice_data.get('vendor_license'),
                 'vendor_address': invoice_data.get('vendor_address'),
                 'customer_name': invoice_data.get('customer_name'),
@@ -900,16 +905,21 @@ class InvoiceDataService:
                 'created_by': invoice_data.get('created_by'),
                 'payment_terms': invoice_data.get('payment_terms'),
                 'status': invoice_data.get('status'),
-                'subtotal': Decimal(str(invoice_data.get('invoice_subtotal', 0))),
-                'discount': Decimal(str(invoice_data.get('invoice_discount', 0))),
-                'fees': Decimal(str(invoice_data.get('invoice_fees', 0))),
-                'tax': Decimal(str(invoice_data.get('invoice_tax', 0))),
-                'total': Decimal(str(invoice_data.get('invoice_total', 0))),
-                'balance': Decimal(str(invoice_data.get('balance', 0))),
                 'source_file': invoice_data.get('source_file'),
-                'extracted_at': invoice_data.get('extracted_at'),
-                'line_item_count': len(invoice_data.get('line_items', []))
+                'extracted_at': invoice_data.get('extracted_at')
             }
+
+            for key, value in optional_fields.items():
+                if value is not None:
+                    invoice_header[key] = value
+
+            # Add numeric fields (DynamoDB needs Decimal type)
+            invoice_header['subtotal'] = Decimal(str(invoice_data.get('invoice_subtotal', 0)))
+            invoice_header['discount'] = Decimal(str(invoice_data.get('invoice_discount', 0)))
+            invoice_header['fees'] = Decimal(str(invoice_data.get('invoice_fees', 0)))
+            invoice_header['tax'] = Decimal(str(invoice_data.get('invoice_tax', 0)))
+            invoice_header['total'] = Decimal(str(invoice_data.get('invoice_total', 0)))
+            invoice_header['balance'] = Decimal(str(invoice_data.get('balance', 0)))
 
             # Store invoice header
             invoices_table.put_item(Item=invoice_header)
@@ -917,30 +927,44 @@ class InvoiceDataService:
             # Store line items
             invoice_id = invoice_header['invoice_id']
             for item in invoice_data.get('line_items', []):
+                # Required fields
                 line_item = {
                     'invoice_id': invoice_id,
                     'line_number': item['line_number'],
-                    'brand': item['brand'],
-                    'product_name': item['product_name'],
-                    'product_type': item['product_type'],
-                    'product_subtype': item['product_subtype'],
-                    'strain': item.get('strain'),
-                    'unit_size': item.get('unit_size'),
-                    'trace_id': item['trace_id'],
-                    'sku_units': item['sku_units'],
-                    'unit_cost': Decimal(str(item['unit_cost'])),
-                    'excise_per_unit': Decimal(str(item['excise_per_unit'])),
-                    'total_cost': Decimal(str(item['total_cost'])),
-                    'total_cost_with_excise': Decimal(str(item['total_cost_with_excise'])),
-                    'is_promo': item.get('is_promo', False),
-                    'invoice_date': invoice_data.get('invoice_date')
+                    'brand': item.get('brand') or 'UNKNOWN',
+                    'product_name': item.get('product_name') or 'UNKNOWN',
+                    'product_type': item.get('product_type') or 'UNKNOWN',
+                    'product_subtype': item.get('product_subtype') or 'UNKNOWN',
+                    'trace_id': item.get('trace_id') or 'UNKNOWN',
+                    'sku_units': item.get('sku_units', 0),
+                    'unit_cost': Decimal(str(item.get('unit_cost', 0))),
+                    'excise_per_unit': Decimal(str(item.get('excise_per_unit', 0))),
+                    'total_cost': Decimal(str(item.get('total_cost', 0))),
+                    'total_cost_with_excise': Decimal(str(item.get('total_cost_with_excise', 0))),
+                    'is_promo': item.get('is_promo', False)
                 }
+
+                # Add optional fields only if not None
+                if item.get('strain'):
+                    line_item['strain'] = item['strain']
+                if item.get('unit_size'):
+                    line_item['unit_size'] = item['unit_size']
+                if invoice_data.get('invoice_date'):
+                    line_item['invoice_date'] = invoice_data['invoice_date']
+
                 line_items_table.put_item(Item=line_item)
 
             return True
 
         except Exception as e:
-            print(f"Error storing invoice: {e}")
+            import traceback
+            error_msg = f"Error storing invoice: {e}\n{traceback.format_exc()}"
+            print(error_msg)
+            # Also store the error message so it can be accessed by the UI
+            if hasattr(self, 'last_error'):
+                self.last_error = error_msg
+            else:
+                self.last_error = error_msg
             return False
 
     def get_invoice_summary(self, start_date: str = None, end_date: str = None) -> Dict:
