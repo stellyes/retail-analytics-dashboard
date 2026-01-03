@@ -116,16 +116,24 @@ class TreezInvoiceParser:
 
         # Initialize invoice data
         invoice = {
+            'distributor': None,
+            'distributor_address': None,
+            'distributor_license': None,
+            'receiver': None,
+            'receiver_address': None,
+            'invoice_status': None,
+            'invoice_number': None,
+            'invoice_id': None,
+            'invoice_date': None,
+            'accepted_date': None,
+            'created_by': None,
+            'payment_terms': None,
+            # Keep legacy field names for compatibility
             'vendor': None,
             'vendor_license': None,
             'vendor_address': None,
             'customer_name': None,
             'customer_address': None,
-            'invoice_number': None,
-            'invoice_id': None,
-            'invoice_date': None,
-            'created_by': None,
-            'payment_terms': None,
             'status': None,
             'invoice_subtotal': 0.0,
             'invoice_discount': 0.0,
@@ -140,79 +148,250 @@ class TreezInvoiceParser:
 
         lines = text.split('\n')
 
-        # Extract vendor info (top left section - first text after "Print Window")
-        # Common patterns: "NABITWO, LLC", "HESHIES LLC", etc.
-        vendor_pattern = r'^([A-Z][A-Z\s,\.&]+(?:LLC|INC|CORP)\.?)'
+        # =================================================================
+        # HEADER EXTRACTION - Parse the 4-column header structure
+        # =================================================================
+        # The Treez invoice header has 4 columns that get merged in text extraction:
+        # Col 1: Distributor (name, address, phone, license)
+        # Col 2: Receiver (always Barbary Coast or Grass Roots + address)
+        # Col 3: Status info (FULFILLED, Created date, Accepted date, Created by, Payment terms)
+        # Col 4: Invoice # and secondary ID
+        #
+        # Example merged line:
+        # "DOS ZAPATOS , INC. Barbary Coast Dispensary FULFILLED INVOICE#"
+        # =================================================================
+
+        # Find the first content line after "Print Window" which contains the merged header
+        header_start_idx = -1
         for i, line in enumerate(lines):
-            line_clean = line.strip()
-            # Skip header lines
-            if line_clean in ['Need Help?', 'Print Window', '']:
-                continue
-            # Match vendor pattern
-            if re.match(vendor_pattern, line_clean, re.IGNORECASE):
-                invoice['vendor'] = line_clean
-                # Next lines are likely address and license
-                if i + 1 < len(lines):
-                    invoice['vendor_address'] = lines[i + 1].strip()
-                # Look for license in nearby lines
-                for j in range(i, min(i + 5, len(lines))):
-                    license_match = re.search(r'C\d{2}-\d{7}', lines[j])
+            if 'Print Window' in line:
+                header_start_idx = i + 1
+                break
+
+        if header_start_idx >= 0 and header_start_idx < len(lines):
+            # Process the merged header lines
+            # The header typically spans 5-8 lines before "Item #" table header
+            header_lines = []
+            for i in range(header_start_idx, min(header_start_idx + 15, len(lines))):
+                line = lines[i].strip()
+                if 'Item #' in line or 'Item' == line:
+                    break
+                if line and line not in ['Need', 'Help?', 'Need Help?']:
+                    header_lines.append(line)
+
+            # Parse the merged header - first line typically has all 4 column headers
+            # Pattern: "VENDOR_NAME Barbary Coast Dispensary FULFILLED INVOICE#"
+            if header_lines:
+                first_line = header_lines[0]
+
+                # Extract Distributor name - everything before "Barbary Coast" or "Grass Roots"
+                distributor_match = re.match(
+                    r'^(.+?)\s+(Barbary Coast Dispensary|Grass Roots)\s+(FULFILLED|PENDING|CANCELLED)\s+INVOICE#',
+                    first_line
+                )
+                if distributor_match:
+                    invoice['distributor'] = distributor_match.group(1).strip()
+                    invoice['receiver'] = distributor_match.group(2).strip()
+                    invoice['invoice_status'] = distributor_match.group(3).strip()
+                else:
+                    # Try alternate pattern - vendor may have LLC/INC at end or split across lines
+                    # Example: "GCM MANAGEMENT SERVICES, Barbary Coast Dispensary..."
+                    # with "INC" on the next line
+                    alt_match = re.match(
+                        r'^(.+?(?:LLC|INC|CORP|SERVICES)?[,.\s]*)\s*(Barbary Coast Dispensary|Grass Roots)',
+                        first_line,
+                        re.IGNORECASE
+                    )
+                    if alt_match:
+                        distributor_name = alt_match.group(1).strip().rstrip(',').strip()
+                        invoice['receiver'] = alt_match.group(2).strip()
+
+                        # Check if the vendor name is incomplete (ends with comma or is "SERVICES,")
+                        # and the next line contains the continuation (e.g., "INC")
+                        if len(header_lines) > 1:
+                            second_line = header_lines[1]
+                            # Check if second line starts with INC, LLC, CORP (continuation of vendor name)
+                            continuation_match = re.match(r'^(INC|LLC|CORP)\b', second_line.strip(), re.IGNORECASE)
+                            if continuation_match and (distributor_name.endswith(',') or 'SERVICES' in distributor_name.upper()):
+                                distributor_name = distributor_name.rstrip(',').strip() + ' ' + continuation_match.group(1)
+
+                        invoice['distributor'] = distributor_name
+
+                # Extract addresses from second header line
+                # Pattern: "ADDRESS1 952 Mission St, San Francisco, CA Created: MM/DD/YYYY INVOICE_NUM"
+                # OR: "INC 952 Mission St..." when vendor name continues
+                if len(header_lines) > 1:
+                    second_line = header_lines[1]
+
+                    # Check if second line starts with INC/LLC/CORP (continuation of vendor name)
+                    # Example: "INC 952 Mission St, San Francisco, CA Created: 04/03/2023 12277"
+                    name_continuation = re.match(r'^(INC|LLC|CORP)\b\s*', second_line.strip(), re.IGNORECASE)
+                    if name_continuation:
+                        # Append to distributor name
+                        if invoice.get('distributor'):
+                            invoice['distributor'] = invoice['distributor'].rstrip(',').strip() + ' ' + name_continuation.group(1).upper()
+                        # Remove this prefix from the line for address parsing
+                        second_line = second_line[name_continuation.end():].strip()
+
+                    # Find receiver address (Mission St pattern - may have spaces instead of numbers in some PDFs)
+                    receiver_addr_match = re.search(
+                        r'(\d*\s*Mission\s+St,?\s*San\s+Francisco,?\s*CA)',
+                        second_line,
+                        re.IGNORECASE
+                    )
+                    if receiver_addr_match:
+                        addr = receiver_addr_match.group(1).strip()
+                        # If no number found or just spaces, use the standard address
+                        if not re.match(r'\d', addr.strip()):
+                            addr = '952 Mission St, San Francisco, CA'
+                        invoice['receiver_address'] = addr
+                        # Everything before this is likely distributor address
+                        dist_addr_part = second_line[:receiver_addr_match.start()].strip()
+                        # Only set if it looks like a real address (has digits AND street keywords)
+                        # Must have actual content, not just "952 Mission St" which is receiver address
+                        if dist_addr_part and re.search(r'\d', dist_addr_part):
+                            # Make sure it's not just the Mission St address
+                            if not re.search(r'^9?5?2?\s*Mission', dist_addr_part, re.IGNORECASE):
+                                if re.search(r'(ST|STREET|AVE|BLVD|RD|DR|WAY|LN|HIGHWAY|HWY|UNIT|SUITE)', dist_addr_part, re.IGNORECASE):
+                                    invoice['distributor_address'] = dist_addr_part
+
+                    # Extract invoice number from end of line (after INVOICE#)
+                    inv_num_match = re.search(r'(\d{4,6})\s*$', second_line)
+                    if inv_num_match:
+                        invoice['invoice_number'] = inv_num_match.group(1)
+                        invoice['invoice_id'] = inv_num_match.group(1)
+
+                # If receiver address not found, try alternate patterns or set default
+                if not invoice['receiver_address']:
+                    # Look for any Mission St reference in all header lines
+                    for line in header_lines:
+                        if 'Mission St' in line or 'Mission' in line:
+                            invoice['receiver_address'] = '952 Mission St, San Francisco, CA 94103'
+                            break
+                    # If still not found, set default based on receiver
+                    if not invoice['receiver_address'] and invoice['receiver'] == 'Barbary Coast Dispensary':
+                        invoice['receiver_address'] = '952 Mission St, San Francisco, CA 94103'
+
+                # Look for additional distributor info in subsequent lines
+                for idx, line in enumerate(header_lines[2:8]):
+                    # Look for zip code line (distributor address continuation)
+                    if re.match(r'^\d{5}', line) and invoice.get('distributor_address'):
+                        # Append zip code to address
+                        invoice['distributor_address'] += f" {line.split()[0]}"
+                        continue
+
+                    # Look for phone number
+                    phone_match = re.search(r'\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4}', line)
+                    if phone_match:
+                        if invoice.get('distributor_address'):
+                            invoice['distributor_address'] += f" {phone_match.group(0)}"
+                        else:
+                            # Phone might help identify address
+                            pass
+
+                    # Look for license number
+                    license_match = re.search(r'C\d{2}-\d{7}', line)
                     if license_match:
-                        invoice['vendor_license'] = license_match.group(0)
-                        break
-                break
+                        invoice['distributor_license'] = license_match.group(0)
 
-        # Extract customer info
-        customer_pattern = r'(Barbary Coast Dispensary|[\w\s]+Dispensary)'
-        for i, line in enumerate(lines):
-            if re.search(customer_pattern, line):
-                invoice['customer_name'] = re.search(customer_pattern, line).group(1).strip()
-                # Next line is likely address
-                if i + 1 < len(lines):
-                    addr_match = re.search(r'\d+\s+[\w\s]+,\s*[\w\s]+,\s*[A-Z]{2}', lines[i + 1])
-                    if addr_match:
-                        invoice['customer_address'] = addr_match.group(0).strip()
-                break
+                # Try to extract distributor address from merged text if still missing
+                if not invoice.get('distributor_address') and len(header_lines) > 1:
+                    # Look for address patterns like "5733 SAN LEANDRO ST" or street addresses
+                    for line in header_lines[1:4]:
+                        # Look for street address patterns with numbers
+                        # But exclude Mission St which is always the receiver address
+                        addr_match = re.search(r'(\d+\s+[A-Z\s]+(?:ST|STREET|AVE|AVENUE|BLVD|RD|ROAD|DR|DRIVE|WAY|LN|LANE|HIGHWAY|HWY))',
+                                              line, re.IGNORECASE)
+                        if addr_match:
+                            potential_addr = addr_match.group(1).strip()
+                            # Skip if this is Mission St (receiver address)
+                            if not re.search(r'Mission\s*St', potential_addr, re.IGNORECASE):
+                                invoice['distributor_address'] = potential_addr
+                                break
+                        # Also check for patterns with suite/unit (numbers may be spaces due to PDF rendering)
+                        suite_match = re.search(r'(\s*[A-Z\s]+(?:ST|STREET)\.?\s+SUITE\s+[A-Z0-9&]+)', line, re.IGNORECASE)
+                        if suite_match:
+                            addr = suite_match.group(1).strip()
+                            # Clean up leading spaces that might be where numbers should be
+                            addr = re.sub(r'^\s+', '', addr)
+                            # Skip Mission St
+                            if not re.search(r'Mission\s*St', addr, re.IGNORECASE):
+                                invoice['distributor_address'] = addr
+                                break
+                        # Check for street names without numbers (PDF rendering may drop numbers)
+                        street_only = re.search(r'([A-Z]+\s+(?:LEANDRO|MAIN|FIRST|SECOND|OAK|ELM|PARK)\s*ST\.?\s*(?:SUITE\s+[A-Z0-9&]+)?)',
+                                               line, re.IGNORECASE)
+                        if street_only:
+                            invoice['distributor_address'] = street_only.group(1).strip()
+                            break
 
-        # Extract invoice number and ID
-        # Try multiple patterns for invoice number
-        invoice_num_match = re.search(r'INVOICE#?\s*(\d+)', text)
-        if not invoice_num_match:
-            # Try alternate pattern with newlines
-            invoice_num_match = re.search(r'INVOICE\s*#?\s*(\d+)', text, re.MULTILINE)
-        if not invoice_num_match:
-            # Try pattern with more whitespace tolerance
-            invoice_num_match = re.search(r'INVOICE[\s#]*(\d+)', text, re.IGNORECASE)
+                # Also look for license in all header lines (format: C11-0001274)
+                if not invoice.get('distributor_license'):
+                    for line in header_lines:
+                        license_match = re.search(r'C\d{1,2}-?\d{5,7}', line)
+                        if license_match:
+                            invoice['distributor_license'] = license_match.group(0)
+                            break
 
-        if invoice_num_match:
-            invoice['invoice_number'] = invoice_num_match.group(1)
-            invoice['invoice_id'] = invoice_num_match.group(1)
+        # Extract invoice status if not found
+        if not invoice['invoice_status']:
+            if 'FULFILLED' in text:
+                invoice['invoice_status'] = 'FULFILLED'
+            elif 'PENDING' in text:
+                invoice['invoice_status'] = 'PENDING'
+            elif 'CANCELLED' in text:
+                invoice['invoice_status'] = 'CANCELLED'
 
-        # Extract status
-        if 'FULFILLED' in text:
-            invoice['status'] = 'FULFILLED'
+        # Extract invoice number if not found
+        if not invoice['invoice_number']:
+            invoice_num_match = re.search(r'INVOICE#?\s*\n?\s*(\d+)', text)
+            if not invoice_num_match:
+                invoice_num_match = re.search(r'INVOICE[\s#]*(\d{4,6})', text, re.IGNORECASE)
+            if invoice_num_match:
+                invoice['invoice_number'] = invoice_num_match.group(1)
+                invoice['invoice_id'] = invoice_num_match.group(1)
 
-        # Extract dates - try multiple patterns
+        # Extract dates
         date_pattern = r'Created:\s*(\d{1,2})/(\d{1,2})/(\d{4})'
         date_match = re.search(date_pattern, text)
-        if not date_match:
-            # Try alternate pattern
-            date_pattern = r'Created:\s*(\d{1,2})\s*/\s*(\d{1,2})\s*/\s*(\d{4})'
-            date_match = re.search(date_pattern, text, re.MULTILINE)
-
         if date_match:
             month, day, year = date_match.groups()
             invoice['invoice_date'] = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
 
+        # Extract accepted date
+        accepted_pattern = r'Accepted:\s*\n?\s*(\d{1,2})/(\d{1,2})/(\d{4})'
+        accepted_match = re.search(accepted_pattern, text)
+        if accepted_match:
+            month, day, year = accepted_match.groups()
+            invoice['accepted_date'] = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+
         # Extract created by
-        created_by_match = re.search(r'Created by:\s*([\w\s]+)', text)
+        created_by_match = re.search(r'Created by:\s*([\w\s]+?)(?:\n|$)', text)
         if created_by_match:
-            invoice['created_by'] = created_by_match.group(1).strip()
+            created_by = created_by_match.group(1).strip()
+            # Remove common suffixes that get appended
+            created_by = re.sub(r'\s*(undefined|COD|Net).*$', '', created_by, flags=re.IGNORECASE)
+            invoice['created_by'] = created_by.strip()
 
         # Extract payment terms
-        cod_match = re.search(r'COD\s*-\s*\d{1,2}/\d{1,2}/\d{4}', text)
-        if cod_match:
+        if re.search(r'COD\s*-', text):
             invoice['payment_terms'] = 'COD'
+        elif re.search(r'Net\s*\d+', text):
+            net_match = re.search(r'Net\s*(\d+)', text)
+            if net_match:
+                invoice['payment_terms'] = f"Net {net_match.group(1)}"
+        elif re.search(r'Net.*-', text):
+            # Fallback: "Net" followed by any characters and dash (numbers may be null bytes or spaces)
+            # Default to Net 30 as it's the most common term
+            invoice['payment_terms'] = 'Net 30'
+
+        # Set legacy fields for backward compatibility
+        invoice['vendor'] = invoice['distributor']
+        invoice['vendor_address'] = invoice['distributor_address']
+        invoice['vendor_license'] = invoice['distributor_license']
+        invoice['customer_name'] = invoice['receiver']
+        invoice['customer_address'] = invoice['receiver_address']
+        invoice['status'] = invoice['invoice_status']
 
         # Extract totals from bottom of invoice
         # Handle both "Subtotal" and "Subt otal" (with space from PDF extraction)
@@ -258,7 +437,7 @@ class TreezInvoiceParser:
 
         # Try table extraction first
         for table in tables:
-            if not table or len(table) < 2:
+            if not table or len(table) < 1:
                 continue
 
             # Check if this looks like an invoice items table by examining the first row
@@ -266,7 +445,8 @@ class TreezInvoiceParser:
             first_row = table[0] if table else []
 
             # Check if first row has enough columns and looks like data (not just 2-3 columns of UI elements)
-            if len(first_row) >= 8:
+            # Line item tables typically have 10-11 columns
+            if len(first_row) >= 10:
                 # Try to parse this table - _parse_table_rows will validate rows
                 items_from_table = self._parse_table_rows(table)
                 if items_from_table:
