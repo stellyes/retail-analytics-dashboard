@@ -493,6 +493,8 @@ def render_full_invoice_section():
     _load_invoices_needing_review_from_dynamo()
 
     # Static tab labels
+    st.write(f"Debug: invoices_needing_date_review count = {len(st.session_state.invoices_needing_date_review)}")
+
     tab1, tab2, tab3 = st.tabs(["📤 Upload Invoices", "📊 View Data", "📅 Date Review"])
 
     with tab1:

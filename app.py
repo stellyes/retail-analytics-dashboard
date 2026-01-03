@@ -3207,9 +3207,14 @@ def render_upload_page(s3_manager, processor):
     try:
         from invoice_upload_ui import render_full_invoice_section
         render_full_invoice_section()
-    except ImportError:
+    except ImportError as e:
         st.warning("Invoice upload module not available. Make sure invoice_upload_ui.py is installed.")
         st.info("📦 Install the invoice_upload_ui module to enable automatic PDF extraction and DynamoDB storage.")
+        st.error(f"Import error: {e}")
+    except Exception as e:
+        st.error(f"Error rendering invoice upload section: {e}")
+        import traceback
+        st.code(traceback.format_exc())
 
     # Customer Data Upload
     st.markdown("---")
