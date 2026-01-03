@@ -25,6 +25,61 @@ def _init_date_review_state():
     """Initialize session state for date review tracking."""
     if 'invoices_needing_date_review' not in st.session_state:
         st.session_state.invoices_needing_date_review = []
+    if 'date_review_loaded_from_dynamo' not in st.session_state:
+        st.session_state.date_review_loaded_from_dynamo = False
+
+
+def _load_invoices_needing_review_from_dynamo():
+    """
+    Load invoices that need date review from DynamoDB.
+    Finds invoices where invoice_date is missing or null.
+    Called once on app startup.
+    """
+    if st.session_state.date_review_loaded_from_dynamo:
+        return  # Already loaded
+
+    try:
+        aws_config = {
+            'aws_access_key': st.secrets['aws']['access_key_id'],
+            'aws_secret_key': st.secrets['aws']['secret_access_key'],
+            'region': st.secrets['aws']['region']
+        }
+        invoice_service = InvoiceDataService(**aws_config)
+
+        # Scan invoices table for items without invoice_date
+        invoices_table = invoice_service.dynamodb.Table(invoice_service.invoices_table_name)
+
+        # Scan all invoices and filter for those missing invoice_date
+        response = invoices_table.scan()
+        items = response.get('Items', [])
+
+        # Handle pagination
+        while 'LastEvaluatedKey' in response:
+            response = invoices_table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+            items.extend(response.get('Items', []))
+
+        # Find invoices needing date review (no invoice_date field)
+        for item in items:
+            if not item.get('invoice_date'):
+                invoice_id = item.get('invoice_id')
+                # Check if already in the review list
+                existing_ids = [inv['invoice_id'] for inv in st.session_state.invoices_needing_date_review]
+                if invoice_id and invoice_id not in existing_ids:
+                    st.session_state.invoices_needing_date_review.append({
+                        'invoice_id': invoice_id,
+                        'invoice_number': item.get('invoice_number', invoice_id),
+                        'filename': item.get('source_file', 'Unknown'),
+                        'vendor': item.get('vendor', 'Unknown'),
+                        'download_date': item.get('download_date'),
+                        'total': float(item.get('total', 0)),
+                        'added_at': datetime.now().isoformat()
+                    })
+
+        st.session_state.date_review_loaded_from_dynamo = True
+
+    except Exception as e:
+        # Silently fail - don't block app startup if DynamoDB isn't accessible
+        st.session_state.date_review_loaded_from_dynamo = True  # Mark as attempted
 
 
 def render_invoice_upload_section():
@@ -434,11 +489,11 @@ def render_full_invoice_section():
     """
     _init_date_review_state()
 
-    # Show badge count for invoices needing review
-    review_count = len(st.session_state.invoices_needing_date_review)
-    date_review_label = f"📅 Date Review ({review_count})" if review_count > 0 else "📅 Date Review"
+    # Load invoices needing review from DynamoDB on first run
+    _load_invoices_needing_review_from_dynamo()
 
-    tab1, tab2, tab3 = st.tabs(["📤 Upload Invoices", "📊 View Data", date_review_label])
+    # Static tab labels
+    tab1, tab2, tab3 = st.tabs(["📤 Upload Invoices", "📊 View Data", "📅 Date Review"])
 
     with tab1:
         render_invoice_upload_section()
