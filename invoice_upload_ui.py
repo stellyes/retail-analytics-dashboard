@@ -12,13 +12,19 @@ Usage in app.py:
 import streamlit as st
 from typing import List, Dict
 import json
-from datetime import datetime
+from datetime import datetime, date
 
 try:
     from invoice_extraction import TreezInvoiceParser, InvoiceDataService
     INVOICE_EXTRACTION_AVAILABLE = True
 except ImportError:
     INVOICE_EXTRACTION_AVAILABLE = False
+
+
+def _init_date_review_state():
+    """Initialize session state for date review tracking."""
+    if 'invoices_needing_date_review' not in st.session_state:
+        st.session_state.invoices_needing_date_review = []
 
 
 def render_invoice_upload_section():
@@ -172,14 +178,34 @@ def process_invoices(uploaded_files: List, parser: TreezInvoiceParser,
                     success = invoice_service.store_invoice(invoice_data)
 
                     if success:
-                        results['successful'].append({
+                        result_item = {
                             'filename': filename,
                             'invoice_number': invoice_data.get('invoice_number'),
+                            'invoice_id': invoice_data.get('invoice_id') or invoice_data.get('invoice_number'),
                             'vendor': invoice_data.get('vendor'),
                             'total': invoice_data.get('invoice_total', 0),
                             'line_items': len(invoice_data.get('line_items', [])),
-                            'invoice_date': invoice_data.get('invoice_date')
-                        })
+                            'invoice_date': invoice_data.get('invoice_date'),
+                            'download_date': invoice_data.get('download_date'),
+                            'date_extraction_failed': invoice_data.get('_date_extraction_failed', False)
+                        }
+                        results['successful'].append(result_item)
+
+                        # Track invoices needing date review
+                        if invoice_data.get('_date_extraction_failed'):
+                            _init_date_review_state()
+                            # Add to review list if not already there
+                            existing_ids = [inv['invoice_id'] for inv in st.session_state.invoices_needing_date_review]
+                            if result_item['invoice_id'] not in existing_ids:
+                                st.session_state.invoices_needing_date_review.append({
+                                    'invoice_id': result_item['invoice_id'],
+                                    'invoice_number': result_item['invoice_number'],
+                                    'filename': filename,
+                                    'vendor': result_item['vendor'],
+                                    'download_date': result_item['download_date'],
+                                    'total': result_item['total'],
+                                    'added_at': datetime.now().isoformat()
+                                })
                     else:
                         # Get detailed error if available
                         error_detail = getattr(invoice_service, 'last_error', 'Failed to store in DynamoDB')
@@ -248,13 +274,20 @@ def display_processing_results(results: Dict, container):
         if results['successful']:
             st.success(f"✓ Successfully processed {len(results['successful'])} invoice(s)")
 
+            # Check for invoices needing date review
+            needs_review = [item for item in results['successful'] if item.get('date_extraction_failed')]
+            if needs_review:
+                st.warning(f"⚠️ {len(needs_review)} invoice(s) need manual date entry. Go to the '📅 Date Review' tab.")
+
             with st.expander("View Successful Uploads", expanded=True):
                 for item in results['successful']:
+                    date_display = item['invoice_date'] if item['invoice_date'] else "⚠️ Needs manual entry"
+                    date_warning = " *(date extraction failed)*" if item.get('date_extraction_failed') else ""
                     st.markdown(f"""
                     **{item['filename']}**
                     - Invoice #: `{item['invoice_number']}`
                     - Vendor: {item['vendor']}
-                    - Date: {item['invoice_date']}
+                    - Date: {date_display}{date_warning}
                     - Total: ${item['total']:,.2f}
                     - Line Items: {item['line_items']}
                     """)
@@ -399,10 +432,179 @@ def render_full_invoice_section():
     Render complete invoice management section with upload and viewer.
     Use this in app.py for a complete invoice management interface.
     """
-    tab1, tab2 = st.tabs(["📤 Upload Invoices", "📊 View Data"])
+    _init_date_review_state()
+
+    # Show badge count for invoices needing review
+    review_count = len(st.session_state.invoices_needing_date_review)
+    date_review_label = f"📅 Date Review ({review_count})" if review_count > 0 else "📅 Date Review"
+
+    tab1, tab2, tab3 = st.tabs(["📤 Upload Invoices", "📊 View Data", date_review_label])
 
     with tab1:
         render_invoice_upload_section()
 
     with tab2:
         render_invoice_data_viewer()
+
+    with tab3:
+        render_date_review_section()
+
+
+def render_date_review_section():
+    """
+    Render the date review section for invoices with failed date extraction.
+    Allows manual entry of invoice dates that couldn't be automatically extracted.
+    """
+    st.header("📅 Invoice Date Review")
+
+    _init_date_review_state()
+
+    invoices_to_review = st.session_state.invoices_needing_date_review
+
+    if not invoices_to_review:
+        st.success("✅ No invoices need date review!")
+        st.info("When you upload invoices with dates that can't be automatically extracted, they'll appear here for manual entry.")
+        return
+
+    st.markdown(f"""
+    **{len(invoices_to_review)} invoice(s)** need manual date entry.
+
+    These invoices have PDF rendering issues that prevent automatic date extraction.
+    Please enter the "Created" date from each invoice's header.
+    """)
+
+    # Get AWS credentials and service
+    try:
+        aws_config = {
+            'aws_access_key': st.secrets['aws']['access_key_id'],
+            'aws_secret_key': st.secrets['aws']['secret_access_key'],
+            'region': st.secrets['aws']['region']
+        }
+        invoice_service = InvoiceDataService(**aws_config)
+    except Exception as e:
+        st.error(f"⚠️ AWS credentials not found. Cannot update invoices: {e}")
+        return
+
+    # Stats
+    st.info(f"📊 **{len(invoices_to_review)}** invoices pending date review")
+
+    st.markdown("---")
+
+    # Process each invoice
+    for idx, invoice in enumerate(invoices_to_review):
+        col1, col2, col3, col4 = st.columns([2, 2, 2, 1])
+
+        with col1:
+            st.markdown(f"**Invoice #{invoice['invoice_number']}**")
+            st.caption(f"Vendor: {invoice.get('vendor', 'Unknown')}")
+            st.caption(f"File: {invoice.get('filename', 'Unknown')}")
+
+        with col2:
+            st.caption(f"Download Date: {invoice.get('download_date', 'Unknown')}")
+            st.caption(f"Total: ${invoice.get('total', 0):,.2f}")
+
+        with col3:
+            # Date input for manual entry
+            # Try to parse download_date as a default starting point
+            default_date = None
+            if invoice.get('download_date'):
+                try:
+                    parts = invoice['download_date'].split('-')
+                    default_date = date(int(parts[0]), int(parts[1]), int(parts[2]))
+                except:
+                    pass
+
+            selected_date = st.date_input(
+                "Created Date",
+                value=default_date,
+                key=f"date_review_{invoice['invoice_id']}",
+                help="Enter the 'Created:' date from the PDF header"
+            )
+
+        with col4:
+            st.markdown("<br>", unsafe_allow_html=True)
+            if st.button("💾 Save", key=f"save_date_{invoice['invoice_id']}", use_container_width=True):
+                if selected_date:
+                    # Update the invoice in DynamoDB
+                    date_str = selected_date.strftime('%Y-%m-%d')
+                    success = _update_invoice_date(
+                        invoice_service,
+                        invoice['invoice_id'],
+                        date_str
+                    )
+
+                    if success:
+                        st.success(f"✅ Updated invoice #{invoice['invoice_number']} with date {date_str}")
+                        # Remove from review list
+                        st.session_state.invoices_needing_date_review = [
+                            inv for inv in st.session_state.invoices_needing_date_review
+                            if inv['invoice_id'] != invoice['invoice_id']
+                        ]
+                        st.rerun()
+                    else:
+                        st.error("Failed to update invoice date")
+                else:
+                    st.warning("Please select a date")
+
+        st.markdown("---")
+
+    # Bulk actions
+    st.subheader("Bulk Actions")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("🗑️ Clear All Pending Reviews", use_container_width=True):
+            st.session_state.invoices_needing_date_review = []
+            st.success("Cleared all pending reviews")
+            st.rerun()
+
+    with col2:
+        st.caption("Use this to dismiss all pending reviews without updating dates")
+
+
+def _update_invoice_date(invoice_service: InvoiceDataService, invoice_id: str, invoice_date: str) -> bool:
+    """
+    Update the invoice_date for an invoice in DynamoDB.
+
+    Args:
+        invoice_service: InvoiceDataService instance
+        invoice_id: The invoice ID to update
+        invoice_date: The new date string (YYYY-MM-DD format)
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Update invoice header
+        invoices_table = invoice_service.dynamodb.Table(invoice_service.invoices_table_name)
+        invoices_table.update_item(
+            Key={'invoice_id': invoice_id},
+            UpdateExpression='SET invoice_date = :date',
+            ExpressionAttributeValues={':date': invoice_date}
+        )
+
+        # Update all line items for this invoice
+        line_items_table = invoice_service.dynamodb.Table(invoice_service.line_items_table_name)
+
+        # Query all line items for this invoice
+        response = line_items_table.query(
+            KeyConditionExpression='invoice_id = :inv_id',
+            ExpressionAttributeValues={':inv_id': invoice_id}
+        )
+
+        # Update each line item
+        for item in response.get('Items', []):
+            line_items_table.update_item(
+                Key={
+                    'invoice_id': invoice_id,
+                    'line_number': item['line_number']
+                },
+                UpdateExpression='SET invoice_date = :date',
+                ExpressionAttributeValues={':date': invoice_date}
+            )
+
+        return True
+
+    except Exception as e:
+        print(f"Error updating invoice date: {e}")
+        return False

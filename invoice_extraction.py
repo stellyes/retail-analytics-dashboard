@@ -94,9 +94,10 @@ class TreezInvoiceParser:
                 except:
                     pass
 
-                # Use filename date as fallback for invoice_date ONLY if PDF extraction failed
+                # Use filename date as fallback for invoice_date ONLY if PDF extraction didn't find a date
+                # BUT NOT if we detected a date that couldn't be read (null byte issue)
                 # (invoice_date should come from "Created:" in PDF header)
-                if not invoice_data.get('invoice_date'):
+                if not invoice_data.get('invoice_date') and not invoice_data.get('_date_extraction_failed'):
                     invoice_data['invoice_date'] = invoice_data.get('download_date')
             else:
                 # Fallback: try simpler pattern for invoice number only
@@ -356,11 +357,19 @@ class TreezInvoiceParser:
                 invoice['invoice_id'] = invoice_num_match.group(1)
 
         # Extract dates
+        # Primary pattern: normal digits
         date_pattern = r'Created:\s*(\d{1,2})/(\d{1,2})/(\d{4})'
         date_match = re.search(date_pattern, text)
         if date_match:
             month, day, year = date_match.groups()
             invoice['invoice_date'] = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+        else:
+            # Check if date has null bytes (font rendering issue)
+            # Pattern: Created: followed by null bytes and slashes like \x00\x00/\x00\x00/\x00\x00\x00\x00
+            null_date_pattern = r'Created:\s*[\x00\s]*[/\x00\s]+[\x00\s]*[/\x00\s]+[\x00\s]*'
+            if re.search(null_date_pattern, text):
+                # Mark that we detected a date but couldn't read it (null byte issue)
+                invoice['_date_extraction_failed'] = True
 
         # Extract accepted date
         accepted_pattern = r'Accepted:\s*\n?\s*(\d{1,2})/(\d{1,2})/(\d{4})'
