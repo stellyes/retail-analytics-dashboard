@@ -80,10 +80,11 @@ class TreezInvoiceParser:
             if filename_match:
                 invoice_num, date_str, time_str = filename_match.groups()
 
-                # Set invoice number from filename (more reliable than PDF text for problematic PDFs)
-                if not invoice_data.get('invoice_number'):
-                    invoice_data['invoice_number'] = invoice_num
-                    invoice_data['invoice_id'] = invoice_num
+                # ALWAYS use invoice number from filename - it's the authoritative source
+                # The filename format is: invoice_[NUMBER]_[YYYYMMDD]_[HHMMSS].pdf
+                # PDF content may contain different numbers (e.g., internal reference numbers)
+                invoice_data['invoice_number'] = invoice_num
+                invoice_data['invoice_id'] = invoice_num
 
                 # Parse download date from filename (when invoice was downloaded/exported)
                 try:
@@ -101,8 +102,9 @@ class TreezInvoiceParser:
                     invoice_data['invoice_date'] = invoice_data.get('download_date')
             else:
                 # Fallback: try simpler pattern for invoice number only
+                # Filename is always authoritative for invoice number
                 filename_match = re.search(r'invoice[_\s-]*(\d+)', filename, re.IGNORECASE)
-                if filename_match and not invoice_data.get('invoice_number'):
+                if filename_match:
                     invoice_data['invoice_number'] = filename_match.group(1)
                     invoice_data['invoice_id'] = filename_match.group(1)
 
@@ -118,6 +120,14 @@ class TreezInvoiceParser:
 
     def _parse_treez_invoice(self, text: str, tables: List[List[List[str]]]) -> Dict:
         """Parse Treez invoice format from extracted text and tables."""
+
+        # Detect non-Treez invoice formats (e.g., inventory receiving system)
+        # These have different header structures that we can't parse properly
+        if self._is_non_treez_format(text):
+            return {
+                'error': 'Non-Treez invoice format detected (inventory/receiving system)',
+                'format_type': 'inventory_receiving'
+            }
 
         # Initialize invoice data
         invoice = {
@@ -472,6 +482,43 @@ class TreezInvoiceParser:
         # Otherwise fall back to text parsing
         return self._extract_line_items_from_text(text)
 
+    def _is_non_treez_format(self, text: str) -> bool:
+        """
+        Detect non-Treez invoice formats that cannot be parsed by this parser.
+        Returns True if the invoice format is not a standard Treez invoice.
+        """
+        # Inventory receiving system format has different header structure
+        # Pattern: "Created Date: ... Accepted Date: ... Distributor: ... INVOICE #"
+        # vs Treez: "VENDOR_NAME Barbary Coast Dispensary FULFILLED INVOICE#"
+        inventory_format_patterns = [
+            r'Created\s+Date:.*Accepted\s+Date:.*Distributor:',  # Inventory format header
+            r'INVOICE\s*#\s*\d+\s*\n.*Created\s+Date:',  # Invoice # on separate line before dates
+            r'Inventory\s+Location:',  # Inventory location field
+            r'View\s+In\s+Inventory\s+Make\s+Payment',  # UI buttons from inventory system
+            r'Items\s*\(\d+\)\s*\n.*Line\s+Item\s+Color\s+Codes:',  # Items count with color codes
+        ]
+
+        for pattern in inventory_format_patterns:
+            if re.search(pattern, text, re.IGNORECASE | re.DOTALL):
+                return True
+
+        # Also check for absence of Treez format markers
+        # Treez invoices always have: "VENDOR Barbary Coast Dispensary STATUS INVOICE#"
+        has_treez_header = re.search(
+            r'(Barbary\s+Coast\s+Dispensary|Grass\s+Roots)\s+(FULFILLED|PENDING|CANCELLED)\s+INVOICE#',
+            text,
+            re.IGNORECASE
+        )
+
+        # If no Treez header found but has INVOICE #, it's likely a different format
+        has_invoice_marker = re.search(r'INVOICE\s*#', text, re.IGNORECASE)
+        if has_invoice_marker and not has_treez_header:
+            # Check if it looks like any known vendor format
+            if not re.search(r'Print\s+Window', text):
+                return True
+
+        return False
+
     def _clean_text(self, text: str) -> str:
         """Remove escape characters and clean text extracted by pdfplumber."""
         if not text:
@@ -542,17 +589,35 @@ class TreezInvoiceParser:
 
                 # Column 3: Type - Subtype (may have newline)
                 type_cell = self._clean_text(row[offset + 3] or '')
-                type_match = re.match(r'(PREROLL|BEVERAGE|EXTRACT|FLOWER|CARTRIDGE|EDIBLE|VAPE)\s*-\s*(.+)', type_cell, re.IGNORECASE | re.DOTALL)
+                # Extended product types to cover all cannabis and non-cannabis products
+                type_match = re.match(r'(PREROLL|BEVERA\s*GE|EXTRACT|FLOWER|CARTRIDGE|EDIBLE|VAPE|TINCTURE|MERCH|MERCHANDISE|ACCESSORY|TOPICAL|CAPSULE|CONCENTRATE|SUPPLY|SUPPLIES|ROLLING|INFUSED|APPAREL|GEAR|DEVICE|HARDWARE|PILL|TABLET|SUBLINGUAL|OIL|SPRAY|PATCH|BALM|LOTION|CREAM)\s*-\s*(.+)', type_cell, re.IGNORECASE | re.DOTALL)
                 if type_match:
-                    prod_type = type_match.group(1).upper()
+                    prod_type = type_match.group(1).upper().replace(' ', '')
                     subtype = self._clean_text(type_match.group(2))
                 else:
-                    prod_type = 'UNKNOWN'
-                    subtype = 'UNKNOWN'
+                    # Try to extract just the type without subtype
+                    type_only_match = re.match(r'(PREROLL|BEVERA\s*GE|EXTRACT|FLOWER|CARTRIDGE|EDIBLE|VAPE|TINCTURE|MERCH|MERCHANDISE|ACCESSORY|TOPICAL|CAPSULE|CONCENTRATE|SUPPLY|SUPPLIES|ROLLING|INFUSED|APPAREL|GEAR|DEVICE|HARDWARE|PILL|TABLET|SUBLINGUAL|OIL|SPRAY|PATCH|BALM|LOTION|CREAM)', type_cell, re.IGNORECASE)
+                    if type_only_match:
+                        prod_type = type_only_match.group(1).upper().replace(' ', '')
+                        subtype = type_cell[type_only_match.end():].strip(' -')
+                    else:
+                        prod_type = 'UNKNOWN'
+                        subtype = type_cell if type_cell else 'UNKNOWN'
 
                 # Column 4: Trace ID
+                # 1A prefix is for cannabis items tracked by Metrc
+                # Non-cannabis products (MERCH, ACCESSORY, ROLLING PAPERS, etc.) may have different IDs or N/A
                 trace_id = self._clean_text(row[offset + 4] or '')
-                if not trace_id or not re.match(r'1A', trace_id):
+
+                # Validate trace ID based on product type
+                is_non_cannabis = prod_type in ('MERCH', 'MERCHANDISE', 'ACCESSORY', 'ROLLING', 'SUPPLY', 'SUPPLIES', 'APPAREL', 'GEAR', 'DEVICE', 'HARDWARE')
+
+                if not trace_id:
+                    continue
+
+                # For cannabis products, require 1A prefix
+                # For non-cannabis, accept any non-empty trace ID
+                if not is_non_cannabis and not re.match(r'1A', trace_id):
                     continue
 
                 # Column 5: SKU (usually empty, skip)
@@ -691,7 +756,8 @@ class TreezInvoiceParser:
 
             # Pattern for single-line format:
             # "1 (1) 8 TRACK MAUI WOWIE [1G] PREROLL - FLOWER 1A4060300048D3D003755403 100 $1.49 $0.00 $149.00 $149.00"
-            pattern = r'^(\d+)\s+\((\d+)\)\s+(.+?)\s+(PREROLL|BEVERA\s*GE|EXTRACT|FLOWER|CARTRIDGE|EDIBLE|VAPE)\s+-\s+([A-Z\s]+?)\s+(1A[A-Z0-9]+)\s+(\d+)\s+\$?([\d,]+\.\d{2})\s+\$?([\d,]+\.\d{2})\s+\$?([\d,]+\.\d{2})\s+\$?([\d,]+\.\d{2})'
+            # Extended product types to cover cannabis and non-cannabis products
+            pattern = r'^(\d+)\s+\((\d+)\)\s+(.+?)\s+(PREROLL|BEVERA\s*GE|EXTRACT|FLOWER|CARTRIDGE|EDIBLE|VAPE|TINCTURE|MERCH|MERCHANDISE|ACCESSORY|TOPICAL|CAPSULE|CONCENTRATE|SUPPLY|SUPPLIES|ROLLING|INFUSED|APPAREL|GEAR|DEVICE|HARDWARE|PILL|TABLET|SUBLINGUAL|OIL|SPRAY|PATCH|BALM|LOTION|CREAM)\s+-\s+([A-Z\s]+?)\s+([A-Z0-9]+)\s+(\d+)\s+\$?([\d,]+\.\d{2})\s+\$?([\d,]+\.\d{2})\s+\$?([\d,]+\.\d{2})\s+\$?([\d,]+\.\d{2})'
 
             match = re.search(pattern, line)
             if not match:
@@ -844,9 +910,10 @@ class TreezInvoiceParser:
                 combined_text = ''.join(product_lines[-3:])  # Join last 3 lines
 
                 # Look for pricing pattern: Trace ID + 4 dollar amounts at the end
+                # Extended product types and flexible trace ID (not just 1A prefix)
                 pricing_match = re.search(
-                    r'(PREROLL|BEVERA\s*GE|EXTRACT|FLOWER|CARTRIDGE|EDIBLE|VAPE).*?'  # Product type (anywhere in combined text)
-                    r'(1A[A-Z0-9]+)\s+'  # Trace ID
+                    r'(PREROLL|BEVERA\s*GE|EXTRACT|FLOWER|CARTRIDGE|EDIBLE|VAPE|TINCTURE|MERCH|MERCHANDISE|ACCESSORY|TOPICAL|CAPSULE|CONCENTRATE|SUPPLY|SUPPLIES|ROLLING|INFUSED|APPAREL|GEAR|DEVICE|HARDWARE|PILL|TABLET|SUBLINGUAL|OIL|SPRAY|PATCH|BALM|LOTION|CREAM).*?'  # Product type (anywhere in combined text)
+                    r'([A-Z0-9]{10,})\s+'  # Trace ID (alphanumeric, at least 10 chars)
                     r'(\d+)\s+'  # Units
                     r'\$?([\d,]+\.\d{2})\s+'  # Cost
                     r'\$?([\d,]+\.\d{2})\s+'  # Excise
@@ -875,7 +942,7 @@ class TreezInvoiceParser:
 
             # Extract subtype from the text before trace ID
             # Common pattern: "PREROLL - INFUSED" or "BEVERAGE - SODA"
-            subtype_match = re.search(r'(?:PREROLL|BEVERA\s*GE|EXTRACT|FLOWER|CARTRIDGE|EDIBLE|VAPE)\s*-\s*([A-Z\s]+?)(?:1A|$)', combined_text)
+            subtype_match = re.search(r'(?:PREROLL|BEVERA\s*GE|EXTRACT|FLOWER|CARTRIDGE|EDIBLE|VAPE|TINCTURE|MERCH|MERCHANDISE|ACCESSORY|TOPICAL|CAPSULE|CONCENTRATE|SUPPLY|SUPPLIES|ROLLING|INFUSED|APPAREL|GEAR|DEVICE|HARDWARE|PILL|TABLET|SUBLINGUAL|OIL|SPRAY|PATCH|BALM|LOTION|CREAM)\s*-\s*([A-Z\s]+?)(?:[A-Z0-9]{10,}|$)', combined_text)
             subtype = subtype_match.group(1).strip() if subtype_match else 'UNKNOWN'
 
             # Reconstruct brand and product name from collected lines
@@ -891,7 +958,7 @@ class TreezInvoiceParser:
             text_clean = re.sub(r'\s+', ' ', text_before_pricing)
 
             # Remove product type keyword if it appears (PREROLL, BEVERAGE, etc.)
-            text_clean = re.sub(r'(PREROLL|BEVERA\s*GE|EXTRACT|FLOWER|CARTRIDGE|EDIBLE|VAPE)\s*-?\s*$', '', text_clean, flags=re.IGNORECASE).strip()
+            text_clean = re.sub(r'(PREROLL|BEVERA\s*GE|EXTRACT|FLOWER|CARTRIDGE|EDIBLE|VAPE|TINCTURE|MERCH|MERCHANDISE|ACCESSORY|TOPICAL|CAPSULE|CONCENTRATE|SUPPLY|SUPPLIES|ROLLING|INFUSED|APPAREL|GEAR|DEVICE|HARDWARE|PILL|TABLET|SUBLINGUAL|OIL|SPRAY|PATCH|BALM|LOTION|CREAM)\s*-?\s*$', '', text_clean, flags=re.IGNORECASE).strip()
 
             # Try to split brand and product
             # Brand is typically 1-4 words at start (all caps, may have special chars)
