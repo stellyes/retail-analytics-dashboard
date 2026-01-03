@@ -145,13 +145,16 @@ def process_invoices(uploaded_files: List, parser: TreezInvoiceParser,
             # Read PDF bytes
             pdf_bytes = uploaded_file.read()
 
-            # Save temporarily to process (PyPDF2 needs a file path)
+            # Save temporarily to process (pdfplumber needs a file path)
+            # IMPORTANT: Preserve original filename for invoice number/date extraction fallback
             import tempfile
             import os
 
-            with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp_file:
+            # Create temp directory and save with original filename
+            tmp_dir = tempfile.mkdtemp()
+            tmp_path = os.path.join(tmp_dir, filename)
+            with open(tmp_path, 'wb') as tmp_file:
                 tmp_file.write(pdf_bytes)
-                tmp_path = tmp_file.name
 
             try:
                 # Extract invoice data
@@ -187,8 +190,13 @@ def process_invoices(uploaded_files: List, parser: TreezInvoiceParser,
                         })
 
             finally:
-                # Clean up temp file
-                os.unlink(tmp_path)
+                # Clean up temp file and directory
+                import shutil
+                try:
+                    os.unlink(tmp_path)
+                    shutil.rmtree(tmp_dir, ignore_errors=True)
+                except:
+                    pass
 
         except Exception as e:
             results['failed'].append({

@@ -71,7 +71,7 @@ class TreezInvoiceParser:
             invoice_data['extracted_at'] = datetime.now().isoformat()
             invoice_data['extraction_method'] = 'pdf_parsing'
 
-            # Extract from filename (primary method for Treez invoices)
+            # Extract from filename (for invoice number and download date)
             # Format: invoice_13608_20251230_173551.pdf
             # Parts: invoice_[NUMBER]_[YYYYMMDD]_[HHMMSS].pdf
             filename = os.path.basename(pdf_path)
@@ -80,24 +80,28 @@ class TreezInvoiceParser:
             if filename_match:
                 invoice_num, date_str, time_str = filename_match.groups()
 
-                # Set invoice number (filename is more reliable than PDF text)
-                invoice_data['invoice_number'] = invoice_num
-                invoice_data['invoice_id'] = invoice_num
+                # Set invoice number from filename (more reliable than PDF text for problematic PDFs)
+                if not invoice_data.get('invoice_number'):
+                    invoice_data['invoice_number'] = invoice_num
+                    invoice_data['invoice_id'] = invoice_num
 
-                # Parse date from filename if not found in PDF
+                # Parse download date from filename (when invoice was downloaded/exported)
+                try:
+                    year = date_str[:4]
+                    month = date_str[4:6]
+                    day = date_str[6:8]
+                    invoice_data['download_date'] = f"{year}-{month}-{day}"
+                except:
+                    pass
+
+                # Use filename date as fallback for invoice_date ONLY if PDF extraction failed
+                # (invoice_date should come from "Created:" in PDF header)
                 if not invoice_data.get('invoice_date'):
-                    try:
-                        # Convert YYYYMMDD to YYYY-MM-DD
-                        year = date_str[:4]
-                        month = date_str[4:6]
-                        day = date_str[6:8]
-                        invoice_data['invoice_date'] = f"{year}-{month}-{day}"
-                    except:
-                        pass
+                    invoice_data['invoice_date'] = invoice_data.get('download_date')
             else:
-                # Fallback: try simpler pattern
+                # Fallback: try simpler pattern for invoice number only
                 filename_match = re.search(r'invoice[_\s-]*(\d+)', filename, re.IGNORECASE)
-                if filename_match:
+                if filename_match and not invoice_data.get('invoice_number'):
                     invoice_data['invoice_number'] = filename_match.group(1)
                     invoice_data['invoice_id'] = filename_match.group(1)
 
@@ -1075,6 +1079,8 @@ class InvoiceDataService:
             }
 
             # Add optional fields only if they have non-None values
+            # Note: invoice_date is the "Created:" date from the PDF header (when business created the invoice)
+            # download_date is when the invoice was downloaded/exported (from filename timestamp)
             optional_fields = {
                 'vendor': invoice_data.get('vendor'),
                 'vendor_license': invoice_data.get('vendor_license'),
@@ -1082,6 +1088,7 @@ class InvoiceDataService:
                 'customer_name': invoice_data.get('customer_name'),
                 'customer_address': invoice_data.get('customer_address'),
                 'invoice_date': invoice_data.get('invoice_date'),
+                'download_date': invoice_data.get('download_date'),
                 'created_by': invoice_data.get('created_by'),
                 'payment_terms': invoice_data.get('payment_terms'),
                 'status': invoice_data.get('status'),
@@ -1129,8 +1136,12 @@ class InvoiceDataService:
                     line_item['strain'] = item['strain']
                 if item.get('unit_size'):
                     line_item['unit_size'] = item['unit_size']
+                # invoice_date = when business created the invoice (from PDF "Created:" header)
                 if invoice_data.get('invoice_date'):
                     line_item['invoice_date'] = invoice_data['invoice_date']
+                # download_date = when invoice was downloaded/exported (from filename timestamp)
+                if invoice_data.get('download_date'):
+                    line_item['download_date'] = invoice_data['download_date']
 
                 line_items_table.put_item(Item=line_item)
 
