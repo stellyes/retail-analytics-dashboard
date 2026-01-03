@@ -27,6 +27,8 @@ def _init_date_review_state():
         st.session_state.invoices_needing_date_review = []
     if 'date_review_loaded_from_dynamo' not in st.session_state:
         st.session_state.date_review_loaded_from_dynamo = False
+    if 'duplicate_invoices' not in st.session_state:
+        st.session_state.duplicate_invoices = []
 
 
 def _load_invoices_needing_review_from_dynamo():
@@ -59,21 +61,55 @@ def _load_invoices_needing_review_from_dynamo():
             items.extend(response.get('Items', []))
 
         # Find invoices needing date review (no invoice_date field)
+        # Also detect duplicates based on invoice_number
+        invoice_numbers_seen = {}
+
         for item in items:
+            invoice_number = item.get('invoice_number')
+            invoice_id = item.get('invoice_id')
+
+            # Track for duplicate detection
+            if invoice_number:
+                if invoice_number not in invoice_numbers_seen:
+                    invoice_numbers_seen[invoice_number] = []
+                invoice_numbers_seen[invoice_number].append(item)
+
+            # Add to date review if missing date
             if not item.get('invoice_date'):
-                invoice_id = item.get('invoice_id')
                 # Check if already in the review list
                 existing_ids = [inv['invoice_id'] for inv in st.session_state.invoices_needing_date_review]
                 if invoice_id and invoice_id not in existing_ids:
                     st.session_state.invoices_needing_date_review.append({
                         'invoice_id': invoice_id,
-                        'invoice_number': item.get('invoice_number', invoice_id),
+                        'invoice_number': invoice_number or invoice_id,
                         'filename': item.get('source_file', 'Unknown'),
                         'vendor': item.get('vendor', 'Unknown'),
                         'download_date': item.get('download_date'),
                         'total': float(item.get('total', 0)),
                         'added_at': datetime.now().isoformat()
                     })
+
+        # Find duplicates (same invoice_number appearing multiple times)
+        for inv_num, invoices in invoice_numbers_seen.items():
+            if len(invoices) > 1:
+                # Sort by extracted_at to find oldest and newest
+                sorted_invoices = sorted(invoices, key=lambda x: x.get('extracted_at', ''))
+                st.session_state.duplicate_invoices.append({
+                    'invoice_number': inv_num,
+                    'count': len(invoices),
+                    'invoices': [
+                        {
+                            'invoice_id': inv.get('invoice_id'),
+                            'vendor': inv.get('vendor'),
+                            'total': float(inv.get('total', 0)),
+                            'invoice_date': inv.get('invoice_date'),
+                            'download_date': inv.get('download_date'),
+                            'extracted_at': inv.get('extracted_at'),
+                            'source_file': inv.get('source_file')
+                        }
+                        for inv in sorted_invoices
+                    ]
+                })
 
         st.session_state.date_review_loaded_from_dynamo = True
 
@@ -229,6 +265,23 @@ def process_invoices(uploaded_files: List, parser: TreezInvoiceParser,
                         'stage': 'extraction'
                     })
                 else:
+                    # Check for duplicates before storing
+                    invoice_number = invoice_data.get('invoice_number')
+                    is_duplicate = False
+
+                    if invoice_number:
+                        try:
+                            # Query DynamoDB to check if invoice already exists
+                            invoices_table = invoice_service.dynamodb.Table(invoice_service.invoices_table_name)
+                            response = invoices_table.scan(
+                                FilterExpression='invoice_number = :inv_num',
+                                ExpressionAttributeValues={':inv_num': invoice_number}
+                            )
+                            if response.get('Items'):
+                                is_duplicate = True
+                        except:
+                            pass  # If check fails, proceed with storing
+
                     # Store in DynamoDB
                     success = invoice_service.store_invoice(invoice_data)
 
@@ -242,7 +295,8 @@ def process_invoices(uploaded_files: List, parser: TreezInvoiceParser,
                             'line_items': len(invoice_data.get('line_items', [])),
                             'invoice_date': invoice_data.get('invoice_date'),
                             'download_date': invoice_data.get('download_date'),
-                            'date_extraction_failed': invoice_data.get('_date_extraction_failed', False)
+                            'date_extraction_failed': invoice_data.get('_date_extraction_failed', False),
+                            'is_duplicate': is_duplicate
                         }
                         results['successful'].append(result_item)
 
@@ -334,12 +388,18 @@ def display_processing_results(results: Dict, container):
             if needs_review:
                 st.warning(f"⚠️ {len(needs_review)} invoice(s) need manual date entry. Go to the '📅 Date Review' tab.")
 
+            # Check for duplicates
+            duplicates = [item for item in results['successful'] if item.get('is_duplicate')]
+            if duplicates:
+                st.warning(f"⚠️ {len(duplicates)} duplicate invoice(s) detected. Go to the '🔍 Duplicates' tab to review.")
+
             with st.expander("View Successful Uploads", expanded=True):
                 for item in results['successful']:
                     date_display = item['invoice_date'] if item['invoice_date'] else "⚠️ Needs manual entry"
                     date_warning = " *(date extraction failed)*" if item.get('date_extraction_failed') else ""
+                    duplicate_warning = " **⚠️ DUPLICATE**" if item.get('is_duplicate') else ""
                     st.markdown(f"""
-                    **{item['filename']}**
+                    **{item['filename']}**{duplicate_warning}
                     - Invoice #: `{item['invoice_number']}`
                     - Vendor: {item['vendor']}
                     - Date: {date_display}{date_warning}
@@ -494,8 +554,9 @@ def render_full_invoice_section():
 
     # Static tab labels
     st.write(f"Debug: invoices_needing_date_review count = {len(st.session_state.invoices_needing_date_review)}")
+    st.write(f"Debug: duplicate_invoices count = {len(st.session_state.duplicate_invoices)}")
 
-    tab1, tab2, tab3 = st.tabs(["📤 Upload Invoices", "📊 View Data", "📅 Date Review"])
+    tab1, tab2, tab3, tab4 = st.tabs(["📤 Upload Invoices", "📊 View Data", "📅 Date Review", "🔍 Duplicates"])
 
     with tab1:
         render_invoice_upload_section()
@@ -505,6 +566,9 @@ def render_full_invoice_section():
 
     with tab3:
         render_date_review_section()
+
+    with tab4:
+        render_duplicates_section()
 
 
 def render_date_review_section():
@@ -664,4 +728,129 @@ def _update_invoice_date(invoice_service: InvoiceDataService, invoice_id: str, i
 
     except Exception as e:
         print(f"Error updating invoice date: {e}")
+        return False
+
+
+def render_duplicates_section():
+    """
+    Render the duplicates section showing invoices with the same invoice_number.
+    Allows users to review and delete duplicate entries.
+    """
+    st.header("🔍 Duplicate Invoices")
+
+    _init_date_review_state()
+
+    duplicates = st.session_state.duplicate_invoices
+
+    if not duplicates:
+        st.success("✅ No duplicate invoices found!")
+        st.info("Duplicate detection looks for invoices with the same invoice number. When duplicates are found, they'll appear here for review.")
+        return
+
+    st.markdown(f"""
+    **{len(duplicates)} invoice number(s)** have duplicates in the database.
+
+    Review each duplicate set below and delete unwanted copies.
+    """)
+
+    # Get AWS credentials and service
+    try:
+        aws_config = {
+            'aws_access_key': st.secrets['aws']['access_key_id'],
+            'aws_secret_key': st.secrets['aws']['secret_access_key'],
+            'region': st.secrets['aws']['region']
+        }
+        invoice_service = InvoiceDataService(**aws_config)
+    except Exception as e:
+        st.error(f"⚠️ AWS credentials not found. Cannot manage duplicates: {e}")
+        return
+
+    # Stats
+    total_duplicate_count = sum(dup['count'] for dup in duplicates)
+    st.warning(f"📊 **{total_duplicate_count}** total invoice entries across **{len(duplicates)}** invoice numbers")
+
+    st.markdown("---")
+
+    # Process each duplicate set
+    for dup_set in duplicates:
+        with st.expander(f"Invoice #{dup_set['invoice_number']} - {dup_set['count']} copies", expanded=False):
+            st.markdown(f"**{dup_set['count']} entries found for invoice #{dup_set['invoice_number']}**")
+
+            for idx, invoice in enumerate(dup_set['invoices']):
+                col1, col2, col3 = st.columns([3, 2, 1])
+
+                with col1:
+                    st.markdown(f"**Copy {idx + 1}**")
+                    st.caption(f"Invoice ID: {invoice['invoice_id']}")
+                    st.caption(f"Vendor: {invoice.get('vendor', 'Unknown')}")
+                    st.caption(f"File: {invoice.get('source_file', 'Unknown')}")
+
+                with col2:
+                    st.caption(f"Date: {invoice.get('invoice_date', 'None')}")
+                    st.caption(f"Download: {invoice.get('download_date', 'Unknown')}")
+                    st.caption(f"Total: ${invoice.get('total', 0):,.2f}")
+                    st.caption(f"Extracted: {invoice.get('extracted_at', 'Unknown')[:10]}")
+
+                with col3:
+                    st.markdown("<br>", unsafe_allow_html=True)
+                    if st.button("🗑️ Delete", key=f"delete_dup_{invoice['invoice_id']}", use_container_width=True):
+                        success = _delete_invoice(invoice_service, invoice['invoice_id'])
+                        if success:
+                            st.success(f"✅ Deleted invoice {invoice['invoice_id']}")
+                            # Remove from duplicates list
+                            # Reload duplicates from DynamoDB
+                            st.session_state.date_review_loaded_from_dynamo = False
+                            st.session_state.duplicate_invoices = []
+                            st.rerun()
+                        else:
+                            st.error("Failed to delete invoice")
+
+                st.markdown("---")
+
+    # Bulk actions
+    st.subheader("Bulk Actions")
+    if st.button("🔄 Refresh Duplicate Detection", use_container_width=True):
+        st.session_state.date_review_loaded_from_dynamo = False
+        st.session_state.duplicate_invoices = []
+        st.rerun()
+
+
+def _delete_invoice(invoice_service: InvoiceDataService, invoice_id: str) -> bool:
+    """
+    Delete an invoice and all its line items from DynamoDB.
+
+    Args:
+        invoice_service: InvoiceDataService instance
+        invoice_id: The invoice ID to delete
+
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        # Delete invoice header
+        invoices_table = invoice_service.dynamodb.Table(invoice_service.invoices_table_name)
+        invoices_table.delete_item(Key={'invoice_id': invoice_id})
+
+        # Delete all line items for this invoice
+        line_items_table = invoice_service.dynamodb.Table(invoice_service.line_items_table_name)
+
+        # Query all line items for this invoice
+        response = line_items_table.query(
+            KeyConditionExpression='invoice_id = :inv_id',
+            ExpressionAttributeValues={':inv_id': invoice_id}
+        )
+
+        # Delete each line item
+        for item in response.get('Items', []):
+            line_items_table.delete_item(
+                Key={
+                    'invoice_id': invoice_id,
+                    'line_number': item['line_number']
+                }
+            )
+
+        return True
+
+    except Exception as e:
+        print(f"Error deleting invoice: {e}")
         return False
