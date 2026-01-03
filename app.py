@@ -3203,10 +3203,10 @@ def render_upload_page(s3_manager, processor):
     - 💰 **Cost-efficient** - Saves $50-200 per 100 invoices vs traditional extraction
     """)
 
-    # Use the integrated invoice upload UI
+    # Use the integrated invoice upload UI with all tabs (Upload, View Data, Date Review)
     try:
-        from invoice_upload_ui import render_invoice_upload_section
-        render_invoice_upload_section()
+        from invoice_upload_ui import render_full_invoice_section
+        render_full_invoice_section()
     except ImportError:
         st.warning("Invoice upload module not available. Make sure invoice_upload_ui.py is installed.")
         st.info("📦 Install the invoice_upload_ui module to enable automatic PDF extraction and DynamoDB storage.")
