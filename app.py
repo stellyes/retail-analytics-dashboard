@@ -919,6 +919,93 @@ def plot_store_comparison(metrics: dict):
 
 
 # =============================================================================
+# INVOICE DATA LOADING FROM DYNAMODB
+# =============================================================================
+
+def load_invoice_data_from_dynamodb(invoice_service):
+    """
+    Load invoice line items from DynamoDB and convert to pandas DataFrame.
+
+    Args:
+        invoice_service: InvoiceDataService instance
+
+    Returns:
+        pd.DataFrame with invoice line items, or None if loading fails
+    """
+    try:
+        from decimal import Decimal
+
+        # Get the line items table
+        line_items_table = invoice_service.dynamodb.Table(invoice_service.line_items_table_name)
+
+        # Scan all line items
+        response = line_items_table.scan()
+        items = response.get('Items', [])
+
+        # Handle pagination
+        while 'LastEvaluatedKey' in response:
+            response = line_items_table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+            items.extend(response.get('Items', []))
+
+        if not items:
+            return None
+
+        # Convert DynamoDB items to DataFrame
+        # Convert Decimal to float for pandas compatibility
+        records = []
+        for item in items:
+            record = {}
+            for key, value in item.items():
+                if isinstance(value, Decimal):
+                    record[key] = float(value)
+                else:
+                    record[key] = value
+            records.append(record)
+
+        df = pd.DataFrame(records)
+
+        # Rename columns to match expected format for analytics
+        # Map DynamoDB schema to app's expected invoice data schema
+        column_mapping = {
+            'invoice_id': 'Invoice Number',
+            'invoice_date': 'Invoice Date',
+            'download_date': 'Download Date',
+            'brand': 'Brand',
+            'product_name': 'Product',
+            'product_type': 'Product Type',
+            'product_subtype': 'Product Subtype',
+            'sku_units': 'Units',
+            'unit_cost': 'Unit Cost',
+            'total_cost': 'Total Cost',
+            'total_cost_with_excise': 'Total Cost With Excise',
+            'trace_id': 'Trace ID',
+            'strain': 'Strain',
+            'unit_size': 'Unit Size',
+            'is_promo': 'Is Promo'
+        }
+
+        # Rename columns that exist
+        for old_name, new_name in column_mapping.items():
+            if old_name in df.columns:
+                df.rename(columns={old_name: new_name}, inplace=True)
+
+        # Convert date columns to datetime
+        if 'Invoice Date' in df.columns:
+            df['Invoice Date'] = pd.to_datetime(df['Invoice Date'], errors='coerce')
+        if 'Download Date' in df.columns:
+            df['Download Date'] = pd.to_datetime(df['Download Date'], errors='coerce')
+
+        # Add a source column to distinguish DynamoDB data from S3 data
+        df['Data Source'] = 'DynamoDB'
+
+        return df
+
+    except Exception as e:
+        print(f"Error loading invoice data from DynamoDB: {e}")
+        return None
+
+
+# =============================================================================
 # MAIN APPLICATION
 # =============================================================================
 
@@ -952,13 +1039,13 @@ def main():
     if 'brand_product_mapping' not in st.session_state:
         st.session_state.brand_product_mapping = None
     
-    # Auto-load data from S3 on first run of session
+    # Auto-load data from S3 and DynamoDB on first run of session
     if not st.session_state.data_loaded_from_s3:
-        with st.spinner("🔄 Loading data from S3..."):
+        with st.spinner("🔄 Loading data from S3 and DynamoDB..."):
             # Load brand-product mapping
             st.session_state.brand_product_mapping = s3_manager.load_brand_product_mapping()
-            
-            # Load all CSV data
+
+            # Load all CSV data from S3
             loaded_data = s3_manager.load_all_data_from_s3(processor)
 
             if loaded_data['sales'] is not None:
@@ -971,6 +1058,31 @@ def main():
                 st.session_state.customer_data = loaded_data['customer']
             if loaded_data['invoice'] is not None:
                 st.session_state.invoice_data = loaded_data['invoice']
+
+            # Load invoice data from DynamoDB
+            try:
+                from invoice_extraction import InvoiceDataService
+                aws_config = {
+                    'aws_access_key': st.secrets['aws']['access_key_id'],
+                    'aws_secret_key': st.secrets['aws']['secret_access_key'],
+                    'region': st.secrets['aws']['region']
+                }
+                invoice_service = InvoiceDataService(**aws_config)
+
+                # Load all invoice line items from DynamoDB
+                dynamo_invoice_df = load_invoice_data_from_dynamodb(invoice_service)
+                if dynamo_invoice_df is not None and len(dynamo_invoice_df) > 0:
+                    # Merge with existing invoice data from S3 if any
+                    if st.session_state.invoice_data is not None:
+                        st.session_state.invoice_data = pd.concat([
+                            st.session_state.invoice_data,
+                            dynamo_invoice_df
+                        ], ignore_index=True).drop_duplicates()
+                    else:
+                        st.session_state.invoice_data = dynamo_invoice_df
+            except Exception as e:
+                # Silently fail if DynamoDB is not accessible - don't block app startup
+                pass
 
             st.session_state.data_loaded_from_s3 = True
 
