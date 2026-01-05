@@ -145,10 +145,17 @@ def render_invoice_upload_section():
         parser = TreezInvoiceParser()
         invoice_service = InvoiceDataService(**aws_config)
 
-        # Check if tables exist, offer to create them
+        # Check if tables exist on first load
         if 'invoice_tables_created' not in st.session_state:
-            st.session_state.invoice_tables_created = False
+            # Try to check if tables exist by describing them
+            try:
+                invoice_service.dynamodb.Table(invoice_service.invoices_table_name).table_status
+                invoice_service.dynamodb.Table(invoice_service.line_items_table_name).table_status
+                st.session_state.invoice_tables_created = True
+            except Exception:
+                st.session_state.invoice_tables_created = False
 
+        # Only show setup if tables don't exist
         if not st.session_state.invoice_tables_created:
             with st.expander("⚙️ One-Time Setup: Create DynamoDB Tables", expanded=False):
                 st.markdown("""
@@ -158,7 +165,6 @@ def render_invoice_upload_section():
                 **Tables to be created:**
                 - `retail-invoices` - Invoice headers
                 - `retail-invoice-line-items` - Product line items
-                - `retail-invoice-aggregations` - Pre-computed summaries
                 """)
 
                 if st.button("Create DynamoDB Tables"):
