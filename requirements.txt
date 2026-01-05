@@ -25,3 +25,4 @@ requests>=2.31.0
 
 # PDF Processing
 pdfplumber>=0.10.0
+pymupdf>=1.23.0  # Better text extraction for problematic fonts

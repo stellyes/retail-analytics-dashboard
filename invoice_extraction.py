@@ -1,6 +1,7 @@
 """
 Invoice Extraction Module - Direct PDF Parsing
-Extracts structured data from Treez invoice PDFs using pdfplumber for superior table extraction.
+Extracts structured data from Treez invoice PDFs using pdfplumber for superior table extraction
+and PyMuPDF (fitz) for text extraction (better font handling for dates).
 No Claude API calls needed - saves costs and improves speed.
 
 Usage:
@@ -22,6 +23,13 @@ from datetime import datetime
 from decimal import Decimal
 import pdfplumber
 
+# PyMuPDF for better text extraction (handles problematic fonts that render as null bytes)
+try:
+    import fitz  # PyMuPDF
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    PYMUPDF_AVAILABLE = False
+
 try:
     import boto3
     from boto3.dynamodb.conditions import Key, Attr
@@ -41,7 +49,8 @@ class TreezInvoiceParser:
 
     def extract_from_pdf(self, pdf_path: str) -> Dict:
         """
-        Extract invoice data from a Treez PDF invoice using pdfplumber.
+        Extract invoice data from a Treez PDF invoice.
+        Uses PyMuPDF for text extraction (better font handling) and pdfplumber for tables.
 
         Args:
             pdf_path: Path to the PDF invoice file
@@ -50,15 +59,28 @@ class TreezInvoiceParser:
             Dictionary containing structured invoice data
         """
         try:
+            # Extract text using PyMuPDF (handles problematic fonts that render as null bytes)
+            all_text = ""
+            if PYMUPDF_AVAILABLE:
+                try:
+                    doc = fitz.open(pdf_path)
+                    for page in doc:
+                        all_text += page.get_text() + "\n"
+                    doc.close()
+                except Exception as e:
+                    # Fall back to pdfplumber if PyMuPDF fails
+                    all_text = ""
+
+            # Extract tables using pdfplumber (better at table extraction)
+            all_tables = []
             with pdfplumber.open(pdf_path) as pdf:
-                # Extract from all pages
-                all_text = ""
-                all_tables = []
+                # If PyMuPDF wasn't available or failed, use pdfplumber for text too
+                if not all_text:
+                    for page in pdf.pages:
+                        all_text += (page.extract_text() or "") + "\n"
 
+                # Extract tables from all pages
                 for page in pdf.pages:
-                    all_text += page.extract_text() + "\n"
-
-                    # Extract tables from this page
                     tables = page.extract_tables()
                     if tables:
                         all_tables.extend(tables)
