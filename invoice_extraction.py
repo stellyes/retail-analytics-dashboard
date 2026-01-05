@@ -1241,16 +1241,27 @@ class InvoiceDataService:
         """
         invoices_table = self.dynamodb.Table(self.invoices_table_name)
 
-        # Query invoices
-        if start_date and end_date:
-            response = invoices_table.query(
-                IndexName='date-index',
-                KeyConditionExpression=Key('invoice_date').between(start_date, end_date)
-            )
-        else:
-            response = invoices_table.scan()
-
+        # Always use scan - it's more reliable and works without requiring specific indexes
+        response = invoices_table.scan()
         invoices = response.get('Items', [])
+
+        # Handle pagination
+        while 'LastEvaluatedKey' in response:
+            response = invoices_table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+            invoices.extend(response.get('Items', []))
+
+        # Filter by date if specified (post-scan filtering)
+        if start_date or end_date:
+            filtered = []
+            for inv in invoices:
+                inv_date = inv.get('invoice_date')
+                if inv_date:
+                    if start_date and inv_date < start_date:
+                        continue
+                    if end_date and inv_date > end_date:
+                        continue
+                filtered.append(inv)
+            invoices = filtered
 
         # Calculate summary statistics
         total_invoices = len(invoices)
@@ -1284,6 +1295,11 @@ class InvoiceDataService:
 
         response = line_items_table.scan()
         items = response.get('Items', [])
+
+        # Handle pagination
+        while 'LastEvaluatedKey' in response:
+            response = line_items_table.scan(ExclusiveStartKey=response['LastEvaluatedKey'])
+            items.extend(response.get('Items', []))
 
         # Filter by date if specified
         if start_date or end_date:
