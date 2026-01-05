@@ -24,19 +24,40 @@ try:
 except ImportError:
     CLAUDE_AVAILABLE = False
 
+# Import Invoice Analytics for DynamoDB data access in Claude Q&A (optional)
+try:
+    from invoice_extraction import InvoiceDataService
+    INVOICE_DATA_AVAILABLE = True
+except ImportError:
+    INVOICE_DATA_AVAILABLE = False
+
 # Import Research Integration (optional)
 try:
-    from research_integration import render_research_page
+    from research_integration import render_research_page, ResearchFindingsViewer
     RESEARCH_AVAILABLE = True
 except ImportError:
     RESEARCH_AVAILABLE = False
 
 # Import SEO Integration (optional)
 try:
-    from seo_integration import render_seo_page
+    from seo_integration import render_seo_page, SEOFindingsViewer
     SEO_AVAILABLE = True
 except ImportError:
     SEO_AVAILABLE = False
+
+# Import Manual Research Integration for findings access (optional)
+try:
+    from manual_research_integration import MonthlyResearchSummarizer
+    MANUAL_RESEARCH_AVAILABLE = True
+except ImportError:
+    MANUAL_RESEARCH_AVAILABLE = False
+
+# Import Insights Engine for AI-free rule-based analysis (optional)
+try:
+    from insights_engine import InsightsEngine, get_insights_engine, InsightPriority
+    INSIGHTS_ENGINE_AVAILABLE = True
+except ImportError:
+    INSIGHTS_ENGINE_AVAILABLE = False
 
 # Import QR Code Integration (optional)
 try:
@@ -2446,43 +2467,262 @@ def render_product_analysis(state, store_filter=None, date_filter=None):
     st.plotly_chart(fig, use_container_width=True)
 
 
+def _render_comprehensive_insights(state, analytics):
+    """
+    Render comprehensive rule-based insights using the InsightsEngine.
+    Gathers data from all available sources and generates AI-free insights.
+    """
+    st.markdown("**Comprehensive Rule-Based Analysis** - No API costs")
+    st.caption("Insights are cached for 24 hours and automatically refresh when data changes.")
+
+    # Initialize InsightsEngine with AWS credentials
+    try:
+        aws_config = {
+            'aws_access_key': st.secrets['aws']['access_key_id'],
+            'aws_secret_key': st.secrets['aws']['secret_access_key'],
+            'region': st.secrets['aws'].get('region', 'us-west-1')
+        }
+        insights_engine = get_insights_engine(aws_config)
+    except Exception as e:
+        st.warning(f"Could not initialize insights engine with caching: {e}")
+        insights_engine = InsightsEngine()  # No caching fallback
+
+    # Gather all available data sources
+    data_sources = {}
+    data_status = []
+
+    # 1. Sales Data (always available at this point)
+    metrics = analytics.calculate_store_metrics(state.sales_data)
+    store_comparison = {}
+    aov_data = {}
+    for store_name, store_metrics in metrics.items():
+        store_comparison[store_name] = {
+            'total_sales': store_metrics.get('total_sales', 0),
+            'total_transactions': store_metrics.get('total_transactions', 0),
+            'avg_margin': store_metrics.get('avg_margin', 0)
+        }
+        aov_data[store_name] = store_metrics.get('avg_order_value', 0)
+
+    data_sources['sales_data'] = {
+        'store_comparison': store_comparison,
+        'aov': aov_data,
+        'margin': sum(m.get('avg_margin', 0) for m in metrics.values()) / max(len(metrics), 1)
+    }
+    data_status.append("Sales")
+
+    # 2. Brand Data
+    if state.brand_data is not None and len(state.brand_data) > 0:
+        brand_dict = {}
+        total_sales = state.brand_data['Net Sales'].sum()
+        for _, row in state.brand_data.iterrows():
+            brand_dict[row['Brand']] = {
+                'sales': row.get('Net Sales', 0),
+                'units': row.get('Qty Sold', 0),
+                'margin': row.get('Gross Margin %', 0)
+            }
+        data_sources['brand_data'] = {
+            'brands': brand_dict,
+            'total_sales': total_sales
+        }
+        data_status.append("Brands")
+
+    # 3. Customer Data (from session state metrics)
+    if metrics:
+        customer_data = {}
+        total_customers = sum(m.get('total_customers', 0) for m in metrics.values())
+        total_new = sum(m.get('total_new_customers', 0) for m in metrics.values())
+        if total_customers > 0:
+            customer_data['new_customer_rate'] = (total_new / total_customers) * 100
+            # Estimate concentration (top customers)
+            customer_data['top_customer_revenue_pct'] = 25  # Placeholder - would need real data
+            data_sources['customer_data'] = customer_data
+            data_status.append("Customers")
+
+    # 4. Invoice/Purchasing Data from DynamoDB
+    if INVOICE_DATA_AVAILABLE:
+        try:
+            invoice_service = InvoiceDataService(
+                aws_access_key=st.secrets['aws']['access_key_id'],
+                aws_secret_key=st.secrets['aws']['secret_access_key'],
+                region=st.secrets['aws'].get('region', 'us-west-1')
+            )
+            invoice_summary = invoice_service.get_invoice_summary()
+            product_summary = invoice_service.get_product_summary()
+
+            if invoice_summary and invoice_summary.get('total_invoices', 0) > 0:
+                data_sources['invoice_data'] = invoice_summary
+                data_status.append("Invoices")
+
+            if product_summary and product_summary.get('total_items', 0) > 0:
+                data_sources['product_data'] = product_summary
+                data_status.append("Products")
+        except Exception as e:
+            st.caption(f"Invoice data unavailable: {str(e)[:50]}")
+
+    # 5. Research Findings from S3
+    if RESEARCH_AVAILABLE:
+        try:
+            research_viewer = ResearchFindingsViewer()
+            if research_viewer.is_available():
+                research_summary = research_viewer.load_latest_summary()
+                if research_summary:
+                    data_sources['research_data'] = {
+                        'key_findings': research_summary.get('key_findings', []),
+                        'action_items': research_summary.get('action_items', []),
+                        'tracking_items': research_summary.get('tracking_items', [])
+                    }
+                    data_status.append("Research")
+        except Exception as e:
+            st.caption(f"Research data unavailable: {str(e)[:50]}")
+
+    # 6. SEO Analysis from S3
+    if SEO_AVAILABLE:
+        try:
+            seo_data = {}
+            for site_name, site_url in [("Barbary Coast", "https://barbarycoastsf.com"),
+                                        ("Grass Roots", "https://grassrootssf.com")]:
+                seo_viewer = SEOFindingsViewer(website=site_url)
+                if seo_viewer.is_available():
+                    seo_summary = seo_viewer.load_latest_summary()
+                    if seo_summary:
+                        seo_data[site_name] = {
+                            'overall_score': seo_summary.get('overall_score', 0),
+                            'categories': seo_summary.get('categories', {}),
+                            'top_priorities': seo_summary.get('top_priorities', []),
+                            'quick_wins': seo_summary.get('quick_wins', [])
+                        }
+            if seo_data:
+                data_sources['seo_data'] = seo_data
+                data_status.append("SEO")
+        except Exception as e:
+            st.caption(f"SEO data unavailable: {str(e)[:50]}")
+
+    # Show data sources status
+    st.success(f"Analyzing data from: {', '.join(data_status)}")
+
+    # Generate insights
+    with st.spinner("Generating insights..."):
+        insights = insights_engine.generate_all_insights(data_sources)
+
+    if not insights:
+        st.info("No actionable insights at this time. Your data looks good!")
+        return
+
+    # Display insights by priority
+    critical = [i for i in insights if i['priority'] == 'critical']
+    high = [i for i in insights if i['priority'] == 'high']
+    medium = [i for i in insights if i['priority'] == 'medium']
+    low = [i for i in insights if i['priority'] == 'low']
+
+    # Summary metrics
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Critical", len(critical), delta=None)
+    col2.metric("High Priority", len(high), delta=None)
+    col3.metric("Medium Priority", len(medium), delta=None)
+    col4.metric("Low Priority / Info", len(low), delta=None)
+
+    st.divider()
+
+    # Critical issues - always expanded
+    if critical:
+        st.subheader("🚨 Critical - Immediate Action Required")
+        for insight in critical:
+            with st.expander(f"🔴 {insight['title']}", expanded=True):
+                st.error(insight['description'])
+                st.markdown(f"**Recommendation:** {insight['recommendation']}")
+                st.caption(f"Source: {insight['data_source']} | Category: {insight['category']}")
+
+    # High priority
+    if high:
+        st.subheader("⚠️ High Priority")
+        for insight in high:
+            with st.expander(f"🟠 {insight['title']}", expanded=len(critical) == 0):
+                st.warning(insight['description'])
+                st.markdown(f"**Recommendation:** {insight['recommendation']}")
+                st.caption(f"Source: {insight['data_source']} | Category: {insight['category']}")
+
+    # Medium priority
+    if medium:
+        st.subheader("📊 Medium Priority")
+        for insight in medium:
+            with st.expander(f"🟡 {insight['title']}"):
+                st.info(insight['description'])
+                st.markdown(f"**Recommendation:** {insight['recommendation']}")
+                st.caption(f"Source: {insight['data_source']} | Category: {insight['category']}")
+
+    # Low priority / informational
+    if low:
+        st.subheader("💡 Informational")
+        for insight in low:
+            with st.expander(f"🟢 {insight['title']}"):
+                st.write(insight['description'])
+                st.markdown(f"**Recommendation:** {insight['recommendation']}")
+                st.caption(f"Source: {insight['data_source']} | Category: {insight['category']}")
+
+    # Category breakdown
+    st.divider()
+    st.subheader("📈 Insights by Category")
+
+    categories = {}
+    for insight in insights:
+        cat = insight['category']
+        if cat not in categories:
+            categories[cat] = 0
+        categories[cat] += 1
+
+    if categories:
+        cat_cols = st.columns(min(len(categories), 6))
+        category_icons = {
+            'sales': '💰',
+            'inventory': '📦',
+            'customers': '👥',
+            'purchasing': '🛒',
+            'marketing': '📣',
+            'operations': '⚙️',
+            'compliance': '📋'
+        }
+        for i, (cat, count) in enumerate(sorted(categories.items(), key=lambda x: -x[1])):
+            icon = category_icons.get(cat, '📊')
+            cat_cols[i % len(cat_cols)].metric(f"{icon} {cat.title()}", count)
+
+
 def render_recommendations(state, analytics):
     """Render AI-powered recommendations page."""
     st.header("💡 Business Recommendations")
-    
+
     if state.sales_data is None:
         st.warning("Please upload data to generate recommendations.")
         return
-    
-    # Generate rule-based recommendations
-    metrics = analytics.calculate_store_metrics(state.sales_data)
-    recommendations = analytics.generate_recommendations(metrics, state.brand_data)
-    
+
     # Create tabs for different recommendation types
     tab1, tab2 = st.tabs(["📋 Automated Insights", "🤖 AI Analysis"])
-    
+
     with tab1:
-        if not recommendations:
-            st.info("No specific recommendations at this time. Data looks good!")
+        # Use the comprehensive InsightsEngine if available
+        if INSIGHTS_ENGINE_AVAILABLE:
+            _render_comprehensive_insights(state, analytics)
         else:
-            # Display recommendations by priority
-            st.subheader("🔴 High Priority")
-            high_priority = [r for r in recommendations if r['priority'] == 'high']
-            for rec in high_priority:
-                with st.expander(f"⚠️ {rec['title']}", expanded=True):
-                    st.write(rec['description'])
-            
-            st.subheader("🟡 Medium Priority")
-            medium_priority = [r for r in recommendations if r['priority'] == 'medium']
-            for rec in medium_priority:
-                with st.expander(f"📊 {rec['title']}"):
-                    st.write(rec['description'])
-            
-            st.subheader("🟢 Insights")
-            low_priority = [r for r in recommendations if r['priority'] == 'low']
-            for rec in low_priority:
-                with st.expander(f"💡 {rec['title']}"):
-                    st.write(rec['description'])
+            # Fallback to basic recommendations
+            metrics = analytics.calculate_store_metrics(state.sales_data)
+            recommendations = analytics.generate_recommendations(metrics, state.brand_data)
+
+            if not recommendations:
+                st.info("No specific recommendations at this time. Data looks good!")
+            else:
+                st.subheader("🔴 High Priority")
+                for rec in [r for r in recommendations if r['priority'] == 'high']:
+                    with st.expander(f"⚠️ {rec['title']}", expanded=True):
+                        st.write(rec['description'])
+
+                st.subheader("🟡 Medium Priority")
+                for rec in [r for r in recommendations if r['priority'] == 'medium']:
+                    with st.expander(f"📊 {rec['title']}"):
+                        st.write(rec['description'])
+
+                st.subheader("🟢 Insights")
+                for rec in [r for r in recommendations if r['priority'] == 'low']:
+                    with st.expander(f"💡 {rec['title']}"):
+                        st.write(rec['description'])
     
     with tab2:
         # Claude AI Integration
@@ -2535,16 +2775,66 @@ def render_recommendations(state, analytics):
             return
         
         st.success("✅ Claude AI connected")
-        
+
+        # Initialize Invoice Data Service for DynamoDB access
+        invoice_service = None
+        invoice_summary = None
+        product_purchase_summary = None
+
+        if INVOICE_DATA_AVAILABLE:
+            try:
+                aws_config = {
+                    'aws_access_key': st.secrets['aws']['access_key_id'],
+                    'aws_secret_key': st.secrets['aws']['secret_access_key'],
+                    'region': st.secrets['aws']['region']
+                }
+                invoice_service = InvoiceDataService(**aws_config)
+
+                # Load invoice summaries for Claude context
+                invoice_summary = invoice_service.get_invoice_summary()
+                product_purchase_summary = invoice_service.get_product_summary()
+
+                st.success(f"✅ Invoice data connected ({invoice_summary.get('total_invoices', 0)} invoices, {product_purchase_summary.get('total_items', 0)} line items)")
+            except Exception as e:
+                st.caption(f"💡 Invoice data not available: {str(e)[:50]}")
+
+        # Initialize Research Findings data for Claude context
+        research_summary = None
+        if RESEARCH_AVAILABLE:
+            try:
+                research_viewer = ResearchFindingsViewer()
+                if research_viewer.is_available():
+                    research_summary = research_viewer.load_latest_summary()
+                    if research_summary:
+                        findings_count = len(research_summary.get('key_findings', []))
+                        st.success(f"✅ Research data connected ({findings_count} key findings)")
+            except Exception as e:
+                st.caption(f"💡 Research data not available: {str(e)[:50]}")
+
+        # Initialize SEO Analysis data for Claude context
+        seo_summaries = {}
+        if SEO_AVAILABLE:
+            try:
+                for site_name, site_url in [("Barbary Coast", "https://barbarycoastsf.com"), ("Grass Roots", "https://grassrootssf.com")]:
+                    seo_viewer = SEOFindingsViewer(website=site_url)
+                    if seo_viewer.is_available():
+                        seo_data = seo_viewer.load_latest_summary()
+                        if seo_data:
+                            seo_summaries[site_name] = seo_data
+                if seo_summaries:
+                    st.success(f"✅ SEO data connected ({len(seo_summaries)} sites)")
+            except Exception as e:
+                st.caption(f"💡 SEO data not available: {str(e)[:50]}")
+
         # Get brand-product mapping
         brand_product_mapping = state.brand_product_mapping or {}
         mapping_count = len(brand_product_mapping)
-        
+
         if mapping_count > 0:
             st.info(f"🔗 Using {mapping_count} brand-product mappings for enhanced analysis")
         else:
             st.caption("💡 Tip: Set up Brand-Product Mappings for more detailed category insights")
-        
+
         # Prepare data summaries for Claude
         sales_summary = {
             'store_metrics': metrics,
@@ -2687,7 +2977,234 @@ def render_recommendations(state, analytics):
                         st.rerun()
         else:
             st.caption("💡 Upload customer data to unlock customer analytics and integrated insights")
-        
+
+        # Row 3: Invoice/Purchasing analytics (if invoice data available)
+        if invoice_summary and invoice_summary.get('total_invoices', 0) > 0:
+            st.markdown("**Purchasing Analytics:**")
+            inv_col1, inv_col2, inv_col3 = st.columns([1, 1, 1])
+
+            with inv_col1:
+                if st.button("🏭 Vendor Analysis", use_container_width=True):
+                    with st.spinner("Claude is analyzing vendor spending..."):
+                        vendor_context = {
+                            'total_invoices': invoice_summary.get('total_invoices', 0),
+                            'total_spend': invoice_summary.get('total_value', 0),
+                            'avg_invoice': invoice_summary.get('avg_invoice_value', 0),
+                            'vendors': invoice_summary.get('vendors', {})
+                        }
+                        prompt = f"""Analyze this vendor spending data for a cannabis dispensary:
+
+{json.dumps(vendor_context, indent=2, default=str)}
+
+Provide insights on:
+1. Top vendors by spend and invoice frequency
+2. Spending concentration (are we too dependent on one vendor?)
+3. Recommendations for vendor negotiations based on spend patterns
+4. Any concerning patterns or opportunities
+
+Keep analysis concise and actionable."""
+
+                        try:
+                            message = claude.client.messages.create(
+                                model=claude.model,
+                                max_tokens=2000,
+                                messages=[{"role": "user", "content": prompt}]
+                            )
+                            analysis = message.content[0].text
+                        except Exception as e:
+                            analysis = f"Error analyzing vendor spending: {str(e)}"
+
+                        st.session_state.ai_analysis_title = "🏭 Vendor Spending Analysis"
+                        st.session_state.ai_analysis_result = analysis
+                        st.rerun()
+
+            with inv_col2:
+                if st.button("📦 Purchase Patterns", use_container_width=True):
+                    with st.spinner("Claude is analyzing purchase patterns..."):
+                        # Get top purchased brands and product types
+                        purchase_brands = product_purchase_summary.get('brands', {})
+                        purchase_types = product_purchase_summary.get('product_types', {})
+
+                        top_brands = dict(sorted(
+                            purchase_brands.items(),
+                            key=lambda x: x[1].get('total_cost', 0),
+                            reverse=True
+                        )[:15])
+
+                        purchase_context = {
+                            'top_brands': top_brands,
+                            'product_types': purchase_types,
+                            'total_products': product_purchase_summary.get('total_items', 0)
+                        }
+
+                        prompt = f"""Analyze this cannabis product purchasing data:
+
+{json.dumps(purchase_context, indent=2, default=str)}
+
+Provide insights on:
+1. Top performing brands by purchase volume and spend
+2. Product category breakdown (concentrates vs flower vs edibles vs cartridges)
+3. Inventory recommendations - which brands/types to stock more/less of
+4. Trends and opportunities for product mix optimization
+
+Keep analysis practical and data-driven."""
+
+                        try:
+                            message = claude.client.messages.create(
+                                model=claude.model,
+                                max_tokens=2000,
+                                messages=[{"role": "user", "content": prompt}]
+                            )
+                            analysis = message.content[0].text
+                        except Exception as e:
+                            analysis = f"Error analyzing purchase patterns: {str(e)}"
+
+                        st.session_state.ai_analysis_title = "📦 Purchase Pattern Analysis"
+                        st.session_state.ai_analysis_result = analysis
+                        st.rerun()
+
+            with inv_col3:
+                if st.button("💰 Margin Optimization", use_container_width=True):
+                    with st.spinner("Claude is analyzing pricing and margins..."):
+                        # Combine sales data with purchase data for margin analysis
+                        purchase_types = product_purchase_summary.get('product_types', {})
+
+                        # Calculate average unit costs
+                        type_pricing = {}
+                        for ptype, data in purchase_types.items():
+                            total_units = data.get('total_units', 0)
+                            avg_unit_cost = data.get('total_cost', 0) / total_units if total_units > 0 else 0
+                            type_pricing[ptype] = {
+                                'avg_unit_cost': round(avg_unit_cost, 2),
+                                'total_units': total_units,
+                                'total_cost': data.get('total_cost', 0)
+                            }
+
+                        margin_context = {
+                            'product_type_pricing': type_pricing,
+                            'sales_summary': sales_summary
+                        }
+
+                        prompt = f"""Analyze this wholesale pricing and sales data for cannabis products:
+
+{json.dumps(margin_context, indent=2, default=str)}
+
+Provide insights on:
+1. Average unit costs by product type
+2. Which product types have the most favorable wholesale pricing
+3. Compare wholesale costs to sales performance (if sales data available)
+4. Recommendations for margin optimization and pricing strategy
+5. Products to prioritize for better margins
+
+Focus on actionable pricing and margin insights."""
+
+                        try:
+                            message = claude.client.messages.create(
+                                model=claude.model,
+                                max_tokens=2000,
+                                messages=[{"role": "user", "content": prompt}]
+                            )
+                            analysis = message.content[0].text
+                        except Exception as e:
+                            analysis = f"Error analyzing margins: {str(e)}"
+
+                        st.session_state.ai_analysis_title = "💰 Margin Optimization Analysis"
+                        st.session_state.ai_analysis_result = analysis
+                        st.rerun()
+        else:
+            st.caption("💡 Upload invoices to unlock purchasing analytics (vendor analysis, purchase patterns, margin optimization)")
+
+        # Row 4: Research & SEO analytics (if data available)
+        if research_summary or seo_summaries:
+            st.markdown("**Strategic Analytics:**")
+            strat_col1, strat_col2 = st.columns([1, 1])
+
+            with strat_col1:
+                if research_summary:
+                    if st.button("🔬 Industry Insights", use_container_width=True):
+                        with st.spinner("Claude is analyzing industry research..."):
+                            research_context = {
+                                'executive_summary': research_summary.get('executive_summary', ''),
+                                'key_findings': research_summary.get('key_findings', []),
+                                'action_items': research_summary.get('action_items', []),
+                                'tracking_items': research_summary.get('tracking_items', [])
+                            }
+
+                            prompt = f"""Analyze this cannabis industry research for a San Francisco dispensary:
+
+{json.dumps(research_context, indent=2, default=str)}
+
+Provide strategic insights on:
+1. Key industry trends that affect our business
+2. Regulatory updates and compliance requirements
+3. Competitive landscape changes
+4. Market opportunities to capitalize on
+5. Risks to monitor and mitigate
+6. Specific action items prioritized by impact
+
+Focus on actionable recommendations for Barbary Coast and Grass Roots dispensaries."""
+
+                            try:
+                                message = claude.client.messages.create(
+                                    model=claude.model,
+                                    max_tokens=2500,
+                                    messages=[{"role": "user", "content": prompt}]
+                                )
+                                analysis = message.content[0].text
+                            except Exception as e:
+                                analysis = f"Error analyzing research: {str(e)}"
+
+                            st.session_state.ai_analysis_title = "🔬 Industry Research Insights"
+                            st.session_state.ai_analysis_result = analysis
+                            st.rerun()
+                else:
+                    st.caption("💡 Upload research documents to unlock industry insights")
+
+            with strat_col2:
+                if seo_summaries:
+                    if st.button("🔍 SEO Analysis", use_container_width=True):
+                        with st.spinner("Claude is analyzing SEO performance..."):
+                            seo_context = {}
+                            for site_name, seo_data in seo_summaries.items():
+                                seo_context[site_name] = {
+                                    'overall_score': seo_data.get('overall_score'),
+                                    'top_priorities': seo_data.get('top_priorities', []),
+                                    'quick_wins': seo_data.get('quick_wins', []),
+                                    'categories': seo_data.get('categories', {}),
+                                    'competitive_insights': seo_data.get('competitive_insights', '')
+                                }
+
+                            prompt = f"""Analyze this SEO data for two cannabis dispensary websites:
+
+{json.dumps(seo_context, indent=2, default=str)}
+
+Provide strategic SEO recommendations:
+1. Overall SEO health assessment for each site
+2. Critical issues to fix immediately (quick wins)
+3. Technical SEO improvements needed
+4. Local SEO optimization for San Francisco market
+5. Content strategy recommendations
+6. Comparison between the two sites - which needs more attention?
+7. Prioritized action plan with expected impact
+
+Focus on actionable improvements that will drive more organic traffic and local visibility."""
+
+                            try:
+                                message = claude.client.messages.create(
+                                    model=claude.model,
+                                    max_tokens=2500,
+                                    messages=[{"role": "user", "content": prompt}]
+                                )
+                                analysis = message.content[0].text
+                            except Exception as e:
+                                analysis = f"Error analyzing SEO: {str(e)}"
+
+                            st.session_state.ai_analysis_title = "🔍 SEO Performance Analysis"
+                            st.session_state.ai_analysis_result = analysis
+                            st.rerun()
+                else:
+                    st.caption("💡 Run SEO analysis to unlock website insights")
+
         # Display AI analysis result at full width
         if st.session_state.ai_analysis_result:
             st.markdown("---")
@@ -2709,10 +3226,31 @@ def render_recommendations(state, analytics):
         st.markdown("---")
         st.subheader("💬 Ask Claude About Your Business")
 
-        question = st.text_input("Ask anything about your sales, brands, customers, or business strategy:")
+        # Show data availability summary
+        data_sources = []
+        if state.sales_data is not None:
+            data_sources.append(f"📊 Sales ({len(state.sales_data):,} records)")
+        if state.brand_data is not None:
+            data_sources.append(f"🏷️ Brands ({len(state.brand_data):,} brands)")
+        if state.customer_data is not None:
+            data_sources.append(f"👥 Customers ({len(state.customer_data):,} customers)")
+        if invoice_summary and invoice_summary.get('total_invoices', 0) > 0:
+            data_sources.append(f"📦 Invoices ({invoice_summary['total_invoices']:,} invoices)")
+        if product_purchase_summary and product_purchase_summary.get('total_items', 0) > 0:
+            data_sources.append(f"🛒 Purchases ({product_purchase_summary['total_items']:,} line items)")
+        if research_summary:
+            findings_count = len(research_summary.get('key_findings', []))
+            data_sources.append(f"🔬 Research ({findings_count} findings)")
+        if seo_summaries:
+            data_sources.append(f"🔍 SEO ({len(seo_summaries)} sites)")
+
+        if data_sources:
+            st.caption(f"**Available data:** {' | '.join(data_sources)}")
+
+        question = st.text_input("Ask anything about your sales, brands, customers, invoices, purchasing, industry research, SEO, or business strategy:")
 
         if question:
-            # Prepare context with mapping and customer data
+            # Prepare comprehensive context with ALL available data sources
             context = {
                 'sales_summary': sales_summary,
                 'top_brands': brand_summary[:20] if brand_summary else [],
@@ -2721,6 +3259,54 @@ def render_recommendations(state, analytics):
                 'brand_product_mapping_sample': dict(list(brand_product_mapping.items())[:30]) if brand_product_mapping else {},
                 'customer_summary': customer_summary if customer_summary else {}
             }
+
+            # Add invoice/purchasing data from DynamoDB if available
+            if invoice_summary and invoice_summary.get('total_invoices', 0) > 0:
+                context['invoice_summary'] = {
+                    'total_invoices': invoice_summary.get('total_invoices', 0),
+                    'total_purchase_value': invoice_summary.get('total_value', 0),
+                    'avg_invoice_value': invoice_summary.get('avg_invoice_value', 0),
+                    'vendors': invoice_summary.get('vendors', {})
+                }
+
+            if product_purchase_summary and product_purchase_summary.get('total_items', 0) > 0:
+                # Include top purchased brands and product types
+                purchase_brands = product_purchase_summary.get('brands', {})
+                purchase_types = product_purchase_summary.get('product_types', {})
+
+                # Sort and limit to top entries for context efficiency
+                top_purchase_brands = dict(sorted(
+                    purchase_brands.items(),
+                    key=lambda x: x[1].get('total_cost', 0),
+                    reverse=True
+                )[:20])
+
+                context['purchase_data'] = {
+                    'total_line_items': product_purchase_summary.get('total_items', 0),
+                    'top_purchased_brands': top_purchase_brands,
+                    'product_types': purchase_types
+                }
+
+            # Add research findings if available
+            if research_summary:
+                context['research_findings'] = {
+                    'executive_summary': research_summary.get('executive_summary', ''),
+                    'key_findings': research_summary.get('key_findings', [])[:10],  # Top 10 findings
+                    'action_items': research_summary.get('action_items', [])[:5],  # Top 5 action items
+                    'tracking_items': research_summary.get('tracking_items', [])[:5]  # Items being tracked
+                }
+
+            # Add SEO analysis if available
+            if seo_summaries:
+                seo_context = {}
+                for site_name, seo_data in seo_summaries.items():
+                    seo_context[site_name] = {
+                        'overall_score': seo_data.get('overall_score'),
+                        'top_priorities': seo_data.get('top_priorities', [])[:5],
+                        'quick_wins': seo_data.get('quick_wins', [])[:5],
+                        'categories': {cat: {'score': data.get('score')} for cat, data in seo_data.get('categories', {}).items() if isinstance(data, dict)}
+                    }
+                context['seo_analysis'] = seo_context
 
             with st.spinner("Thinking..."):
                 answer = claude.answer_business_question(question, context)

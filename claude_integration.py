@@ -456,22 +456,59 @@ Be specific and data-driven with your recommendations."""
         # Safely serialize the context data
         context_str = safe_json_dumps(context_data)
 
-        prompt = f"""You are a retail analytics assistant for a cannabis dispensary.
+        # Build a comprehensive data description
+        data_description = []
+        if context_data.get('sales_summary'):
+            data_description.append("- **Sales Data**: Store metrics, transaction records, revenue, and performance trends")
+        if context_data.get('top_brands'):
+            data_description.append("- **Brand Data**: Brand performance, net sales, and gross margins")
+        if context_data.get('product_mix'):
+            data_description.append("- **Product Mix**: Sales breakdown by product category (Flower, Preroll, Cartridge, etc.)")
+        if context_data.get('customer_summary'):
+            data_description.append("- **Customer Data**: Customer segments, demographics, lifetime value, and recency")
+        if context_data.get('invoice_summary'):
+            data_description.append("- **Invoice Data**: Vendor invoices, total spend, and supplier relationships from DynamoDB")
+        if context_data.get('purchase_data'):
+            data_description.append("- **Purchase Data**: Line-item purchasing details, wholesale costs by brand and product type")
+        if context_data.get('research_findings'):
+            data_description.append("- **Industry Research**: Cannabis industry trends, regulatory updates, market analysis, and competitive insights from research documents")
+        if context_data.get('seo_analysis'):
+            data_description.append("- **SEO Analysis**: Website SEO scores, technical issues, content recommendations, and local SEO performance for store websites")
 
-Available data context:
+        data_sources_text = "\n".join(data_description) if data_description else "Limited data available"
+
+        prompt = f"""You are a comprehensive retail analytics assistant for a cannabis dispensary operation with two stores (Barbary Coast and Grass Roots) in San Francisco.
+
+**DATA SOURCES AVAILABLE FOR ANALYSIS:**
+{data_sources_text}
+
+**COMPLETE DATA CONTEXT:**
 {context_str}
 
-User question: {question}
+**USER QUESTION:** {question}
 
-Please provide a helpful, data-informed answer. If the data doesn't fully answer
-the question, say so and explain what additional data would help.
+**INSTRUCTIONS:**
+1. Analyze ALL relevant data sources to provide a comprehensive answer
+2. Cross-reference data when possible (e.g., compare sales performance to purchasing costs, relate industry trends to business strategy)
+3. Be specific - use actual numbers, brand names, vendor names, and percentages from the data
+4. If the question relates to:
+   - Purchasing/vendors/invoices: Focus on invoice_summary and purchase_data
+   - Sales/revenue: Focus on sales_summary and brand data
+   - Customers: Focus on customer_summary
+   - Product strategy: Combine product_mix, brand data, and purchase data
+   - Industry trends/regulations: Focus on research_findings
+   - Website/marketing/online presence: Focus on seo_analysis
+   - Strategic planning: Synthesize across ALL available data sources
+5. If data is missing or incomplete for a full answer, clearly state what additional information would help
+6. Provide actionable insights and specific recommendations when appropriate
+7. When discussing SEO or research insights, relate them back to business impact and recommended actions
 
-Be specific and reference actual numbers from the data when possible."""
+Respond with a clear, data-driven answer that demonstrates you have access to and understand ALL the available business data."""
 
         try:
             message = self.client.messages.create(
                 model=self.model,
-                max_tokens=1024,
+                max_tokens=2000,
                 messages=[{"role": "user", "content": prompt}]
             )
             return message.content[0].text
