@@ -3013,17 +3013,6 @@ def render_upload_page(s3_manager, processor):
     
     if s3_connected:
         st.success(f"✅ {s3_message}")
-        
-        # Show existing files in bucket
-        with st.expander("📂 Files in S3 Bucket"):
-            files = s3_manager.list_files()
-            if files:
-                for f in files[:50]:  # Limit to 50 files
-                    st.text(f"  {f}")
-                if len(files) > 50:
-                    st.text(f"  ... and {len(files) - 50} more files")
-            else:
-                st.info("Bucket is empty - no files uploaded yet")
     else:
         st.error(f"❌ S3 Not Connected: {s3_message}")
         st.markdown("""
@@ -3041,15 +3030,6 @@ def render_upload_page(s3_manager, processor):
         2. The IAM user has `s3:PutObject`, `s3:GetObject`, `s3:ListBucket` permissions
         3. The bucket name matches exactly (case-sensitive)
         """)
-    
-    st.markdown("---")
-    
-    st.markdown("""
-    Upload your CSV files to update the dashboard. Supported file types:
-    - **Sales by Store**: Daily transaction and revenue data
-    - **Net Sales by Brand**: Brand-level performance metrics
-    - **Net Sales by Product**: Product category summaries
-    """)
     
     # Global upload settings
     st.markdown("---")

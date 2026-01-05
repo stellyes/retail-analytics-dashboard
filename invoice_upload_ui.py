@@ -127,17 +127,6 @@ def render_invoice_upload_section():
         st.error("Invoice extraction module not available. Check dependencies.")
         return
 
-    st.header("📋 Invoice Data Upload")
-    st.markdown("""
-    Upload invoice PDFs to automatically extract data and store in DynamoDB.
-
-    **Process:**
-    1. Upload one or more PDF invoices
-    2. Data is extracted from each PDF (no Claude API costs)
-    3. Extracted data is stored in DynamoDB
-    4. View extraction results and any errors
-    """)
-
     # Get AWS credentials from secrets
     try:
         aws_config = {
@@ -551,10 +540,6 @@ def render_full_invoice_section():
 
     # Load invoices needing review from DynamoDB on first run
     _load_invoices_needing_review_from_dynamo()
-
-    # Static tab labels
-    st.write(f"Debug: invoices_needing_date_review count = {len(st.session_state.invoices_needing_date_review)}")
-    st.write(f"Debug: duplicate_invoices count = {len(st.session_state.duplicate_invoices)}")
 
     tab1, tab2, tab3, tab4 = st.tabs(["📤 Upload Invoices", "📊 View Data", "📅 Date Review", "🔍 Duplicates"])
 
