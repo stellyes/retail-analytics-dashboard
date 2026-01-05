@@ -140,6 +140,61 @@ class TreezInvoiceParser:
                 'extracted_at': datetime.now().isoformat()
             }
 
+    def _extract_vendor_from_header(self, text: str) -> Optional[str]:
+        """
+        Extract vendor name from PyMuPDF text output.
+        PyMuPDF extracts text line-by-line, so vendor appears on its own line
+        after "Print Window" and before "Barbary Coast Dispensary".
+
+        Header structure (PyMuPDF output):
+          Line 0: "Need Help?"
+          Line 1: "menu"
+          Line 2: "Print Window"
+          Line 3: VENDOR NAME (e.g., "NABITWO, LLC") - OR "Barbary Coast Dispensary" if no vendor
+          Line 4+: Address, status, dates...
+        """
+        lines = [l.strip() for l in text.split('\n') if l.strip()]
+
+        # Find "Print Window" line
+        print_window_idx = -1
+        for i, line in enumerate(lines):
+            if 'Print Window' in line:
+                print_window_idx = i
+                break
+
+        if print_window_idx < 0 or print_window_idx + 1 >= len(lines):
+            return None
+
+        # The line after "Print Window" should be the vendor name
+        # Unless it's "Barbary Coast Dispensary" (receiver) which means no vendor listed
+        potential_vendor = lines[print_window_idx + 1]
+
+        # Skip if it's the receiver name (Barbary Coast or Grass Roots)
+        if 'Barbary Coast' in potential_vendor or 'Grass Roots' in potential_vendor:
+            return None
+
+        # Skip if it looks like an address (starts with number or contains common address words)
+        if re.match(r'^\d+\s', potential_vendor) or 'Mission St' in potential_vendor:
+            return None
+
+        # Skip UI elements that might appear
+        skip_patterns = ['Need Help', 'menu', 'FULFILLED', 'PENDING', 'CANCELLED', 'Created:', 'INVOICE']
+        for pattern in skip_patterns:
+            if pattern in potential_vendor:
+                return None
+
+        # Clean up vendor name
+        vendor = potential_vendor.strip()
+
+        # Handle multi-line vendor names (e.g., "NABITWO, LLC" followed by address on same conceptual line)
+        # Check if next line is a continuation like "INC" or "LLC"
+        if print_window_idx + 2 < len(lines):
+            next_line = lines[print_window_idx + 2].strip()
+            if next_line in ['INC', 'LLC', 'CORP', 'INC.', 'LLC.', 'CORP.']:
+                vendor = vendor.rstrip(',').strip() + ' ' + next_line
+
+        return vendor if vendor else None
+
     def _parse_treez_invoice(self, text: str, tables: List[List[List[str]]]) -> Dict:
         """Parse Treez invoice format from extracted text and tables."""
 
@@ -429,6 +484,13 @@ class TreezInvoiceParser:
             # Fallback: "Net" followed by any characters and dash (numbers may be null bytes or spaces)
             # Default to Net 30 as it's the most common term
             invoice['payment_terms'] = 'Net 30'
+
+        # Use PyMuPDF-specific vendor extraction if distributor not found
+        # PyMuPDF extracts text line-by-line which is cleaner for vendor extraction
+        if not invoice['distributor']:
+            pymupdf_vendor = self._extract_vendor_from_header(text)
+            if pymupdf_vendor:
+                invoice['distributor'] = pymupdf_vendor
 
         # Set legacy fields for backward compatibility
         invoice['vendor'] = invoice['distributor']
