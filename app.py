@@ -2467,31 +2467,129 @@ def render_product_analysis(state, store_filter=None, date_filter=None):
     st.plotly_chart(fig, use_container_width=True)
 
 
+@st.cache_data(ttl=86400, show_spinner=False)  # Cache for 24 hours
+def _fetch_invoice_data_cached(_aws_access_key: str, _aws_secret_key: str, _region: str):
+    """Fetch invoice data with daily caching to avoid repeated DynamoDB scans."""
+    try:
+        invoice_service = InvoiceDataService(
+            aws_access_key=_aws_access_key,
+            aws_secret_key=_aws_secret_key,
+            region=_region
+        )
+        invoice_summary = invoice_service.get_invoice_summary()
+        product_summary = invoice_service.get_product_summary()
+        # Return with timestamp for display
+        return invoice_summary, product_summary, datetime.now().strftime("%Y-%m-%d %H:%M")
+    except Exception as e:
+        return None, None, None
+
+
+@st.cache_data(ttl=86400, show_spinner=False)  # Cache for 24 hours
+def _fetch_research_data_cached(_aws_access_key: str, _aws_secret_key: str, _region: str):
+    """Fetch research findings with daily caching."""
+    try:
+        research_viewer = ResearchFindingsViewer()
+        if research_viewer.is_available():
+            return research_viewer.load_latest_summary()
+        return None
+    except Exception:
+        return None
+
+
+@st.cache_data(ttl=86400, show_spinner=False)  # Cache for 24 hours
+def _fetch_seo_data_cached(_aws_access_key: str, _aws_secret_key: str, _region: str):
+    """Fetch SEO data for both sites with daily caching."""
+    try:
+        seo_data = {}
+        for site_name, site_url in [("Barbary Coast", "https://barbarycoastsf.com"),
+                                    ("Grass Roots", "https://grassrootssf.com")]:
+            seo_viewer = SEOFindingsViewer(website=site_url)
+            if seo_viewer.is_available():
+                seo_summary = seo_viewer.load_latest_summary()
+                if seo_summary:
+                    seo_data[site_name] = {
+                        'overall_score': seo_summary.get('overall_score', 0),
+                        'categories': seo_summary.get('categories', {}),
+                        'top_priorities': seo_summary.get('top_priorities', []),
+                        'quick_wins': seo_summary.get('quick_wins', [])
+                    }
+        return seo_data if seo_data else None
+    except Exception:
+        return None
+
+
 def _render_comprehensive_insights(state, analytics):
     """
     Render comprehensive rule-based insights using the InsightsEngine.
     Gathers data from all available sources and generates AI-free insights.
     """
-    st.markdown("**Comprehensive Rule-Based Analysis** - No API costs")
-    st.caption("Insights are cached for 24 hours and automatically refresh when data changes.")
-
-    # Initialize InsightsEngine with AWS credentials
+    # Get AWS config once
     try:
-        aws_config = {
-            'aws_access_key': st.secrets['aws']['access_key_id'],
-            'aws_secret_key': st.secrets['aws']['secret_access_key'],
-            'region': st.secrets['aws'].get('region', 'us-west-1')
-        }
-        insights_engine = get_insights_engine(aws_config)
-    except Exception as e:
-        st.warning(f"Could not initialize insights engine with caching: {e}")
-        insights_engine = InsightsEngine()  # No caching fallback
+        aws_access_key = st.secrets['aws']['access_key_id']
+        aws_secret_key = st.secrets['aws']['secret_access_key']
+        aws_region = st.secrets['aws'].get('region', 'us-west-1')
+    except Exception:
+        aws_access_key = aws_secret_key = aws_region = None
 
-    # Gather all available data sources
+    # Check when data was last fetched (for display)
+    last_fetch_time = None
+    if INVOICE_DATA_AVAILABLE and aws_access_key:
+        cached_result = _fetch_invoice_data_cached(aws_access_key, aws_secret_key, aws_region)
+        if cached_result and len(cached_result) == 3:
+            last_fetch_time = cached_result[2]
+
+    # Header with refresh button
+    col1, col2, col3 = st.columns([4, 2, 1])
+    with col1:
+        st.markdown("**Comprehensive Rule-Based Analysis** - No API costs")
+    with col2:
+        if last_fetch_time:
+            st.caption(f"Data from: {last_fetch_time}")
+        else:
+            st.caption("Data: Loading...")
+    with col3:
+        if st.button("🔄 Scan New Data", help="Clear cache and reload all data from DynamoDB/S3"):
+            _fetch_invoice_data_cached.clear()
+            _fetch_research_data_cached.clear()
+            _fetch_seo_data_cached.clear()
+            st.rerun()
+
+    # Initialize InsightsEngine
+    try:
+        if aws_access_key:
+            aws_config = {
+                'aws_access_key': aws_access_key,
+                'aws_secret_key': aws_secret_key,
+                'region': aws_region
+            }
+            insights_engine = get_insights_engine(aws_config)
+        else:
+            insights_engine = InsightsEngine()
+    except Exception as e:
+        st.warning(f"Could not initialize insights engine: {e}")
+        insights_engine = InsightsEngine()
+
+    # Gather all available data sources with progress indicator
     data_sources = {}
     data_status = []
 
-    # 1. Sales Data (always available at this point)
+    # Create progress bar and status placeholder (only shows on first load)
+    progress_container = st.empty()
+    status_container = st.empty()
+
+    # Check if this is a fresh fetch (no cache) - show progress
+    is_fresh_fetch = last_fetch_time is None
+
+    if is_fresh_fetch:
+        progress_bar = progress_container.progress(0, text="Loading data sources...")
+        status_text = status_container.empty()
+    else:
+        progress_bar = None
+        status_text = None
+
+    # 1. Sales Data (always available at this point - already in memory)
+    if status_text:
+        status_text.caption("📊 Loading sales data...")
     metrics = analytics.calculate_store_metrics(state.sales_data)
     store_comparison = {}
     aov_data = {}
@@ -2509,8 +2607,12 @@ def _render_comprehensive_insights(state, analytics):
         'margin': sum(m.get('avg_margin', 0) for m in metrics.values()) / max(len(metrics), 1)
     }
     data_status.append("Sales")
+    if progress_bar:
+        progress_bar.progress(15, text="Sales data loaded")
 
-    # 2. Brand Data
+    # 2. Brand Data (already in memory)
+    if status_text:
+        status_text.caption("🏷️ Loading brand data...")
     if state.brand_data is not None and len(state.brand_data) > 0:
         brand_dict = {}
         total_sales = state.brand_data['Net Sales'].sum()
@@ -2525,77 +2627,77 @@ def _render_comprehensive_insights(state, analytics):
             'total_sales': total_sales
         }
         data_status.append("Brands")
+    if progress_bar:
+        progress_bar.progress(30, text="Brand data loaded")
 
-    # 3. Customer Data (from session state metrics)
+    # 3. Customer Data (from session state metrics - already computed)
+    if status_text:
+        status_text.caption("👥 Loading customer data...")
     if metrics:
         customer_data = {}
         total_customers = sum(m.get('total_customers', 0) for m in metrics.values())
         total_new = sum(m.get('total_new_customers', 0) for m in metrics.values())
         if total_customers > 0:
             customer_data['new_customer_rate'] = (total_new / total_customers) * 100
-            # Estimate concentration (top customers)
-            customer_data['top_customer_revenue_pct'] = 25  # Placeholder - would need real data
+            customer_data['top_customer_revenue_pct'] = 25  # Placeholder
             data_sources['customer_data'] = customer_data
             data_status.append("Customers")
+    if progress_bar:
+        progress_bar.progress(40, text="Customer data loaded")
 
-    # 4. Invoice/Purchasing Data from DynamoDB
-    if INVOICE_DATA_AVAILABLE:
-        try:
-            invoice_service = InvoiceDataService(
-                aws_access_key=st.secrets['aws']['access_key_id'],
-                aws_secret_key=st.secrets['aws']['secret_access_key'],
-                region=st.secrets['aws'].get('region', 'us-west-1')
-            )
-            invoice_summary = invoice_service.get_invoice_summary()
-            product_summary = invoice_service.get_product_summary()
-
+    # 4. Invoice/Purchasing Data from DynamoDB (CACHED - daily refresh)
+    if status_text:
+        status_text.caption("🧾 Loading invoice data from DynamoDB...")
+    if INVOICE_DATA_AVAILABLE and aws_access_key:
+        cached_invoice_data = _fetch_invoice_data_cached(
+            aws_access_key, aws_secret_key, aws_region
+        )
+        if cached_invoice_data:
+            invoice_summary, product_summary = cached_invoice_data[0], cached_invoice_data[1]
             if invoice_summary and invoice_summary.get('total_invoices', 0) > 0:
                 data_sources['invoice_data'] = invoice_summary
                 data_status.append("Invoices")
-
             if product_summary and product_summary.get('total_items', 0) > 0:
                 data_sources['product_data'] = product_summary
                 data_status.append("Products")
-        except Exception as e:
-            st.caption(f"Invoice data unavailable: {str(e)[:50]}")
+    if progress_bar:
+        progress_bar.progress(70, text="Invoice data loaded")
 
-    # 5. Research Findings from S3
-    if RESEARCH_AVAILABLE:
-        try:
-            research_viewer = ResearchFindingsViewer()
-            if research_viewer.is_available():
-                research_summary = research_viewer.load_latest_summary()
-                if research_summary:
-                    data_sources['research_data'] = {
-                        'key_findings': research_summary.get('key_findings', []),
-                        'action_items': research_summary.get('action_items', []),
-                        'tracking_items': research_summary.get('tracking_items', [])
-                    }
-                    data_status.append("Research")
-        except Exception as e:
-            st.caption(f"Research data unavailable: {str(e)[:50]}")
+    # 5. Research Findings from S3 (CACHED)
+    if status_text:
+        status_text.caption("📚 Loading research findings...")
+    if RESEARCH_AVAILABLE and aws_access_key:
+        research_summary = _fetch_research_data_cached(aws_access_key, aws_secret_key, aws_region)
+        if research_summary:
+            data_sources['research_data'] = {
+                'key_findings': research_summary.get('key_findings', []),
+                'action_items': research_summary.get('action_items', []),
+                'tracking_items': research_summary.get('tracking_items', [])
+            }
+            data_status.append("Research")
+    if progress_bar:
+        progress_bar.progress(85, text="Research data loaded")
 
-    # 6. SEO Analysis from S3
-    if SEO_AVAILABLE:
-        try:
-            seo_data = {}
-            for site_name, site_url in [("Barbary Coast", "https://barbarycoastsf.com"),
-                                        ("Grass Roots", "https://grassrootssf.com")]:
-                seo_viewer = SEOFindingsViewer(website=site_url)
-                if seo_viewer.is_available():
-                    seo_summary = seo_viewer.load_latest_summary()
-                    if seo_summary:
-                        seo_data[site_name] = {
-                            'overall_score': seo_summary.get('overall_score', 0),
-                            'categories': seo_summary.get('categories', {}),
-                            'top_priorities': seo_summary.get('top_priorities', []),
-                            'quick_wins': seo_summary.get('quick_wins', [])
-                        }
-            if seo_data:
-                data_sources['seo_data'] = seo_data
-                data_status.append("SEO")
-        except Exception as e:
-            st.caption(f"SEO data unavailable: {str(e)[:50]}")
+    # 6. SEO Analysis from S3 (CACHED)
+    if status_text:
+        status_text.caption("🔍 Loading SEO analysis...")
+    if SEO_AVAILABLE and aws_access_key:
+        seo_data = _fetch_seo_data_cached(aws_access_key, aws_secret_key, aws_region)
+        if seo_data:
+            data_sources['seo_data'] = seo_data
+            data_status.append("SEO")
+    if progress_bar:
+        progress_bar.progress(95, text="SEO data loaded")
+
+    # Final step - generating insights
+    if status_text:
+        status_text.caption("🧠 Analyzing data and generating insights...")
+    if progress_bar:
+        progress_bar.progress(100, text="Complete!")
+
+    # Clear progress indicators
+    progress_container.empty()
+    status_container.empty()
 
     # Show data sources status
     st.success(f"Analyzing data from: {', '.join(data_status)}")
