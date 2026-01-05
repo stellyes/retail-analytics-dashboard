@@ -1025,7 +1025,7 @@ def main():
     # Use a flag to track if we've attempted to load from S3 this session
     if 'data_loaded_from_s3' not in st.session_state:
         st.session_state.data_loaded_from_s3 = False
-    
+
     if 'sales_data' not in st.session_state:
         st.session_state.sales_data = None
     if 'brand_data' not in st.session_state:
@@ -1038,6 +1038,12 @@ def main():
         st.session_state.invoice_data = None
     if 'brand_product_mapping' not in st.session_state:
         st.session_state.brand_product_mapping = None
+
+    # Track DynamoDB invoice loading status
+    if 'dynamo_invoice_count' not in st.session_state:
+        st.session_state.dynamo_invoice_count = 0
+    if 'dynamo_load_error' not in st.session_state:
+        st.session_state.dynamo_load_error = None
     
     # Auto-load data from S3 and DynamoDB on first run of session
     if not st.session_state.data_loaded_from_s3:
@@ -1072,6 +1078,7 @@ def main():
                 # Load all invoice line items from DynamoDB
                 dynamo_invoice_df = load_invoice_data_from_dynamodb(invoice_service)
                 if dynamo_invoice_df is not None and len(dynamo_invoice_df) > 0:
+                    st.session_state.dynamo_invoice_count = len(dynamo_invoice_df)
                     # Merge with existing invoice data from S3 if any
                     if st.session_state.invoice_data is not None:
                         st.session_state.invoice_data = pd.concat([
@@ -1080,9 +1087,12 @@ def main():
                         ], ignore_index=True).drop_duplicates()
                     else:
                         st.session_state.invoice_data = dynamo_invoice_df
+                else:
+                    st.session_state.dynamo_invoice_count = 0
             except Exception as e:
-                # Silently fail if DynamoDB is not accessible - don't block app startup
-                pass
+                # Store error but don't block app startup
+                st.session_state.dynamo_load_error = str(e)
+                st.session_state.dynamo_invoice_count = 0
 
             st.session_state.data_loaded_from_s3 = True
 
@@ -1097,12 +1107,19 @@ def main():
             if st.session_state.customer_data is not None:
                 loaded_items.append(f"Customers ({len(st.session_state.customer_data)} records)")
             if st.session_state.invoice_data is not None:
-                loaded_items.append(f"Invoices ({len(st.session_state.invoice_data)} records)")
+                invoice_source = ""
+                if st.session_state.dynamo_invoice_count > 0:
+                    invoice_source = f" ({st.session_state.dynamo_invoice_count} from DynamoDB)"
+                loaded_items.append(f"Invoices ({len(st.session_state.invoice_data)} records{invoice_source})")
             if st.session_state.brand_product_mapping:
                 loaded_items.append(f"Mappings ({len(st.session_state.brand_product_mapping)} brands)")
 
             if loaded_items:
                 st.toast(f"✅ Loaded: {', '.join(loaded_items)}", icon="📊")
+
+            # Show DynamoDB error if any
+            if st.session_state.dynamo_load_error:
+                st.toast(f"⚠️ DynamoDB Error: {st.session_state.dynamo_load_error[:100]}", icon="⚠️")
     
     # Sidebar
     with st.sidebar:
@@ -3253,7 +3270,34 @@ def render_upload_page(s3_manager, processor):
     # Current data status
     st.markdown("---")
     st.subheader("📊 Current Data Status")
-    
+
+    # Add invoice status row first if we have invoice data
+    if st.session_state.invoice_data is not None or st.session_state.get('dynamo_invoice_count', 0) > 0:
+        st.markdown("**Invoice Data:**")
+        inv_col1, inv_col2 = st.columns([3, 1])
+        with inv_col1:
+            if st.session_state.invoice_data is not None:
+                total_count = len(st.session_state.invoice_data)
+                dynamo_count = st.session_state.get('dynamo_invoice_count', 0)
+                if dynamo_count > 0:
+                    st.success(f"✅ Invoices: {total_count} line items ({dynamo_count} from DynamoDB)")
+                else:
+                    st.success(f"✅ Invoices: {total_count} line items (from S3)")
+
+                # Show date range if available
+                if 'Invoice Date' in st.session_state.invoice_data.columns:
+                    dates = st.session_state.invoice_data['Invoice Date'].dropna()
+                    if len(dates) > 0:
+                        st.caption(f"📅 {dates.min().strftime('%m/%d/%Y')} - {dates.max().strftime('%m/%d/%Y')}")
+            else:
+                st.info("No invoice line items loaded")
+        with inv_col2:
+            if st.session_state.get('dynamo_load_error'):
+                with st.expander("⚠️ Error Details"):
+                    st.code(st.session_state.dynamo_load_error)
+        st.markdown("---")
+
+    st.markdown("**CSV Data:**")
     status_col1, status_col2, status_col3 = st.columns(3)
     
     with status_col1:
@@ -3304,6 +3348,27 @@ def render_upload_page(s3_manager, processor):
     # Invoice Data Upload - Integrated with DynamoDB
     st.markdown("---")
     st.subheader("📋 Invoice Data Upload")
+
+    # Show current invoice data status
+    if st.session_state.invoice_data is not None:
+        col1, col2 = st.columns([3, 1])
+        with col1:
+            total_count = len(st.session_state.invoice_data)
+            dynamo_count = st.session_state.get('dynamo_invoice_count', 0)
+            if dynamo_count > 0:
+                st.success(f"✅ **{total_count} invoice line items loaded** ({dynamo_count} from DynamoDB)")
+            else:
+                st.info(f"📊 {total_count} invoice line items loaded (from S3)")
+        with col2:
+            if st.session_state.get('dynamo_load_error'):
+                st.error("⚠️ DynamoDB Error")
+                with st.expander("View Error"):
+                    st.code(st.session_state.dynamo_load_error)
+    else:
+        if st.session_state.get('dynamo_load_error'):
+            st.warning(f"⚠️ No invoice data loaded. DynamoDB error: {st.session_state.dynamo_load_error[:100]}")
+        else:
+            st.info("📤 No invoice data loaded yet. Upload invoices below to get started.")
 
     st.markdown("""
     Upload invoice PDFs to automatically extract data and store in DynamoDB for analysis.
