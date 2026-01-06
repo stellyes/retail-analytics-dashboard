@@ -1100,6 +1100,12 @@ def main():
                 }
                 invoice_service = InvoiceDataService(**aws_config)
 
+                # Verify tables exist before attempting to load
+                try:
+                    invoice_service.dynamodb.Table(invoice_service.line_items_table_name).table_status
+                except Exception as table_err:
+                    raise Exception(f"DynamoDB table not accessible: {invoice_service.line_items_table_name}")
+
                 # Load all invoice line items from DynamoDB
                 dynamo_invoice_df = load_invoice_data_from_dynamodb(invoice_service)
                 if dynamo_invoice_df is not None and len(dynamo_invoice_df) > 0:
@@ -2529,7 +2535,7 @@ def _fetch_research_documents_cached(_aws_access_key: str, _aws_secret_key: str,
         if MANUAL_RESEARCH_AVAILABLE:
             from manual_research_integration import DocumentStorage, S3_BUCKET
             storage = DocumentStorage(S3_BUCKET)
-            documents = storage.list_documents()
+            documents = storage.list_uploaded_documents(days=365)  # Get documents from the last year
             return documents if documents else []
         return []
     except Exception:
