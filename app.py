@@ -2547,6 +2547,144 @@ def _load_document_content(doc_s3_key: str) -> str:
         return f"[Error loading document: {str(e)}]"
 
 
+# =============================================================================
+# AI REPORT STORAGE
+# =============================================================================
+
+def _get_reports_s3_client():
+    """Get S3 client for report storage."""
+    try:
+        import boto3
+        return boto3.client(
+            's3',
+            aws_access_key_id=st.secrets['aws']['access_key_id'],
+            aws_secret_access_key=st.secrets['aws']['secret_access_key'],
+            region_name=st.secrets['aws'].get('region', 'us-west-2')
+        )
+    except Exception:
+        return None
+
+
+def _save_ai_report(question: str, answer: str, model_type: str, data_sources: list) -> bool:
+    """
+    Save an AI analysis report to S3.
+
+    Args:
+        question: The user's question
+        answer: The AI-generated answer
+        model_type: 'fast' or 'deep'
+        data_sources: List of data sources used
+
+    Returns:
+        True if saved successfully, False otherwise
+    """
+    s3_client = _get_reports_s3_client()
+    if not s3_client:
+        return False
+
+    try:
+        import json
+        from datetime import datetime
+        import hashlib
+
+        timestamp = datetime.now()
+
+        # Generate a unique report ID
+        report_id = hashlib.md5(f"{timestamp.isoformat()}{question[:50]}".encode()).hexdigest()[:12]
+
+        report = {
+            'report_id': report_id,
+            'timestamp': timestamp.isoformat(),
+            'date': timestamp.strftime('%Y-%m-%d'),
+            'time': timestamp.strftime('%H:%M:%S'),
+            'question': question,
+            'answer': answer,
+            'model_type': model_type,
+            'model_name': 'Claude Opus (Deep Insights)' if model_type == 'deep' else 'Claude Sonnet (Fast Insights)',
+            'data_sources': data_sources
+        }
+
+        # Save to S3 with date-based path
+        bucket = st.secrets['aws'].get('bucket_name', 'retail-data-bcgr')
+        s3_key = f"ai-reports/{timestamp.strftime('%Y/%m')}/{report_id}.json"
+
+        s3_client.put_object(
+            Bucket=bucket,
+            Key=s3_key,
+            Body=json.dumps(report, indent=2, default=str),
+            ContentType='application/json'
+        )
+
+        return True
+    except Exception as e:
+        print(f"Error saving report: {e}")
+        return False
+
+
+def _load_ai_reports(limit: int = 50) -> list:
+    """
+    Load recent AI reports from S3.
+
+    Args:
+        limit: Maximum number of reports to load
+
+    Returns:
+        List of report dictionaries, sorted by date (newest first)
+    """
+    s3_client = _get_reports_s3_client()
+    if not s3_client:
+        return []
+
+    try:
+        import json
+
+        bucket = st.secrets['aws'].get('bucket_name', 'retail-data-bcgr')
+        prefix = 'ai-reports/'
+
+        # List all report files
+        paginator = s3_client.get_paginator('list_objects_v2')
+        reports = []
+
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            for obj in page.get('Contents', []):
+                if obj['Key'].endswith('.json'):
+                    try:
+                        response = s3_client.get_object(Bucket=bucket, Key=obj['Key'])
+                        report = json.loads(response['Body'].read().decode('utf-8'))
+                        reports.append(report)
+                    except Exception:
+                        continue
+
+        # Sort by timestamp (newest first)
+        reports.sort(key=lambda x: x.get('timestamp', ''), reverse=True)
+
+        return reports[:limit]
+    except Exception as e:
+        print(f"Error loading reports: {e}")
+        return []
+
+
+def _delete_ai_report(report_id: str, timestamp: str) -> bool:
+    """Delete a specific AI report from S3."""
+    s3_client = _get_reports_s3_client()
+    if not s3_client:
+        return False
+
+    try:
+        from datetime import datetime
+
+        # Parse timestamp to get the S3 path
+        dt = datetime.fromisoformat(timestamp)
+        bucket = st.secrets['aws'].get('bucket_name', 'retail-data-bcgr')
+        s3_key = f"ai-reports/{dt.strftime('%Y/%m')}/{report_id}.json"
+
+        s3_client.delete_object(Bucket=bucket, Key=s3_key)
+        return True
+    except Exception as e:
+        print(f"Error deleting report: {e}")
+        return False
+
+
 def _render_comprehensive_insights(state, analytics):
     """
     Render comprehensive rule-based insights using the InsightsEngine.
@@ -2826,7 +2964,7 @@ def render_recommendations(state, analytics):
         return
 
     # Create tabs for different recommendation types
-    tab1, tab2 = st.tabs(["📋 Automated Insights", "🤖 AI Analysis"])
+    tab1, tab2, tab3 = st.tabs(["📋 Automated Insights", "🤖 AI Analysis", "📁 Past Reports"])
 
     with tab1:
         # Use the comprehensive InsightsEngine if available
@@ -3516,12 +3654,130 @@ Focus on actionable improvements that will drive more organic traffic and local 
             spinner_text = "🧠 Generating Deep Insights..." if use_deep_thinking else "⚡ Generating Fast Insights..."
             with st.spinner(spinner_text):
                 answer = claude.answer_business_question(question, context, use_deep_thinking=use_deep_thinking)
+
+                # Save the report to S3
+                model_type = 'deep' if use_deep_thinking else 'fast'
+                report_saved = _save_ai_report(
+                    question=question,
+                    answer=answer,
+                    model_type=model_type,
+                    data_sources=data_sources
+                )
+
                 st.markdown("### Answer")
                 if use_deep_thinking:
                     st.caption("🧠 *Deep Insights - Analyzed with Claude Opus + Extended Thinking*")
                 else:
                     st.caption("⚡ *Fast Insights - Analyzed with Claude Sonnet*")
                 st.markdown(answer)
+
+                if report_saved:
+                    st.success("📁 Report saved to Past Reports")
+
+    with tab3:
+        # Past Reports Tab
+        st.subheader("📁 Past AI Analysis Reports")
+        st.caption("View and print previous AI-generated insights")
+
+        # Refresh button
+        col1, col2 = st.columns([3, 1])
+        with col2:
+            if st.button("🔄 Refresh", key="refresh_reports"):
+                st.rerun()
+
+        # Load reports
+        with st.spinner("Loading reports..."):
+            reports = _load_ai_reports(limit=50)
+
+        if not reports:
+            st.info("No saved reports yet. Generate an AI analysis in the 'AI Analysis' tab to create your first report.")
+        else:
+            st.success(f"Found {len(reports)} saved report(s)")
+
+            # Filter options
+            col1, col2 = st.columns(2)
+            with col1:
+                model_filter = st.selectbox(
+                    "Filter by type:",
+                    options=["All", "Deep Insights", "Fast Insights"],
+                    key="report_model_filter"
+                )
+            with col2:
+                # Get unique dates for filtering
+                unique_dates = sorted(set(r.get('date', '') for r in reports), reverse=True)
+                date_filter = st.selectbox(
+                    "Filter by date:",
+                    options=["All"] + unique_dates,
+                    key="report_date_filter"
+                )
+
+            # Apply filters
+            filtered_reports = reports
+            if model_filter == "Deep Insights":
+                filtered_reports = [r for r in filtered_reports if r.get('model_type') == 'deep']
+            elif model_filter == "Fast Insights":
+                filtered_reports = [r for r in filtered_reports if r.get('model_type') == 'fast']
+
+            if date_filter != "All":
+                filtered_reports = [r for r in filtered_reports if r.get('date') == date_filter]
+
+            st.markdown(f"**Showing {len(filtered_reports)} report(s)**")
+            st.markdown("---")
+
+            # Display reports
+            for i, report in enumerate(filtered_reports):
+                report_date = report.get('date', 'Unknown')
+                report_time = report.get('time', '')
+                model_name = report.get('model_name', 'Unknown')
+                model_type = report.get('model_type', 'fast')
+                question = report.get('question', 'No question recorded')
+                answer = report.get('answer', 'No answer recorded')
+                report_id = report.get('report_id', '')
+                timestamp = report.get('timestamp', '')
+
+                # Model badge
+                model_badge = "🧠" if model_type == 'deep' else "⚡"
+
+                with st.expander(f"{model_badge} {report_date} {report_time} - {question[:60]}{'...' if len(question) > 60 else ''}", expanded=False):
+                    # Report header
+                    st.markdown(f"**Date:** {report_date} at {report_time}")
+                    st.markdown(f"**Model:** {model_name}")
+
+                    # Data sources used
+                    data_sources = report.get('data_sources', [])
+                    if data_sources:
+                        st.markdown(f"**Data Sources:** {' | '.join(data_sources)}")
+
+                    st.markdown("---")
+
+                    # Question
+                    st.markdown("**Question:**")
+                    st.info(question)
+
+                    # Answer (print-friendly format)
+                    st.markdown("**Analysis:**")
+                    st.markdown(answer)
+
+                    # Action buttons
+                    col1, col2, col3 = st.columns([1, 1, 2])
+                    with col1:
+                        # Copy to clipboard button (using markdown workaround)
+                        if st.button("📋 Copy", key=f"copy_{report_id}"):
+                            st.code(f"Question: {question}\n\nAnalysis:\n{answer}", language=None)
+                            st.caption("Select and copy the text above")
+
+                    with col2:
+                        # Delete button
+                        if st.button("🗑️ Delete", key=f"delete_{report_id}"):
+                            if _delete_ai_report(report_id, timestamp):
+                                st.success("Report deleted")
+                                st.rerun()
+                            else:
+                                st.error("Failed to delete report")
+
+                    with col3:
+                        # Print instructions
+                        st.caption("💡 To print: Expand report → Right-click → Print")
 
 
 def render_brand_product_mapping(state, s3_manager):
