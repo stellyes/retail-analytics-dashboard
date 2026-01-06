@@ -546,8 +546,8 @@ class DataProcessor:
         """Clean and process Net Sales by Brand data."""
         df = df.copy()
 
-        # Handle column name change: Treez renamed 'Brand' to 'Product brand' after 12/01/2025
-        if 'Product brand' in df.columns and 'Brand' not in df.columns:
+        # Handle column name change: Treez renamed 'Brand' to 'Product Brand' after 12/01/2025
+        if 'Product Brand' in df.columns and 'Brand' not in df.columns:
             df = df.rename(columns={'Product Brand': 'Brand'})
 
         # Filter out sample records ([DS] = Display Samples, [SS] = Staff Samples)
@@ -4209,14 +4209,14 @@ def render_upload_page(s3_manager, processor):
             df = pd.read_csv(brand_file)
             st.success(f"Loaded {len(df)} rows")
 
-            # Handle column name change: Treez renamed 'Brand' to 'Product brand' after 12/01/2025
-            if 'Product brand' in df.columns and 'Brand' not in df.columns:
-                df = df.rename(columns={'Product brand': 'Brand'})
-                st.info("ℹ️ Detected new Treez format - 'Product brand' column renamed to 'Brand'")
+            # Handle column name change: Treez renamed 'Brand' to 'Product Brand' after 12/01/2025
+            if 'Product Brand' in df.columns and 'Brand' not in df.columns:
+                df = df.rename(columns={'Product Brand': 'Brand'})
+                st.info("ℹ️ Detected new Treez format - 'Product Brand' column renamed to 'Brand'")
 
             # Validate that this is brand data (must have 'Brand' column)
             if 'Brand' not in df.columns:
-                st.error(f"⚠️ This doesn't appear to be Brand data. Expected 'Brand' or 'Product brand' column but found: {', '.join(df.columns[:5])}...")
+                st.error(f"⚠️ This doesn't appear to be Brand data. Expected 'Brand' or 'Product Brand' column but found: {', '.join(df.columns[:5])}...")
                 st.info("Please upload a 'Net Sales by Brand' report from Treez.")
             else:
                 # Show sample record count that will be filtered
