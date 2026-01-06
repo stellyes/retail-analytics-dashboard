@@ -439,13 +439,15 @@ Be specific and data-driven with your recommendations."""
         except Exception as e:
             return f"Error generating integrated insights: {str(e)}"
 
-    def answer_business_question(self, question: str, context_data: dict) -> str:
+    def answer_business_question(self, question: str, context_data: dict, use_deep_thinking: bool = True) -> str:
         """
         Answer ad-hoc business questions using the data context.
+        Uses Claude Opus with extended thinking for deeper analysis.
 
         Args:
             question: User's business question
             context_data: Relevant data to inform the answer
+            use_deep_thinking: If True, use Opus with extended thinking for deeper analysis
 
         Returns:
             AI-generated answer
@@ -506,16 +508,38 @@ Be specific and data-driven with your recommendations."""
 6. If data is missing or incomplete for a full answer, clearly state what additional information would help
 7. Provide actionable insights and specific recommendations when appropriate
 8. When discussing SEO or research insights, relate them back to business impact and recommended actions
+9. Think deeply about the interconnections between data sources and provide strategic insights that go beyond surface-level observations
 
 Respond with a clear, data-driven answer that demonstrates you have access to and understand ALL the available business data."""
 
         try:
-            message = self.client.messages.create(
-                model=self.model,
-                max_tokens=2000,
-                messages=[{"role": "user", "content": prompt}]
-            )
-            return message.content[0].text
+            if use_deep_thinking:
+                # Use Claude Opus with extended thinking for deeper analysis
+                response = self.client.messages.create(
+                    model="claude-opus-4-20250514",
+                    max_tokens=16000,
+                    thinking={
+                        "type": "enabled",
+                        "budget_tokens": 10000  # Allow up to 10k tokens for thinking
+                    },
+                    messages=[{"role": "user", "content": prompt}]
+                )
+
+                # Extract the text response (skip thinking blocks)
+                result_text = ""
+                for block in response.content:
+                    if block.type == "text":
+                        result_text += block.text
+
+                return result_text if result_text else "No response generated."
+            else:
+                # Standard mode without extended thinking
+                message = self.client.messages.create(
+                    model=self.model,
+                    max_tokens=4000,
+                    messages=[{"role": "user", "content": prompt}]
+                )
+                return message.content[0].text
         except Exception as e:
             return f"Error processing question: {str(e)}"
 

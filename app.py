@@ -3438,7 +3438,16 @@ Focus on actionable improvements that will drive more organic traffic and local 
             except Exception as e:
                 st.caption(f"💡 Document selection not available: {str(e)[:50]}")
 
-        question = st.text_input("Ask anything about your sales, brands, customers, invoices, purchasing, industry research, SEO, or business strategy:")
+        # Model selection toggle
+        col_q, col_toggle = st.columns([4, 1])
+        with col_q:
+            question = st.text_input("Ask anything about your sales, brands, customers, invoices, purchasing, industry research, SEO, or business strategy:")
+        with col_toggle:
+            use_deep_thinking = st.toggle(
+                "Deep Insights",
+                value=False,
+                help="**OFF - Fast Insights (Sonnet)**: ~$0.10/query, quick answers\n\n**ON - Deep Insights (Opus)**: ~$2/query, strategic analysis with extended thinking"
+            )
 
         if question:
             # Prepare comprehensive context with ALL available data sources
@@ -3503,9 +3512,15 @@ Focus on actionable improvements that will drive more organic traffic and local 
             if selected_doc_contents:
                 context['selected_research_documents'] = selected_doc_contents
 
-            with st.spinner("Thinking..."):
-                answer = claude.answer_business_question(question, context)
+            # Show appropriate spinner based on model
+            spinner_text = "🧠 Generating Deep Insights..." if use_deep_thinking else "⚡ Generating Fast Insights..."
+            with st.spinner(spinner_text):
+                answer = claude.answer_business_question(question, context, use_deep_thinking=use_deep_thinking)
                 st.markdown("### Answer")
+                if use_deep_thinking:
+                    st.caption("🧠 *Deep Insights - Analyzed with Claude Opus + Extended Thinking*")
+                else:
+                    st.caption("⚡ *Fast Insights - Analyzed with Claude Sonnet*")
                 st.markdown(answer)
 
 
@@ -3933,17 +3948,22 @@ def render_upload_page(s3_manager, processor):
         if brand_file:
             df = pd.read_csv(brand_file)
             st.success(f"Loaded {len(df)} rows")
-            
-            # Show sample record count that will be filtered
-            sample_count = df['Brand'].str.startswith(('[DS]', '[SS]'), na=False).sum()
-            if sample_count > 0:
-                st.info(f"ℹ️ {sample_count} sample records ([DS]/[SS]) will be filtered out")
-            
-            # Preview
-            with st.expander("Preview Data"):
-                st.dataframe(df.head(), use_container_width=True)
-            
-            if st.button("Process Brand Data", key="process_brand"):
+
+            # Validate that this is brand data (must have 'Brand' column)
+            if 'Brand' not in df.columns:
+                st.error(f"⚠️ This doesn't appear to be Brand data. Expected 'Brand' column but found: {', '.join(df.columns[:5])}...")
+                st.info("Please upload a 'Net Sales by Brand' report from Treez.")
+            else:
+                # Show sample record count that will be filtered
+                sample_count = df['Brand'].str.startswith(('[DS]', '[SS]'), na=False).sum()
+                if sample_count > 0:
+                    st.info(f"ℹ️ {sample_count} sample records ([DS]/[SS]) will be filtered out")
+
+                # Preview
+                with st.expander("Preview Data"):
+                    st.dataframe(df.head(), use_container_width=True)
+
+            if 'Brand' in df.columns and st.button("Process Brand Data", key="process_brand"):
                 original_count = len(df)
                 processed = processor.clean_brand_data(df)
                 filtered_count = original_count - len(processed)
