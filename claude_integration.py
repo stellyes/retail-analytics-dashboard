@@ -474,6 +474,9 @@ Be specific and data-driven with your recommendations."""
             data_description.append("- **Industry Research**: Cannabis industry trends, regulatory updates, market analysis, and competitive insights from research documents")
         if context_data.get('seo_analysis'):
             data_description.append("- **SEO Analysis**: Website SEO scores, technical issues, content recommendations, and local SEO performance for store websites")
+        if context_data.get('selected_research_documents'):
+            doc_names = list(context_data['selected_research_documents'].keys())
+            data_description.append(f"- **Selected Research Documents**: Full content from {len(doc_names)} specific document(s): {', '.join(doc_names)}")
 
         data_sources_text = "\n".join(data_description) if data_description else "Limited data available"
 
@@ -496,12 +499,13 @@ Be specific and data-driven with your recommendations."""
    - Sales/revenue: Focus on sales_summary and brand data
    - Customers: Focus on customer_summary
    - Product strategy: Combine product_mix, brand data, and purchase data
-   - Industry trends/regulations: Focus on research_findings
+   - Industry trends/regulations: Focus on research_findings and selected_research_documents
    - Website/marketing/online presence: Focus on seo_analysis
    - Strategic planning: Synthesize across ALL available data sources
-5. If data is missing or incomplete for a full answer, clearly state what additional information would help
-6. Provide actionable insights and specific recommendations when appropriate
-7. When discussing SEO or research insights, relate them back to business impact and recommended actions
+5. If selected_research_documents are provided, prioritize those documents for answering questions about their content - quote relevant passages and provide specific insights from the document text
+6. If data is missing or incomplete for a full answer, clearly state what additional information would help
+7. Provide actionable insights and specific recommendations when appropriate
+8. When discussing SEO or research insights, relate them back to business impact and recommended actions
 
 Respond with a clear, data-driven answer that demonstrates you have access to and understand ALL the available business data."""
 

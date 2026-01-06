@@ -2518,6 +2518,35 @@ def _fetch_seo_data_cached(_aws_access_key: str, _aws_secret_key: str, _region: 
         return None
 
 
+@st.cache_data(ttl=86400, show_spinner=False)  # Cache for 24 hours
+def _fetch_research_documents_cached(_aws_access_key: str, _aws_secret_key: str, _region: str):
+    """Fetch list of research documents from S3 with daily caching."""
+    try:
+        if MANUAL_RESEARCH_AVAILABLE:
+            from manual_research_integration import DocumentStorage, S3_BUCKET
+            storage = DocumentStorage(S3_BUCKET)
+            documents = storage.list_documents()
+            return documents if documents else []
+        return []
+    except Exception:
+        return []
+
+
+def _load_document_content(doc_s3_key: str) -> str:
+    """Load a specific document's content from S3."""
+    try:
+        if MANUAL_RESEARCH_AVAILABLE:
+            from manual_research_integration import DocumentStorage, S3_BUCKET
+            storage = DocumentStorage(S3_BUCKET)
+            content, error = storage.get_document_content(doc_s3_key)
+            if error:
+                return f"[Error loading document: {error}]"
+            return content
+        return ""
+    except Exception as e:
+        return f"[Error loading document: {str(e)}]"
+
+
 def _render_comprehensive_insights(state, analytics):
     """
     Render comprehensive rule-based insights using the InsightsEngine.
@@ -3352,6 +3381,63 @@ Focus on actionable improvements that will drive more organic traffic and local 
         if data_sources:
             st.caption(f"**Available data:** {' | '.join(data_sources)}")
 
+        # Document selector for specific research document queries
+        selected_doc_contents = {}
+        if MANUAL_RESEARCH_AVAILABLE:
+            try:
+                aws_access_key = st.secrets['aws']['access_key_id']
+                aws_secret_key = st.secrets['aws']['secret_access_key']
+                aws_region = st.secrets['aws'].get('region', 'us-west-2')
+
+                research_documents = _fetch_research_documents_cached(aws_access_key, aws_secret_key, aws_region)
+
+                if research_documents:
+                    with st.expander(f"📄 Reference Specific Documents ({len(research_documents)} available)", expanded=False):
+                        st.caption("Select documents to include in your query for targeted analysis")
+
+                        # Group documents by category
+                        docs_by_category = {}
+                        for doc in research_documents:
+                            category = doc.get('category', 'Other')
+                            if category not in docs_by_category:
+                                docs_by_category[category] = []
+                            docs_by_category[category].append(doc)
+
+                        # Create multiselect with formatted document names
+                        doc_options = []
+                        doc_map = {}  # Maps display name to doc data
+                        for category, docs in sorted(docs_by_category.items()):
+                            for doc in docs:
+                                filename = doc.get('original_filename', 'Unknown')
+                                uploaded = doc.get('uploaded_at', '')[:10]  # Just the date
+                                display_name = f"[{category}] {filename} ({uploaded})"
+                                doc_options.append(display_name)
+                                doc_map[display_name] = doc
+
+                        selected_docs = st.multiselect(
+                            "Select documents:",
+                            options=doc_options,
+                            default=[],
+                            help="Select one or more documents to include in your query"
+                        )
+
+                        if selected_docs:
+                            st.info(f"📎 {len(selected_docs)} document(s) will be included in your query")
+                            # Load content for selected documents
+                            for display_name in selected_docs:
+                                doc = doc_map[display_name]
+                                s3_key = doc.get('s3_key', '')
+                                if s3_key:
+                                    content = _load_document_content(s3_key)
+                                    selected_doc_contents[doc.get('original_filename', 'Unknown')] = {
+                                        'content': content[:50000],  # Limit to 50k chars per doc
+                                        'category': doc.get('category', 'Other'),
+                                        'source_url': doc.get('source_url', ''),
+                                        'uploaded_at': doc.get('uploaded_at', '')
+                                    }
+            except Exception as e:
+                st.caption(f"💡 Document selection not available: {str(e)[:50]}")
+
         question = st.text_input("Ask anything about your sales, brands, customers, invoices, purchasing, industry research, SEO, or business strategy:")
 
         if question:
@@ -3412,6 +3498,10 @@ Focus on actionable improvements that will drive more organic traffic and local 
                         'categories': {cat: {'score': data.get('score')} for cat, data in seo_data.get('categories', {}).items() if isinstance(data, dict)}
                     }
                 context['seo_analysis'] = seo_context
+
+            # Add selected research documents for targeted queries
+            if selected_doc_contents:
+                context['selected_research_documents'] = selected_doc_contents
 
             with st.spinner("Thinking..."):
                 answer = claude.answer_business_question(question, context)
