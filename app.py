@@ -548,7 +548,7 @@ class DataProcessor:
 
         # Handle column name change: Treez renamed 'Brand' to 'Product brand' after 12/01/2025
         if 'Product brand' in df.columns and 'Brand' not in df.columns:
-            df = df.rename(columns={'Product brand': 'Brand'})
+            df = df.rename(columns={'Product Brand': 'Brand'})
 
         # Filter out sample records ([DS] = Display Samples, [SS] = Staff Samples)
         # These are not actual sales and should be excluded from analysis
