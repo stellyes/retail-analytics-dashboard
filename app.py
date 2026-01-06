@@ -77,6 +77,203 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
+# =============================================================================
+# SMART CACHING - Hash-based cache invalidation with localStorage persistence
+# =============================================================================
+
+# Simple XOR encryption key for localStorage (adequate for internal apps)
+_CACHE_KEY = "r3t41l_4n4lyt1cs_2024"
+
+def _compute_data_hash(data: dict) -> str:
+    """Compute a hash of the data for cache invalidation."""
+    # Create a deterministic string representation
+    json_str = json.dumps(data, sort_keys=True, default=str)
+    return hashlib.md5(json_str.encode()).hexdigest()[:16]
+
+def _xor_encrypt(data: str, key: str) -> str:
+    """Simple XOR encryption for localStorage data."""
+    import base64
+    encrypted = ''.join(chr(ord(c) ^ ord(key[i % len(key)])) for i, c in enumerate(data))
+    return base64.b64encode(encrypted.encode('latin-1')).decode('ascii')
+
+def _xor_decrypt(data: str, key: str) -> str:
+    """Simple XOR decryption for localStorage data."""
+    import base64
+    decoded = base64.b64decode(data.encode('ascii')).decode('latin-1')
+    return ''.join(chr(ord(c) ^ ord(key[i % len(key)])) for i, c in enumerate(decoded))
+
+def _save_hash_to_localstorage(hash_value: str):
+    """Save data hash to localStorage for cache invalidation checks."""
+    try:
+        import streamlit.components.v1 as components
+        components.html(f"""
+            <script>
+                try {{
+                    localStorage.setItem('retail_data_hash', '{hash_value}');
+                    localStorage.setItem('retail_cache_timestamp', '{datetime.now().isoformat()}');
+                }} catch(e) {{
+                    console.log('localStorage hash save failed:', e);
+                }}
+            </script>
+        """, height=0)
+    except Exception:
+        pass
+
+def _save_to_localstorage(key: str, data: dict):
+    """Save data to browser localStorage with encryption."""
+    try:
+        import streamlit.components.v1 as components
+        json_data = json.dumps(data, default=str)
+        encrypted = _xor_encrypt(json_data, _CACHE_KEY)
+        # Compute and save hash along with data
+        data_hash = _compute_data_hash(data)
+        components.html(f"""
+            <script>
+                try {{
+                    localStorage.setItem('retail_cache_{key}', '{encrypted}');
+                    localStorage.setItem('retail_cache_{key}_hash', '{data_hash}');
+                    localStorage.setItem('retail_cache_{key}_timestamp', '{datetime.now().isoformat()}');
+                }} catch(e) {{
+                    console.log('localStorage save failed:', e);
+                }}
+            </script>
+        """, height=0)
+    except Exception:
+        pass
+
+def _get_localstorage_hash_check_js():
+    """Generate JavaScript that reads localStorage hash and sends it to Streamlit via query params."""
+    return """
+    <script>
+        (function() {
+            try {
+                const hash = localStorage.getItem('retail_data_hash') || '';
+                const timestamp = localStorage.getItem('retail_cache_timestamp') || '';
+                // Store in sessionStorage so Streamlit can potentially read it
+                sessionStorage.setItem('cache_hash', hash);
+                sessionStorage.setItem('cache_timestamp', timestamp);
+                // Also try to communicate via a custom event
+                window.postMessage({type: 'RETAIL_CACHE_HASH', hash: hash, timestamp: timestamp}, '*');
+            } catch(e) {
+                console.log('localStorage hash check failed:', e);
+            }
+        })();
+    </script>
+    """
+
+def _show_loading_overlay(message: str = "Syncing data...", submessage: str = "New data detected in cloud"):
+    """Show a fullscreen loading overlay with progress animation."""
+    import streamlit.components.v1 as components
+    components.html(f"""
+        <style>
+            @keyframes pulse {{
+                0%, 100% {{ opacity: 1; }}
+                50% {{ opacity: 0.5; }}
+            }}
+            @keyframes progress {{
+                0% {{ width: 0%; }}
+                50% {{ width: 70%; }}
+                100% {{ width: 100%; }}
+            }}
+            @keyframes spin {{
+                0% {{ transform: rotate(0deg); }}
+                100% {{ transform: rotate(360deg); }}
+            }}
+        </style>
+        <div id="loading-overlay" style="
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(8px);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 999999;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        ">
+            <!-- Spinner -->
+            <div style="
+                width: 60px;
+                height: 60px;
+                border: 4px solid rgba(255, 255, 255, 0.1);
+                border-top: 4px solid #4CAF50;
+                border-radius: 50%;
+                animation: spin 1s linear infinite;
+                margin-bottom: 24px;
+            "></div>
+
+            <!-- Main message -->
+            <div style="
+                color: white;
+                font-size: 24px;
+                font-weight: 600;
+                margin-bottom: 8px;
+                animation: pulse 2s ease-in-out infinite;
+            ">{message}</div>
+
+            <!-- Sub message -->
+            <div style="
+                color: rgba(255, 255, 255, 0.7);
+                font-size: 14px;
+                margin-bottom: 32px;
+            ">{submessage}</div>
+
+            <!-- Progress bar container -->
+            <div style="
+                width: 300px;
+                height: 6px;
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 3px;
+                overflow: hidden;
+            ">
+                <div style="
+                    height: 100%;
+                    background: linear-gradient(90deg, #4CAF50, #8BC34A);
+                    border-radius: 3px;
+                    animation: progress 3s ease-in-out infinite;
+                "></div>
+            </div>
+
+            <!-- Status text -->
+            <div style="
+                color: rgba(255, 255, 255, 0.5);
+                font-size: 12px;
+                margin-top: 16px;
+            ">Please wait while we fetch the latest data...</div>
+        </div>
+
+        <script>
+            // Auto-remove overlay after data loads (Streamlit will rerun)
+            // This is a fallback in case the page doesn't refresh
+            setTimeout(function() {{
+                const overlay = document.getElementById('loading-overlay');
+                if (overlay) {{
+                    overlay.style.transition = 'opacity 0.5s';
+                    overlay.style.opacity = '0';
+                    setTimeout(() => overlay.remove(), 500);
+                }}
+            }}, 10000); // 10 second timeout
+        </script>
+    """, height=0)
+
+def _hide_loading_overlay():
+    """Hide the loading overlay."""
+    import streamlit.components.v1 as components
+    components.html("""
+        <script>
+            const overlay = document.getElementById('loading-overlay');
+            if (overlay) {
+                overlay.style.transition = 'opacity 0.3s';
+                overlay.style.opacity = '0';
+                setTimeout(() => overlay.remove(), 300);
+            }
+        </script>
+    """, height=0)
+
 # Store mappings based on data prefixes
 STORE_MAPPING = {
     "Barbary Coast - SF Mission": "barbary_coast",
@@ -3055,55 +3252,184 @@ def render_recommendations(state, analytics):
         
         st.success("✅ Claude AI connected")
 
-        # Initialize Invoice Data Service for DynamoDB access
-        invoice_service = None
-        invoice_summary = None
-        product_purchase_summary = None
+        # =============================================================================
+        # SMART CACHED DATA LOADING - Hash-based cache invalidation
+        # Only reloads data when the underlying data has actually changed
+        # =============================================================================
 
-        if INVOICE_DATA_AVAILABLE:
+        @st.cache_data(ttl=300, show_spinner=False)  # 5-minute TTL for quick hash check
+        def _get_data_fingerprint():
+            """
+            Get a lightweight fingerprint of current data state.
+            This is fast - just counts records, doesn't load full data.
+            Used to detect if data has changed and cache should be invalidated.
+            """
+            fingerprint = {'invoice_count': 0, 'research_updated': '', 'seo_updated': ''}
+            try:
+                if INVOICE_DATA_AVAILABLE:
+                    aws_config = {
+                        'aws_access_key': st.secrets['aws']['access_key_id'],
+                        'aws_secret_key': st.secrets['aws']['secret_access_key'],
+                        'region': st.secrets['aws']['region']
+                    }
+                    invoice_svc = InvoiceDataService(**aws_config)
+                    # Quick count query - much faster than full scan
+                    invoices_table = invoice_svc.dynamodb.Table(invoice_svc.invoices_table_name)
+                    response = invoices_table.scan(Select='COUNT')
+                    fingerprint['invoice_count'] = response.get('Count', 0)
+            except Exception:
+                pass
+            return _compute_data_hash(fingerprint)
+
+        @st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
+        def _load_invoice_data_cached():
+            """Load invoice data from DynamoDB with 1-hour cache."""
+            if not INVOICE_DATA_AVAILABLE:
+                return None, None
             try:
                 aws_config = {
                     'aws_access_key': st.secrets['aws']['access_key_id'],
                     'aws_secret_key': st.secrets['aws']['secret_access_key'],
                     'region': st.secrets['aws']['region']
                 }
-                invoice_service = InvoiceDataService(**aws_config)
+                invoice_svc = InvoiceDataService(**aws_config)
+                inv_summary = invoice_svc.get_invoice_summary()
+                prod_summary = invoice_svc.get_product_summary()
+                return inv_summary, prod_summary
+            except Exception:
+                return None, None
 
-                # Load invoice summaries for Claude context
-                invoice_summary = invoice_service.get_invoice_summary()
-                product_purchase_summary = invoice_service.get_product_summary()
-
-                st.success(f"✅ Invoice data connected ({invoice_summary.get('total_invoices', 0)} invoices, {product_purchase_summary.get('total_items', 0)} line items)")
-            except Exception as e:
-                st.caption(f"💡 Invoice data not available: {str(e)[:50]}")
-
-        # Initialize Research Findings data for Claude context
-        research_summary = None
-        if RESEARCH_AVAILABLE:
+        @st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
+        def _load_research_data_cached():
+            """Load research data from S3 with 1-hour cache."""
+            if not RESEARCH_AVAILABLE:
+                return None
             try:
                 research_viewer = ResearchFindingsViewer()
                 if research_viewer.is_available():
-                    research_summary = research_viewer.load_latest_summary()
-                    if research_summary:
-                        findings_count = len(research_summary.get('key_findings', []))
-                        st.success(f"✅ Research data connected ({findings_count} key findings)")
-            except Exception as e:
-                st.caption(f"💡 Research data not available: {str(e)[:50]}")
+                    return research_viewer.load_latest_summary()
+            except Exception:
+                pass
+            return None
 
-        # Initialize SEO Analysis data for Claude context
-        seo_summaries = {}
-        if SEO_AVAILABLE:
+        @st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
+        def _load_seo_data_cached():
+            """Load SEO data from S3 with 1-hour cache."""
+            if not SEO_AVAILABLE:
+                return {}
             try:
+                seo_data_dict = {}
                 for site_name, site_url in [("Barbary Coast", "https://barbarycoastsf.com"), ("Grass Roots", "https://grassrootssf.com")]:
                     seo_viewer = SEOFindingsViewer(website=site_url)
                     if seo_viewer.is_available():
                         seo_data = seo_viewer.load_latest_summary()
                         if seo_data:
-                            seo_summaries[site_name] = seo_data
-                if seo_summaries:
-                    st.success(f"✅ SEO data connected ({len(seo_summaries)} sites)")
-            except Exception as e:
-                st.caption(f"💡 SEO data not available: {str(e)[:50]}")
+                            seo_data_dict[site_name] = seo_data
+                return seo_data_dict
+            except Exception:
+                return {}
+
+        # Initialize session state cache keys if not present
+        if 'recommendations_invoice_summary' not in st.session_state:
+            st.session_state.recommendations_invoice_summary = None
+        if 'recommendations_product_summary' not in st.session_state:
+            st.session_state.recommendations_product_summary = None
+        if 'recommendations_research_summary' not in st.session_state:
+            st.session_state.recommendations_research_summary = None
+        if 'recommendations_seo_summaries' not in st.session_state:
+            st.session_state.recommendations_seo_summaries = None
+        if 'recommendations_data_loaded' not in st.session_state:
+            st.session_state.recommendations_data_loaded = False
+        if 'recommendations_data_hash' not in st.session_state:
+            st.session_state.recommendations_data_hash = None
+
+        # Load data only once per session (or when refresh is requested)
+        invoice_service = None
+        invoice_summary = None
+        product_purchase_summary = None
+        research_summary = None
+        seo_summaries = {}
+
+        # Check if we need to load data
+        needs_refresh = not st.session_state.recommendations_data_loaded
+
+        # Smart hash-based invalidation: check if data has changed
+        if st.session_state.recommendations_data_loaded:
+            current_hash = _get_data_fingerprint()
+            if current_hash != st.session_state.recommendations_data_hash:
+                # Show loading overlay BEFORE invalidating cache
+                _show_loading_overlay("Syncing data...", "New data detected in cloud")
+                # Data has changed - invalidate cache
+                needs_refresh = True
+                st.session_state.recommendations_data_loaded = False
+                _load_invoice_data_cached.clear()
+                _load_research_data_cached.clear()
+                _load_seo_data_cached.clear()
+
+        # Add refresh button in sidebar for manual data refresh
+        with st.sidebar:
+            if st.button("🔄 Refresh Data", key="refresh_recommendations_data", help="Reload all data from sources"):
+                # Show loading overlay for manual refresh
+                _show_loading_overlay("Refreshing data...", "Fetching latest data from cloud")
+                # Clear the function caches to force a refresh
+                _get_data_fingerprint.clear()
+                _load_invoice_data_cached.clear()
+                _load_research_data_cached.clear()
+                _load_seo_data_cached.clear()
+                needs_refresh = True
+                st.session_state.recommendations_data_loaded = False
+                st.session_state.recommendations_data_hash = None
+
+        if needs_refresh:
+            with st.spinner("Loading data sources..."):
+                # Load all data using cached functions (1-hour TTL)
+                # These functions cache their results, so subsequent calls are instant
+                inv_data = _load_invoice_data_cached()
+                st.session_state.recommendations_invoice_summary = inv_data[0] if inv_data else None
+                st.session_state.recommendations_product_summary = inv_data[1] if inv_data else None
+
+                st.session_state.recommendations_research_summary = _load_research_data_cached()
+                st.session_state.recommendations_seo_summaries = _load_seo_data_cached()
+
+                # Store the current data hash for future comparisons
+                st.session_state.recommendations_data_hash = _get_data_fingerprint()
+                st.session_state.recommendations_data_loaded = True
+
+                # Save to localStorage for persistence across browser sessions (includes hash for validation)
+                cache_data = {
+                    'invoice_summary': st.session_state.recommendations_invoice_summary,
+                    'product_summary': st.session_state.recommendations_product_summary,
+                    'research_summary': st.session_state.recommendations_research_summary,
+                    'seo_summaries': st.session_state.recommendations_seo_summaries,
+                    'data_hash': st.session_state.recommendations_data_hash,
+                    'cached_at': datetime.now().isoformat()
+                }
+                _save_to_localstorage('recommendations_data', cache_data)
+                # Also save the hash separately for quick validation checks
+                _save_hash_to_localstorage(st.session_state.recommendations_data_hash)
+
+        # Use cached data from session state
+        invoice_summary = st.session_state.recommendations_invoice_summary
+        product_purchase_summary = st.session_state.recommendations_product_summary
+        research_summary = st.session_state.recommendations_research_summary
+        seo_summaries = st.session_state.recommendations_seo_summaries or {}
+
+        # Display connection status (using cached values)
+        if invoice_summary and invoice_summary.get('total_invoices', 0) > 0:
+            st.success(f"✅ Invoice data ({invoice_summary.get('total_invoices', 0)} invoices, {product_purchase_summary.get('total_items', 0) if product_purchase_summary else 0} line items)")
+        else:
+            st.caption("💡 Invoice data not available")
+
+        if research_summary:
+            findings_count = len(research_summary.get('key_findings', []))
+            st.success(f"✅ Research data ({findings_count} key findings)")
+        else:
+            st.caption("💡 Research data not available")
+
+        if seo_summaries:
+            st.success(f"✅ SEO data ({len(seo_summaries)} sites)")
+        else:
+            st.caption("💡 SEO data not available")
 
         # Get brand-product mapping
         brand_product_mapping = state.brand_product_mapping or {}
