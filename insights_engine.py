@@ -851,71 +851,94 @@ class InsightsEngine:
         action_items = research_data.get('action_items', [])
         tracking_items = research_data.get('tracking_items', [])
 
-        # Rule 1: Urgent action items
-        urgent_actions = [a for a in action_items if 'urgent' in str(a).lower() or 'immediate' in str(a).lower()]
-        if urgent_actions:
-            self._create_insight(
-                title="Urgent action items from research",
-                description=f"{len(urgent_actions)} urgent action items identified from industry research.",
-                priority=InsightPriority.CRITICAL,
-                category=InsightCategory.COMPLIANCE,
-                data_source="research",
-                metric_value=len(urgent_actions),
-                threshold="any urgent items",
-                recommendation=f"Review and address: {urgent_actions[0] if urgent_actions else 'See research findings'}"
-            )
+        # Helper to extract text from finding (handles both string and dict formats)
+        def get_finding_text(finding) -> str:
+            if isinstance(finding, dict):
+                return finding.get('finding', finding.get('text', finding.get('title', str(finding))))
+            return str(finding)
 
-        # Rule 2: Regulatory findings
-        regulatory_keywords = ['regulation', 'compliance', 'law', 'license', 'permit', 'legal', 'requirement']
+        # Rule 1: Surface all action items (these are pre-identified as important)
+        if action_items:
+            urgent_actions = [a for a in action_items if 'urgent' in get_finding_text(a).lower() or 'immediate' in get_finding_text(a).lower()]
+
+            if urgent_actions:
+                urgent_text = get_finding_text(urgent_actions[0])
+                self._create_insight(
+                    title="Urgent action required from research",
+                    description=f"{urgent_text[:200]}..." if len(urgent_text) > 200 else urgent_text,
+                    priority=InsightPriority.CRITICAL,
+                    category=InsightCategory.COMPLIANCE,
+                    data_source="research",
+                    metric_value=len(urgent_actions),
+                    threshold="any urgent items",
+                    recommendation="Review this item immediately and take appropriate action."
+                )
+            elif len(action_items) > 0:
+                # Show top action item even if not urgent
+                top_action = get_finding_text(action_items[0])
+                self._create_insight(
+                    title="Action item from industry research",
+                    description=f"{top_action[:200]}..." if len(top_action) > 200 else top_action,
+                    priority=InsightPriority.MEDIUM,
+                    category=InsightCategory.OPERATIONS,
+                    data_source="research",
+                    metric_value=len(action_items),
+                    threshold="any action items",
+                    recommendation=f"Review all {len(action_items)} action items in the Research page."
+                )
+
+        # Rule 2: Regulatory findings - show the actual finding
+        regulatory_keywords = ['regulation', 'compliance', 'law', 'license', 'permit', 'legal', 'requirement', 'dcc', 'cannabis control']
         regulatory_findings = [
             f for f in key_findings
-            if any(kw in str(f).lower() for kw in regulatory_keywords)
+            if any(kw in get_finding_text(f).lower() for kw in regulatory_keywords)
         ]
 
         if regulatory_findings:
+            top_regulatory = get_finding_text(regulatory_findings[0])
             self._create_insight(
-                title="Regulatory updates require attention",
-                description=f"{len(regulatory_findings)} regulatory-related findings identified.",
+                title="Regulatory update from research",
+                description=f"{top_regulatory[:250]}..." if len(top_regulatory) > 250 else top_regulatory,
                 priority=InsightPriority.HIGH,
                 category=InsightCategory.COMPLIANCE,
                 data_source="research",
                 metric_value=len(regulatory_findings),
                 threshold="any regulatory items",
-                recommendation="Review regulatory findings and ensure compliance. "
-                              "Consult with legal/compliance team if needed."
+                recommendation=f"Review {len(regulatory_findings)} regulatory finding(s). Consult with compliance team if action needed."
             )
 
-        # Rule 3: Market opportunity findings
-        opportunity_keywords = ['opportunity', 'growth', 'trend', 'emerging', 'demand', 'expand']
+        # Rule 3: Market opportunity findings - show actual opportunities
+        opportunity_keywords = ['opportunity', 'growth', 'trend', 'emerging', 'demand', 'expand', 'increase', 'rising']
         opportunities = [
             f for f in key_findings
-            if any(kw in str(f).lower() for kw in opportunity_keywords)
+            if any(kw in get_finding_text(f).lower() for kw in opportunity_keywords)
         ]
 
         if opportunities:
+            top_opportunity = get_finding_text(opportunities[0])
             self._create_insight(
-                title="Market opportunities identified",
-                description=f"{len(opportunities)} potential market opportunities found in research.",
+                title="Market opportunity identified",
+                description=f"{top_opportunity[:250]}..." if len(top_opportunity) > 250 else top_opportunity,
                 priority=InsightPriority.MEDIUM,
                 category=InsightCategory.MARKETING,
                 data_source="research",
                 metric_value=len(opportunities),
                 threshold="any opportunities",
-                recommendation="Evaluate identified opportunities for strategic fit. "
-                              "Prioritize based on potential ROI and resource requirements."
+                recommendation=f"Evaluate this opportunity. {len(opportunities)} total opportunities identified in research."
             )
 
-        # Rule 4: Competitive threats
-        threat_keywords = ['competitor', 'threat', 'risk', 'challenge', 'pressure', 'decline']
+        # Rule 4: Competitive threats - show actual threats
+        threat_keywords = ['competitor', 'threat', 'risk', 'challenge', 'pressure', 'decline', 'competition', 'losing']
         threats = [
             f for f in key_findings
-            if any(kw in str(f).lower() for kw in threat_keywords)
+            if any(kw in get_finding_text(f).lower() for kw in threat_keywords)
         ]
 
         if threats:
+            top_threat = get_finding_text(threats[0])
             self._create_insight(
-                title="Competitive threats identified",
-                description=f"{len(threats)} potential competitive threats found in research.",
+                title="Competitive/market risk identified",
+                description=f"{top_threat[:250]}..." if len(top_threat) > 250 else top_threat,
                 priority=InsightPriority.MEDIUM,
                 category=InsightCategory.OPERATIONS,
                 data_source="research",
