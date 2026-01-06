@@ -262,6 +262,7 @@ class InsightsEngine:
                 - product_data: Product purchase summary
                 - research_data: Research findings
                 - seo_data: SEO analysis data
+                - business_context: Employee-provided business context entries
 
         Returns:
             List of insight dictionaries
@@ -294,6 +295,9 @@ class InsightsEngine:
 
         if data.get('seo_data'):
             self._analyze_seo(data['seo_data'])
+
+        if data.get('business_context'):
+            self._analyze_business_context(data['business_context'])
 
         # Cross-data analysis
         self._analyze_cross_data(data)
@@ -1136,6 +1140,78 @@ class InsightsEngine:
                 threshold="churn >15% + sales >10%",
                 recommendation="Growth is coming from higher spend per customer or new customers. "
                               "Still prioritize retention - acquiring new customers costs more than keeping existing ones."
+            )
+
+    # =========================================================================
+    # BUSINESS CONTEXT ANALYSIS
+    # =========================================================================
+
+    def _analyze_business_context(self, context_data: Dict) -> None:
+        """
+        Analyze employee-provided business context and generate relevant insights.
+
+        Business context represents direct input from employees about strategic decisions,
+        operational changes, market conditions, etc. These are converted into actionable
+        insights to ensure the team is aware of and acting on important business information.
+        """
+        entries = context_data.get('entries', [])
+
+        if not entries:
+            return
+
+        # Process each context entry
+        for entry in entries:
+            context_text = entry.get('text', '')
+            author = entry.get('author', 'Unknown')
+            date = entry.get('date', 'Unknown date')
+
+            if not context_text:
+                continue
+
+            # Determine priority based on keywords in the context
+            priority = InsightPriority.MEDIUM
+            context_lower = context_text.lower()
+
+            # High priority keywords
+            high_priority_keywords = [
+                'immediately', 'urgent', 'critical', 'stop', 'discontinue',
+                'no longer', 'closing', 'competitor', 'lawsuit', 'compliance',
+                'regulation', 'audit', 'recall', 'safety'
+            ]
+
+            # Low priority keywords
+            low_priority_keywords = [
+                'consider', 'maybe', 'eventually', 'long-term', 'future',
+                'thinking about', 'exploring', 'might'
+            ]
+
+            # Check for high priority
+            if any(keyword in context_lower for keyword in high_priority_keywords):
+                priority = InsightPriority.HIGH
+
+            # Check for critical indicators
+            if any(kw in context_lower for kw in ['immediately', 'urgent', 'critical', 'recall', 'safety']):
+                priority = InsightPriority.CRITICAL
+
+            # Downgrade if low priority keywords present (unless already critical)
+            if priority != InsightPriority.CRITICAL:
+                if any(keyword in context_lower for keyword in low_priority_keywords):
+                    priority = InsightPriority.LOW
+
+            # Truncate long context for the title
+            title_preview = context_text[:50] + "..." if len(context_text) > 50 else context_text
+            title_preview = title_preview.replace('\n', ' ')
+
+            self._create_insight(
+                title=f"Business Context: {title_preview}",
+                description=f"**From {author} ({date}):**\n\n{context_text}",
+                priority=priority,
+                category=InsightCategory.OPERATIONS,
+                data_source="business-context",
+                metric_value=entry.get('id', 'unknown'),
+                threshold="employee-provided",
+                recommendation="Review this business context and take appropriate action. "
+                              "Consider how this information should influence current business decisions and strategies."
             )
 
 

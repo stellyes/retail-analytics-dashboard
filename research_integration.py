@@ -400,7 +400,7 @@ def _render_executive_summary(viewer: ResearchFindingsViewer):
         st.info("No items currently being tracked.")
     else:
         tracking_df = pd.DataFrame(tracking_items)
-        st.dataframe(tracking_df, use_container_width=True, hide_index=True)
+        st.dataframe(tracking_df, width='stretch', hide_index=True)
 
 
 def _render_daily_findings(viewer: ResearchFindingsViewer):

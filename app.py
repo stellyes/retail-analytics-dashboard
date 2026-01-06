@@ -66,6 +66,13 @@ try:
 except ImportError:
     QR_AVAILABLE = False
 
+# Import Business Context Service for employee-provided insights (optional)
+try:
+    from business_context import BusinessContextService, get_business_context_service
+    BUSINESS_CONTEXT_AVAILABLE = True
+except ImportError:
+    BUSINESS_CONTEXT_AVAILABLE = False
+
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
@@ -456,7 +463,7 @@ class S3DataManager:
             return None
         try:
             response = self.s3_client.get_object(Bucket=self.bucket_name, Key=s3_key)
-            return pd.read_csv(io.BytesIO(response['Body'].read()))
+            return pd.read_csv(io.BytesIO(response['Body'].read()), low_memory=False)
         except ClientError as e:
             if e.response['Error']['Code'] == 'NoSuchKey':
                 return None
@@ -1729,12 +1736,12 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
                 with col1:
                     st.subheader("🏆 Top Brands by Revenue")
                     top_brands = analytics.identify_top_brands(df_brand, 10, store_filter)
-                    st.dataframe(top_brands, use_container_width=True)
+                    st.dataframe(top_brands, width='stretch')
 
                 with col2:
                     st.subheader("⚠️ Low Margin Brands")
                     underperformers = analytics.identify_underperformers(df_brand)
-                    st.dataframe(underperformers, use_container_width=True)
+                    st.dataframe(underperformers, width='stretch')
 
                 # Margin vs Sales scatter
                 st.subheader("Margin vs. Sales Analysis")
@@ -1840,7 +1847,7 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
                 with col2:
                     st.subheader("Category Details")
                     df_product['Sales Share %'] = (df_product['Net Sales'] / df_product['Net Sales'].sum() * 100).round(2)
-                    st.dataframe(df_product, use_container_width=True)
+                    st.dataframe(df_product, width='stretch')
 
                 # Category bar chart
                 fig = px.bar(df_product, x='Product Type', y='Net Sales',
@@ -1881,7 +1888,7 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
             if store_id:
                 df = df[df['Store_ID'] == store_id[0]]
 
-        st.dataframe(df.sort_values('Date', ascending=False), use_container_width=True)
+        st.dataframe(df.sort_values('Date', ascending=False), width='stretch')
 
         # Download button
         csv = df.to_csv(index=False)
@@ -2025,7 +2032,7 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
             segment_data.columns = ['Customer Count', 'Total Sales', 'Avg LTV', 'Avg Transactions', 'Avg Order Value']
             segment_data = segment_data.reindex([s for s in segment_order if s in segment_data.index])
 
-            st.dataframe(segment_data, use_container_width=True)
+            st.dataframe(segment_data, width='stretch')
 
             # Visualizations
             col1, col2 = st.columns(2)
@@ -2062,7 +2069,7 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
             recency_data.columns = ['Customer Count', 'Avg Days Since Visit', 'Total Sales', 'Avg LTV']
             recency_data = recency_data.reindex([s for s in recency_order if s in recency_data.index])
 
-            st.dataframe(recency_data, use_container_width=True)
+            st.dataframe(recency_data, width='stretch')
 
             # Visualizations
             col1, col2 = st.columns(2)
@@ -2106,7 +2113,7 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
             col_order = [s for s in recency_order if s in matrix.columns] + ['All']
 
             matrix = matrix.reindex(index=row_order, columns=col_order)
-            st.dataframe(matrix, use_container_width=True)
+            st.dataframe(matrix, width='stretch')
 
             # Heatmap
             matrix_no_totals = matrix.drop('All', errors='ignore').drop('All', axis=1, errors='ignore')
@@ -2293,7 +2300,7 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
             with col1:
                 st.markdown("**Top Cities**")
                 top_cities = df['City'].value_counts().head(10)
-                st.dataframe(top_cities, use_container_width=True)
+                st.dataframe(top_cities, width='stretch')
 
             with col2:
                 if 'State' in df.columns:
@@ -2356,7 +2363,7 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
             ] if 'Customer Name' in df.columns else df.nlargest(20, 'Lifetime Net Sales')[
                 ['Lifetime Net Sales', 'Customer Segment']
             ]
-            st.dataframe(top_customers, use_container_width=True, height=300)
+            st.dataframe(top_customers, width='stretch', height=300)
 
         # LTV by segment
         if 'Customer Segment' in df.columns:
@@ -2448,7 +2455,7 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
 
                 st.dataframe(
                     at_risk_vip[display_cols].head(20),
-                    use_container_width=True
+                    width='stretch'
                 )
 
     # ===== TAB 6: Customer Search =====
@@ -2504,7 +2511,7 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
 
         st.dataframe(
             filtered_df[display_cols],
-            use_container_width=True,
+            width='stretch',
             height=400
         )
 
@@ -2576,12 +2583,12 @@ def render_brand_analysis(state, analytics, store_filter, date_filter=None):
     with col1:
         st.subheader("🏆 Top Brands by Revenue")
         top_brands = analytics.identify_top_brands(df, 10, store_filter)
-        st.dataframe(top_brands, use_container_width=True)
+        st.dataframe(top_brands, width='stretch')
     
     with col2:
         st.subheader("⚠️ Low Margin Brands")
         underperformers = analytics.identify_underperformers(df)
-        st.dataframe(underperformers, use_container_width=True)
+        st.dataframe(underperformers, width='stretch')
     
     # Margin vs Sales scatter
     st.subheader("Margin vs. Sales Analysis")
@@ -2691,7 +2698,7 @@ def render_product_analysis(state, store_filter=None, date_filter=None):
     with col2:
         st.subheader("Category Details")
         df['Sales Share %'] = (df['Net Sales'] / df['Net Sales'].sum() * 100).round(2)
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df, width='stretch')
     
     # Category bar chart
     fig = px.bar(df, x='Product Type', y='Net Sales',
@@ -3088,7 +3095,27 @@ def _render_comprehensive_insights(state, analytics):
             data_sources['seo_data'] = seo_data
             data_status.append("SEO")
     if progress_bar:
-        progress_bar.progress(95, text="SEO data loaded")
+        progress_bar.progress(90, text="SEO data loaded")
+
+    # 7. Business Context from DynamoDB
+    if status_text:
+        status_text.caption("💡 Loading business context...")
+    if BUSINESS_CONTEXT_AVAILABLE:
+        try:
+            context_service = get_business_context_service()
+            if context_service:
+                context_entries = context_service.get_context_for_insights()
+                if context_entries:
+                    data_sources['business_context'] = {
+                        'entries': context_entries,
+                        'count': len(context_entries)
+                    }
+                    data_status.append("Context")
+        except Exception as e:
+            # Don't fail insights generation if context loading fails
+            pass
+    if progress_bar:
+        progress_bar.progress(95, text="Business context loaded")
 
     # Final step - generating insights
     if status_text:
@@ -3538,7 +3565,7 @@ def render_recommendations(state, analytics):
             st.session_state.ai_analysis_title = None
 
         with col1:
-            if st.button("📊 Analyze Sales Trends", use_container_width=True):
+            if st.button("📊 Analyze Sales Trends", width='stretch'):
                 with st.spinner("Claude is analyzing your sales data..."):
                     analysis = claude.analyze_sales_trends(sales_summary)
                     st.session_state.ai_analysis_title = "📊 Sales Analysis"
@@ -3546,7 +3573,7 @@ def render_recommendations(state, analytics):
                     st.rerun()
 
         with col2:
-            if st.button("🏷️ Brand Recommendations", use_container_width=True):
+            if st.button("🏷️ Brand Recommendations", width='stretch'):
                 if not brand_summary:
                     st.warning("Upload brand data first.")
                 else:
@@ -3557,7 +3584,7 @@ def render_recommendations(state, analytics):
                         st.rerun()
 
         with col3:
-            if st.button("📦 Category Insights", use_container_width=True):
+            if st.button("📦 Category Insights", width='stretch'):
                 if not brand_by_category:
                     st.warning("Set up brand-product mappings first to get category insights.")
                 else:
@@ -3568,7 +3595,7 @@ def render_recommendations(state, analytics):
                         st.rerun()
 
         with col4:
-            if st.button("🎯 Deal Suggestions", use_container_width=True):
+            if st.button("🎯 Deal Suggestions", width='stretch'):
                 if state.brand_data is None:
                     st.warning("Upload brand data first.")
                 else:
@@ -3592,7 +3619,7 @@ def render_recommendations(state, analytics):
             col5, col6, col7 = st.columns([1, 1, 1])
 
             with col5:
-                if st.button("👥 Customer Insights", use_container_width=True):
+                if st.button("👥 Customer Insights", width='stretch'):
                     with st.spinner("Claude is analyzing customer segments..."):
                         analysis = claude.analyze_customer_segments(customer_summary, sales_summary)
                         st.session_state.ai_analysis_title = "👥 Customer Analysis"
@@ -3600,7 +3627,7 @@ def render_recommendations(state, analytics):
                         st.rerun()
 
             with col6:
-                if st.button("🔄 Integrated Analysis", use_container_width=True):
+                if st.button("🔄 Integrated Analysis", width='stretch'):
                     with st.spinner("Claude is generating integrated insights..."):
                         analysis = claude.generate_integrated_insights(
                             sales_summary,
@@ -3619,7 +3646,7 @@ def render_recommendations(state, analytics):
             inv_col1, inv_col2, inv_col3 = st.columns([1, 1, 1])
 
             with inv_col1:
-                if st.button("🏭 Vendor Analysis", use_container_width=True):
+                if st.button("🏭 Vendor Analysis", width='stretch'):
                     with st.spinner("Claude is analyzing vendor spending..."):
                         vendor_context = {
                             'total_invoices': invoice_summary.get('total_invoices', 0),
@@ -3654,7 +3681,7 @@ Keep analysis concise and actionable."""
                         st.rerun()
 
             with inv_col2:
-                if st.button("📦 Purchase Patterns", use_container_width=True):
+                if st.button("📦 Purchase Patterns", width='stretch'):
                     with st.spinner("Claude is analyzing purchase patterns..."):
                         # Get top purchased brands and product types
                         purchase_brands = product_purchase_summary.get('brands', {})
@@ -3699,7 +3726,7 @@ Keep analysis practical and data-driven."""
                         st.rerun()
 
             with inv_col3:
-                if st.button("💰 Margin Optimization", use_container_width=True):
+                if st.button("💰 Margin Optimization", width='stretch'):
                     with st.spinner("Claude is analyzing pricing and margins..."):
                         # Combine sales data with purchase data for margin analysis
                         purchase_types = product_purchase_summary.get('product_types', {})
@@ -3756,7 +3783,7 @@ Focus on actionable pricing and margin insights."""
 
             with strat_col1:
                 if research_summary:
-                    if st.button("🔬 Industry Insights", use_container_width=True):
+                    if st.button("🔬 Industry Insights", width='stretch'):
                         with st.spinner("Claude is analyzing industry research..."):
                             research_context = {
                                 'executive_summary': research_summary.get('executive_summary', ''),
@@ -3797,7 +3824,7 @@ Focus on actionable recommendations for Barbary Coast and Grass Roots dispensari
 
             with strat_col2:
                 if seo_summaries:
-                    if st.button("🔍 SEO Analysis", use_container_width=True):
+                    if st.button("🔍 SEO Analysis", width='stretch'):
                         with st.spinner("Claude is analyzing SEO performance..."):
                             seo_context = {}
                             for site_name, seo_data in seo_summaries.items():
@@ -4257,7 +4284,7 @@ def render_brand_product_mapping(state, s3_manager):
         with col3:
             if selected_brand:
                 st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("💾 Save", key="quick_save", use_container_width=True):
+                if st.button("💾 Save", key="quick_save", width='stretch'):
                     current_mapping[selected_brand] = selected_category
                     state.brand_product_mapping = current_mapping
                     
@@ -4395,7 +4422,7 @@ def render_brand_product_mapping(state, s3_manager):
             
             st.dataframe(
                 pd.DataFrame(summary_data),
-                use_container_width=True,
+                width='stretch',
                 hide_index=True
             )
             
@@ -4448,16 +4475,58 @@ def render_brand_product_mapping(state, s3_manager):
 
 
 def render_upload_page(s3_manager, processor):
-    """Render data upload page."""
+    """Render data upload page with tabbed interface."""
     st.header("📤 Data Upload")
-    
-    # S3 Connection Status
-    st.subheader("☁️ S3 Storage Status")
-    
+
+    # S3 Connection Status with consolidated record counts
     s3_connected, s3_message = s3_manager.test_connection()
-    
+
+    # Build consolidated status message
+    record_counts = []
+
+    # Sales records
+    if st.session_state.sales_data is not None:
+        record_counts.append(f"Sales: {len(st.session_state.sales_data)}")
+
+    # Brand records
+    if st.session_state.brand_data is not None:
+        record_counts.append(f"Brands: {len(st.session_state.brand_data)}")
+
+    # Product records
+    if st.session_state.product_data is not None:
+        record_counts.append(f"Products: {len(st.session_state.product_data)}")
+
+    # Invoice records
+    if st.session_state.invoice_data is not None:
+        dynamo_count = st.session_state.get('dynamo_invoice_count', 0)
+        if dynamo_count > 0:
+            record_counts.append(f"Invoices: {len(st.session_state.invoice_data)} items")
+        else:
+            record_counts.append(f"Invoices: {len(st.session_state.invoice_data)} items")
+
+    # Customer records
+    if st.session_state.customer_data is not None:
+        record_counts.append(f"Customers: {len(st.session_state.customer_data)}")
+
+    # Business context records
+    context_count = 0
+    if BUSINESS_CONTEXT_AVAILABLE:
+        try:
+            context_service = get_business_context_service()
+            if context_service:
+                context_count = context_service.get_context_count()
+                if context_count > 0:
+                    record_counts.append(f"Context: {context_count}")
+        except Exception:
+            pass
+
+    # Display consolidated status
     if s3_connected:
-        st.success(f"✅ {s3_message}")
+        if record_counts:
+            status_text = f"✅ {s3_message} | Records: {' | '.join(record_counts)}"
+        else:
+            status_text = f"✅ {s3_message} | No data loaded"
+        st.success(status_text)
     else:
         st.error(f"❌ S3 Not Connected: {s3_message}")
         st.markdown("""
@@ -4469,7 +4538,7 @@ def render_upload_page(s3_manager, processor):
         region = "us-west-2"
         bucket_name = "retail-data-bcgr"
         ```
-        
+
         Make sure:
         1. All four values are filled in
         2. The IAM user has `s3:PutObject`, `s3:GetObject`, `s3:ListBucket` permissions
@@ -4536,448 +4605,460 @@ def render_upload_page(s3_manager, processor):
         st.info(f"📍 **Store:** {selected_store} | 📅 **Period:** {start_date.strftime('%b %d, %Y')} to {end_date.strftime('%b %d, %Y')}")
     
     st.markdown("---")
-    
-    # File uploaders
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.subheader("Sales Data")
-        sales_file = st.file_uploader("Upload Sales by Store CSV", type=['csv'], key='sales_upload')
-        
-        if sales_file:
-            df = pd.read_csv(sales_file)
-            st.success(f"Loaded {len(df)} rows")
-            
-            # Preview
-            with st.expander("Preview Data"):
-                st.dataframe(df.head(), use_container_width=True)
-            
-            if st.button("Process Sales Data", key="process_sales"):
-                processed = processor.clean_sales_by_store(df)
-                
-                # Add metadata
-                processed['Upload_Store'] = store_id
-                processed['Upload_Start_Date'] = pd.to_datetime(start_date)
-                processed['Upload_End_Date'] = pd.to_datetime(end_date)
-                
-                # If store is manually specified and not "combined", override Store_ID
-                if store_id != "combined":
-                    processed['Store_ID'] = store_id
-                
-                # Merge with existing data or replace
-                if st.session_state.sales_data is not None:
-                    # Option to append or replace
-                    st.session_state.sales_data = pd.concat([
-                        st.session_state.sales_data,
-                        processed
-                    ]).drop_duplicates(subset=['Store', 'Date'], keep='last')
-                else:
-                    st.session_state.sales_data = processed
-                
-                # Upload to S3 with metadata in path
-                sales_file.seek(0)
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                date_range_str = f"{start_date.strftime('%Y%m%d')}-{end_date.strftime('%Y%m%d')}"
-                s3_key = f"raw-uploads/{store_id}/sales_{date_range_str}_{timestamp}.csv"
-                
-                success, message = s3_manager.upload_file(sales_file, s3_key)
-                if success:
-                    st.success(f"✅ {message}")
-                else:
-                    st.warning(f"⚠️ S3 upload failed: {message}")
-                    st.info("Data processed locally but NOT saved to S3")
-                
-                st.success("✅ Data processed and ready!")
-                st.rerun()
-    
-    with col2:
-        st.subheader("Brand Data")
-        brand_file = st.file_uploader("Upload Net Sales by Brand CSV", type=['csv'], key='brand_upload')
-        
-        if brand_file:
-            df = pd.read_csv(brand_file)
-            st.success(f"Loaded {len(df)} rows")
 
-            # Handle column name change: Treez renamed 'Brand' to 'Product Brand' after 12/01/2025
-            if 'Product Brand' in df.columns and 'Brand' not in df.columns:
-                df = df.rename(columns={'Product Brand': 'Brand'})
-                st.info("ℹ️ Detected new Treez format - 'Product Brand' column renamed to 'Brand'")
+    # Create main tabs for Data Upload
+    sales_tab, invoice_tab, customer_tab, context_tab = st.tabs([
+        "📊 Sales Data",
+        "📋 Invoice Data",
+        "👥 Customer Data",
+        "💡 Define Context"
+    ])
 
-            # Validate that this is brand data (must have 'Brand' column)
-            if 'Brand' not in df.columns:
-                st.error(f"⚠️ This doesn't appear to be Brand data. Expected 'Brand' or 'Product Brand' column but found: {', '.join(df.columns[:5])}...")
-                st.info("Please upload a 'Net Sales by Brand' report from Treez.")
-            else:
-                # Show sample record count that will be filtered
-                sample_count = df['Brand'].str.startswith(('[DS]', '[SS]'), na=False).sum()
-                if sample_count > 0:
-                    st.info(f"ℹ️ {sample_count} sample records ([DS]/[SS]) will be filtered out")
+    # =========================================================================
+    # SALES DATA TAB - Sales, Brand, and Product uploads
+    # =========================================================================
+    with sales_tab:
+        st.markdown("Upload sales reports from Treez to analyze store performance, brand trends, and product data.")
+
+        # File uploaders in 3 columns
+        col1, col2, col3 = st.columns(3)
+
+        with col1:
+            st.subheader("Sales Data")
+            sales_file = st.file_uploader("Upload Sales by Store CSV", type=['csv'], key='sales_upload')
+
+            if sales_file:
+                df = pd.read_csv(sales_file)
+                st.success(f"Loaded {len(df)} rows")
 
                 # Preview
                 with st.expander("Preview Data"):
-                    st.dataframe(df.head(), use_container_width=True)
+                    st.dataframe(df.head(), width='stretch')
 
-            if 'Brand' in df.columns and st.button("Process Brand Data", key="process_brand"):
-                original_count = len(df)
-                processed = processor.clean_brand_data(df)
-                filtered_count = original_count - len(processed)
-                
-                if filtered_count > 0:
-                    st.info(f"Filtered out {filtered_count} records (samples + zero/negative sales)")
-                
-                # Add metadata
-                processed['Upload_Store'] = store_id
-                processed['Upload_Start_Date'] = pd.to_datetime(start_date)
-                processed['Upload_End_Date'] = pd.to_datetime(end_date)
-                
-                # If store is manually specified and not "combined", set Store_ID
-                if store_id != "combined":
-                    processed['Store_ID'] = store_id
-                
-                # Merge with existing data or replace
-                if st.session_state.brand_data is not None:
-                    st.session_state.brand_data = pd.concat([
-                        st.session_state.brand_data,
-                        processed
-                    ]).drop_duplicates(subset=['Brand', 'Upload_Store', 'Upload_Start_Date'], keep='last')
-                else:
-                    st.session_state.brand_data = processed
-                
-                brand_file.seek(0)
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                date_range_str = f"{start_date.strftime('%Y%m%d')}-{end_date.strftime('%Y%m%d')}"
-                s3_key = f"raw-uploads/{store_id}/brand_{date_range_str}_{timestamp}.csv"
-                
-                success, message = s3_manager.upload_file(brand_file, s3_key)
-                if success:
-                    st.success(f"✅ {message}")
-                else:
-                    st.warning(f"⚠️ S3 upload failed: {message}")
-                    st.info("Data processed locally but NOT saved to S3")
-                
-                st.success("✅ Data processed!")
-                st.rerun()
-    
-    with col3:
-        st.subheader("Product Data")
-        product_file = st.file_uploader("Upload Net Sales by Product CSV", type=['csv'], key='product_upload')
-        
-        if product_file:
-            df = pd.read_csv(product_file)
-            st.success(f"Loaded {len(df)} rows")
-            
-            # Preview
-            with st.expander("Preview Data"):
-                st.dataframe(df.head(), use_container_width=True)
-            
-            if st.button("Process Product Data", key="process_product"):
-                processed = processor.clean_product_data(df)
-                
-                # Add metadata
-                processed['Upload_Store'] = store_id
-                processed['Upload_Start_Date'] = pd.to_datetime(start_date)
-                processed['Upload_End_Date'] = pd.to_datetime(end_date)
-                
-                # Merge with existing data or replace
-                if st.session_state.product_data is not None:
-                    st.session_state.product_data = pd.concat([
-                        st.session_state.product_data,
-                        processed
-                    ]).drop_duplicates(subset=['Product Type', 'Upload_Store', 'Upload_Start_Date'], keep='last')
-                else:
-                    st.session_state.product_data = processed
-                
-                product_file.seek(0)
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                date_range_str = f"{start_date.strftime('%Y%m%d')}-{end_date.strftime('%Y%m%d')}"
-                s3_key = f"raw-uploads/{store_id}/product_{date_range_str}_{timestamp}.csv"
-                
-                success, message = s3_manager.upload_file(product_file, s3_key)
-                if success:
-                    st.success(f"✅ {message}")
-                else:
-                    st.warning(f"⚠️ S3 upload failed: {message}")
-                    st.info("Data processed locally but NOT saved to S3")
-                
-                st.success("✅ Data processed!")
-                st.rerun()
-    
-    # Current data status
-    st.markdown("---")
-    st.subheader("📊 Current Data Status")
+                if st.button("Process Sales Data", key="process_sales"):
+                    processed = processor.clean_sales_by_store(df)
 
-    # Add invoice status row first if we have invoice data
-    if st.session_state.invoice_data is not None or st.session_state.get('dynamo_invoice_count', 0) > 0:
-        st.markdown("**Invoice Data:**")
-        inv_col1, inv_col2 = st.columns([3, 1])
-        with inv_col1:
-            if st.session_state.invoice_data is not None:
+                    # Add metadata
+                    processed['Upload_Store'] = store_id
+                    processed['Upload_Start_Date'] = pd.to_datetime(start_date)
+                    processed['Upload_End_Date'] = pd.to_datetime(end_date)
+
+                    # If store is manually specified and not "combined", override Store_ID
+                    if store_id != "combined":
+                        processed['Store_ID'] = store_id
+
+                    # Merge with existing data or replace
+                    if st.session_state.sales_data is not None:
+                        # Option to append or replace
+                        st.session_state.sales_data = pd.concat([
+                            st.session_state.sales_data,
+                            processed
+                        ]).drop_duplicates(subset=['Store', 'Date'], keep='last')
+                    else:
+                        st.session_state.sales_data = processed
+
+                    # Upload to S3 with metadata in path
+                    sales_file.seek(0)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    date_range_str = f"{start_date.strftime('%Y%m%d')}-{end_date.strftime('%Y%m%d')}"
+                    s3_key = f"raw-uploads/{store_id}/sales_{date_range_str}_{timestamp}.csv"
+
+                    success, message = s3_manager.upload_file(sales_file, s3_key)
+                    if success:
+                        st.success(f"✅ {message}")
+                    else:
+                        st.warning(f"⚠️ S3 upload failed: {message}")
+                        st.info("Data processed locally but NOT saved to S3")
+
+                    st.success("✅ Data processed and ready!")
+                    st.rerun()
+
+        with col2:
+            st.subheader("Brand Data")
+            brand_file = st.file_uploader("Upload Net Sales by Brand CSV", type=['csv'], key='brand_upload')
+
+            if brand_file:
+                df = pd.read_csv(brand_file)
+                st.success(f"Loaded {len(df)} rows")
+
+                # Handle column name change: Treez renamed 'Brand' to 'Product Brand' after 12/01/2025
+                if 'Product Brand' in df.columns and 'Brand' not in df.columns:
+                    df = df.rename(columns={'Product Brand': 'Brand'})
+                    st.info("ℹ️ Detected new Treez format - 'Product Brand' column renamed to 'Brand'")
+
+                # Validate that this is brand data (must have 'Brand' column)
+                if 'Brand' not in df.columns:
+                    st.error(f"⚠️ This doesn't appear to be Brand data. Expected 'Brand' or 'Product Brand' column but found: {', '.join(df.columns[:5])}...")
+                    st.info("Please upload a 'Net Sales by Brand' report from Treez.")
+                else:
+                    # Show sample record count that will be filtered
+                    sample_count = df['Brand'].str.startswith(('[DS]', '[SS]'), na=False).sum()
+                    if sample_count > 0:
+                        st.info(f"ℹ️ {sample_count} sample records ([DS]/[SS]) will be filtered out")
+
+                    # Preview
+                    with st.expander("Preview Data"):
+                        st.dataframe(df.head(), width='stretch')
+
+                if 'Brand' in df.columns and st.button("Process Brand Data", key="process_brand"):
+                    original_count = len(df)
+                    processed = processor.clean_brand_data(df)
+                    filtered_count = original_count - len(processed)
+
+                    if filtered_count > 0:
+                        st.info(f"Filtered out {filtered_count} records (samples + zero/negative sales)")
+
+                    # Add metadata
+                    processed['Upload_Store'] = store_id
+                    processed['Upload_Start_Date'] = pd.to_datetime(start_date)
+                    processed['Upload_End_Date'] = pd.to_datetime(end_date)
+
+                    # If store is manually specified and not "combined", set Store_ID
+                    if store_id != "combined":
+                        processed['Store_ID'] = store_id
+
+                    # Merge with existing data or replace
+                    if st.session_state.brand_data is not None:
+                        st.session_state.brand_data = pd.concat([
+                            st.session_state.brand_data,
+                            processed
+                        ]).drop_duplicates(subset=['Brand', 'Upload_Store', 'Upload_Start_Date'], keep='last')
+                    else:
+                        st.session_state.brand_data = processed
+
+                    brand_file.seek(0)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    date_range_str = f"{start_date.strftime('%Y%m%d')}-{end_date.strftime('%Y%m%d')}"
+                    s3_key = f"raw-uploads/{store_id}/brand_{date_range_str}_{timestamp}.csv"
+
+                    success, message = s3_manager.upload_file(brand_file, s3_key)
+                    if success:
+                        st.success(f"✅ {message}")
+                    else:
+                        st.warning(f"⚠️ S3 upload failed: {message}")
+                        st.info("Data processed locally but NOT saved to S3")
+
+                    st.success("✅ Data processed!")
+                    st.rerun()
+
+        with col3:
+            st.subheader("Product Data")
+            product_file = st.file_uploader("Upload Net Sales by Product CSV", type=['csv'], key='product_upload')
+
+            if product_file:
+                df = pd.read_csv(product_file)
+                st.success(f"Loaded {len(df)} rows")
+
+                # Preview
+                with st.expander("Preview Data"):
+                    st.dataframe(df.head(), width='stretch')
+
+                if st.button("Process Product Data", key="process_product"):
+                    processed = processor.clean_product_data(df)
+
+                    # Add metadata
+                    processed['Upload_Store'] = store_id
+                    processed['Upload_Start_Date'] = pd.to_datetime(start_date)
+                    processed['Upload_End_Date'] = pd.to_datetime(end_date)
+
+                    # Merge with existing data or replace
+                    if st.session_state.product_data is not None:
+                        st.session_state.product_data = pd.concat([
+                            st.session_state.product_data,
+                            processed
+                        ]).drop_duplicates(subset=['Product Type', 'Upload_Store', 'Upload_Start_Date'], keep='last')
+                    else:
+                        st.session_state.product_data = processed
+
+                    product_file.seek(0)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    date_range_str = f"{start_date.strftime('%Y%m%d')}-{end_date.strftime('%Y%m%d')}"
+                    s3_key = f"raw-uploads/{store_id}/product_{date_range_str}_{timestamp}.csv"
+
+                    success, message = s3_manager.upload_file(product_file, s3_key)
+                    if success:
+                        st.success(f"✅ {message}")
+                    else:
+                        st.warning(f"⚠️ S3 upload failed: {message}")
+                        st.info("Data processed locally but NOT saved to S3")
+
+                    st.success("✅ Data processed!")
+                    st.rerun()
+
+    # =========================================================================
+    # INVOICE DATA TAB
+    # =========================================================================
+    with invoice_tab:
+        # Show current invoice data status
+        if st.session_state.invoice_data is not None:
+            inv_col1, inv_col2 = st.columns([3, 1])
+            with inv_col1:
                 total_count = len(st.session_state.invoice_data)
                 dynamo_count = st.session_state.get('dynamo_invoice_count', 0)
                 if dynamo_count > 0:
-                    st.success(f"✅ Invoices: {total_count} line items ({dynamo_count} from DynamoDB)")
+                    st.success(f"✅ **{total_count} invoice line items loaded** ({dynamo_count} from DynamoDB)")
                 else:
-                    st.success(f"✅ Invoices: {total_count} line items (from S3)")
-
-                # Show date range if available
-                if 'Invoice Date' in st.session_state.invoice_data.columns:
-                    dates = st.session_state.invoice_data['Invoice Date'].dropna()
-                    if len(dates) > 0:
-                        st.caption(f"📅 {dates.min().strftime('%m/%d/%Y')} - {dates.max().strftime('%m/%d/%Y')}")
-            else:
-                st.info("No invoice line items loaded")
-        with inv_col2:
+                    st.info(f"📊 {total_count} invoice line items loaded (from S3)")
+            with inv_col2:
+                if st.session_state.get('dynamo_load_error'):
+                    st.error("⚠️ DynamoDB Error")
+                    with st.expander("View Error"):
+                        st.code(st.session_state.dynamo_load_error)
+        else:
             if st.session_state.get('dynamo_load_error'):
-                with st.expander("⚠️ Error Details"):
-                    st.code(st.session_state.dynamo_load_error)
+                st.warning(f"⚠️ No invoice data loaded. DynamoDB error: {st.session_state.dynamo_load_error[:100]}")
+            else:
+                st.info("📤 No invoice data loaded yet. Upload invoices below to get started.")
+
+        st.markdown("""
+        **Features:**
+        - 🚀 **Auto-extraction** - Parses Treez invoices without Claude API costs
+        - 💾 **DynamoDB storage** - Fast, queryable invoice database
+        - 🤖 **Claude analytics** - AI-powered insights on your purchasing data
+        - 💰 **Cost-efficient** - Saves $50-200 per 100 invoices vs traditional extraction
+        """)
+
+        # Use the integrated invoice upload UI with all tabs (Upload, View Data, Date Review)
+        try:
+            from invoice_upload_ui import render_full_invoice_section
+            render_full_invoice_section()
+        except ImportError as e:
+            st.warning("Invoice upload module not available. Make sure invoice_upload_ui.py is installed.")
+            st.info("📦 Install the invoice_upload_ui module to enable automatic PDF extraction and DynamoDB storage.")
+            st.error(f"Import error: {e}")
+        except Exception as e:
+            st.error(f"Error rendering invoice upload section: {e}")
+            import traceback
+            st.code(traceback.format_exc())
+
+    # =========================================================================
+    # CUSTOMER DATA TAB
+    # =========================================================================
+    with customer_tab:
+        st.markdown("""
+        Upload customer data to enable demographic analysis and customer segmentation insights.
+        This data will be analyzed alongside sales and product data for comprehensive business intelligence.
+        """)
+
+        customer_file = st.file_uploader(
+            "Upload Customer Data CSV",
+            type=['csv'],
+            key='customer_upload',
+            help="Upload a CSV file containing customer demographic and transaction history data"
+        )
+
+        if customer_file:
+            df = pd.read_csv(customer_file)
+            st.success(f"✅ Loaded {len(df)} customer records")
+
+            # Preview
+            with st.expander("Preview Customer Data"):
+                st.dataframe(df.head(10), width='stretch')
+                st.caption(f"Columns: {', '.join(df.columns.tolist()[:10])}{'...' if len(df.columns) > 10 else ''}")
+
+            if st.button("Process Customer Data", key="process_customer"):
+                with st.spinner("Processing customer data..."):
+                    # Clean and process customer data
+                    processed = processor.clean_customer_data(df)
+
+                    # Add metadata
+                    processed['Upload_Store'] = store_id
+                    processed['Upload_Date'] = pd.to_datetime(datetime.now())
+
+                    # Merge with existing data or replace
+                    if st.session_state.customer_data is not None:
+                        # Merge by Customer ID, keeping latest version
+                        customer_id_col = 'Customer ID' if 'Customer ID' in processed.columns else 'id'
+                        st.session_state.customer_data = pd.concat([
+                            st.session_state.customer_data,
+                            processed
+                        ]).drop_duplicates(subset=[customer_id_col], keep='last')
+                    else:
+                        st.session_state.customer_data = processed
+
+                    # Upload to S3
+                    customer_file.seek(0)
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    s3_key = f"raw-uploads/{store_id}/customers_{timestamp}.csv"
+
+                    success, message = s3_manager.upload_file(customer_file, s3_key)
+                    if success:
+                        st.success(f"✅ {message}")
+                    else:
+                        st.warning(f"⚠️ S3 upload failed: {message}")
+                        st.info("Data processed locally but NOT saved to S3")
+
+                    # Show processing summary
+                    st.success("✅ Customer data processed!")
+
+                    # Show segments summary
+                    if 'Customer Segment' in processed.columns:
+                        segment_counts = processed['Customer Segment'].value_counts()
+                        st.markdown("**Customer Segments:**")
+                        seg_cols = st.columns(5)
+                        for idx, (seg, count) in enumerate(segment_counts.items()):
+                            with seg_cols[idx % 5]:
+                                st.metric(seg, count)
+
+                    if 'Recency Segment' in processed.columns:
+                        recency_counts = processed['Recency Segment'].value_counts()
+                        st.markdown("**Recency Segments:**")
+                        rec_cols = st.columns(5)
+                        for idx, (seg, count) in enumerate(recency_counts.items()):
+                            with rec_cols[idx % 5]:
+                                st.metric(seg, count)
+
+                    st.rerun()
+
+        # Customer data status
+        if st.session_state.customer_data is not None:
+            with st.expander("📊 Customer Data Status"):
+                df = st.session_state.customer_data
+                st.success(f"✅ {len(df)} customer records loaded")
+
+                cols = st.columns(4)
+                with cols[0]:
+                    if 'Customer Segment' in df.columns:
+                        st.caption("**Value Segments:**")
+                        for seg, count in df['Customer Segment'].value_counts().items():
+                            st.text(f"{seg}: {count}")
+
+                with cols[1]:
+                    if 'Recency Segment' in df.columns:
+                        st.caption("**Recency:**")
+                        for seg, count in df['Recency Segment'].value_counts().items():
+                            st.text(f"{seg}: {count}")
+
+                with cols[2]:
+                    if 'Age' in df.columns:
+                        avg_age = df['Age'].mean()
+                        st.caption("**Demographics:**")
+                        st.text(f"Avg Age: {avg_age:.1f}")
+                        if 'Gender' in df.columns:
+                            gender_dist = df['Gender'].value_counts()
+                            for gender, count in gender_dist.items():
+                                st.text(f"{gender}: {count}")
+
+                with cols[3]:
+                    if 'Lifetime Net Sales' in df.columns:
+                        total_ltv = df['Lifetime Net Sales'].sum()
+                        avg_ltv = df['Lifetime Net Sales'].mean()
+                        st.caption("**Lifetime Value:**")
+                        st.text(f"Total: ${total_ltv:,.0f}")
+                        st.text(f"Avg: ${avg_ltv:,.0f}")
+
+        # View uploaded customer files from S3
+        with st.expander("📋 View Uploaded Customer Files"):
+            if s3_connected:
+                customer_files = [f for f in s3_manager.list_files(prefix="raw-uploads/") if '/customers_' in f and f.endswith('.csv')]
+
+                if customer_files:
+                    st.success(f"✅ {len(customer_files)} customer data file(s) in S3")
+
+                    # Group by store
+                    from collections import defaultdict
+                    by_store = defaultdict(list)
+
+                    for f in customer_files:
+                        cust_store_id = s3_manager._extract_store_from_path(f)
+                        store_name = STORE_DISPLAY_NAMES.get(cust_store_id, cust_store_id.replace('_', ' ').title())
+                        by_store[store_name].append(f)
+
+                    for store, files in sorted(by_store.items()):
+                        st.markdown(f"**{store}** ({len(files)} upload(s))")
+                        for f in sorted(files, reverse=True)[:5]:  # Show 5 most recent
+                            filename = f.split('/')[-1]
+                            # Extract timestamp from filename
+                            try:
+                                timestamp_str = filename.split('_')[-1].replace('.csv', '')
+                                file_timestamp = datetime.strptime(timestamp_str, '%Y%m%d_%H%M%S')
+                                st.text(f"  • {file_timestamp.strftime('%m/%d/%Y %I:%M %p')}")
+                            except:
+                                st.text(f"  • {filename}")
+                        if len(files) > 5:
+                            st.text(f"  ... and {len(files) - 5} more")
+                else:
+                    st.info("No customer data uploaded yet")
+            else:
+                st.warning("S3 not connected - cannot view uploaded customer files")
+
+    # =========================================================================
+    # DEFINE CONTEXT TAB
+    # =========================================================================
+    with context_tab:
+        st.markdown("""
+        Provide business context that the insights engine will use when generating recommendations.
+        This can include strategic decisions, operational changes, market insights, or any other
+        information that would help generate more relevant business insights.
+        """)
+
         st.markdown("---")
 
-    st.markdown("**CSV Data:**")
-    status_col1, status_col2, status_col3 = st.columns(3)
-    
-    with status_col1:
-        if st.session_state.sales_data is not None:
-            df = st.session_state.sales_data
-            stores = df['Store_ID'].unique().tolist() if 'Store_ID' in df.columns else ['Unknown']
-            st.success(f"✅ Sales: {len(df)} records")
-            st.caption(f"Stores: {', '.join(stores)}")
-            if 'Date' in df.columns:
-                st.caption(f"📅 {df['Date'].min().strftime('%m/%d/%Y')} - {df['Date'].max().strftime('%m/%d/%Y')}")
-        else:
-            st.warning("❌ No sales data loaded")
-    
-    with status_col2:
-        if st.session_state.brand_data is not None:
-            df = st.session_state.brand_data
-            stores = df['Upload_Store'].unique().tolist() if 'Upload_Store' in df.columns else ['Unknown']
-            st.success(f"✅ Brands: {len(df)} records")
-            st.caption(f"Stores: {', '.join(stores)}")
-            if 'Upload_Start_Date' in df.columns and 'Upload_End_Date' in df.columns:
-                # Show all unique date ranges
-                for store in stores:
-                    store_df = df[df['Upload_Store'] == store] if 'Upload_Store' in df.columns else df
-                    start = store_df['Upload_Start_Date'].min()
-                    end = store_df['Upload_End_Date'].max()
-                    if pd.notna(start) and pd.notna(end):
-                        st.caption(f"📅 {store}: {start.strftime('%m/%d/%Y')} - {end.strftime('%m/%d/%Y')}")
-        else:
-            st.warning("❌ No brand data loaded")
-    
-    with status_col3:
-        if st.session_state.product_data is not None:
-            df = st.session_state.product_data
-            stores = df['Upload_Store'].unique().tolist() if 'Upload_Store' in df.columns else ['Unknown']
-            st.success(f"✅ Products: {len(df)} records")
-            st.caption(f"Stores: {', '.join(stores)}")
-            if 'Upload_Start_Date' in df.columns and 'Upload_End_Date' in df.columns:
-                # Show all unique date ranges
-                for store in stores:
-                    store_df = df[df['Upload_Store'] == store] if 'Upload_Store' in df.columns else df
-                    start = store_df['Upload_Start_Date'].min()
-                    end = store_df['Upload_End_Date'].max()
-                    if pd.notna(start) and pd.notna(end):
-                        st.caption(f"📅 {store}: {start.strftime('%m/%d/%Y')} - {end.strftime('%m/%d/%Y')}")
-        else:
-            st.warning("❌ No product data loaded")
-    
-    # Invoice Data Upload - Integrated with DynamoDB
-    st.markdown("---")
-    st.subheader("📋 Invoice Data Upload")
+        # Context entry form
+        st.subheader("Add New Context")
 
-    # Show current invoice data status
-    if st.session_state.invoice_data is not None:
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            total_count = len(st.session_state.invoice_data)
-            dynamo_count = st.session_state.get('dynamo_invoice_count', 0)
-            if dynamo_count > 0:
-                st.success(f"✅ **{total_count} invoice line items loaded** ({dynamo_count} from DynamoDB)")
+        context_text = st.text_area(
+            "Business Context",
+            placeholder="Enter business context here. Examples:\n• We will no longer carry [brand] products starting next month\n• Our flagship store is undergoing renovations and will have reduced foot traffic\n• We're focusing on premium products for the next quarter\n• New competitor opened nearby last week",
+            height=200,
+            key="context_text_input",
+            help="Provide any relevant business context that would help the insights engine generate better recommendations."
+        )
+
+        author_name = st.text_input(
+            "Your Name",
+            placeholder="Enter your name",
+            key="context_author_input",
+            help="Who is providing this context?"
+        )
+
+        if st.button("Save Context", type="primary", disabled=not (context_text and author_name)):
+            if BUSINESS_CONTEXT_AVAILABLE:
+                try:
+                    context_service = get_business_context_service()
+                    if context_service:
+                        result = context_service.add_context(context_text, author_name)
+                        st.success(f"✅ Context saved successfully! (ID: {result['context_id'][:8]}...)")
+                        st.rerun()
+                    else:
+                        st.error("❌ Could not connect to context service. Check AWS configuration.")
+                except Exception as e:
+                    st.error(f"❌ Failed to save context: {str(e)}")
             else:
-                st.info(f"📊 {total_count} invoice line items loaded (from S3)")
-        with col2:
-            if st.session_state.get('dynamo_load_error'):
-                st.error("⚠️ DynamoDB Error")
-                with st.expander("View Error"):
-                    st.code(st.session_state.dynamo_load_error)
-    else:
-        if st.session_state.get('dynamo_load_error'):
-            st.warning(f"⚠️ No invoice data loaded. DynamoDB error: {st.session_state.dynamo_load_error[:100]}")
-        else:
-            st.info("📤 No invoice data loaded yet. Upload invoices below to get started.")
+                st.error("❌ Business context service not available. Check that business_context.py is installed.")
 
-    st.markdown("""
-    Upload invoice PDFs to automatically extract data and store in DynamoDB for analysis.
+        st.markdown("---")
 
-    **Features:**
-    - 🚀 **Auto-extraction** - Parses Treez invoices without Claude API costs
-    - 💾 **DynamoDB storage** - Fast, queryable invoice database
-    - 🤖 **Claude analytics** - AI-powered insights on your purchasing data
-    - 💰 **Cost-efficient** - Saves $50-200 per 100 invoices vs traditional extraction
-    """)
+        # View existing context
+        st.subheader("Existing Context Entries")
 
-    # Use the integrated invoice upload UI with all tabs (Upload, View Data, Date Review)
-    try:
-        from invoice_upload_ui import render_full_invoice_section
-        render_full_invoice_section()
-    except ImportError as e:
-        st.warning("Invoice upload module not available. Make sure invoice_upload_ui.py is installed.")
-        st.info("📦 Install the invoice_upload_ui module to enable automatic PDF extraction and DynamoDB storage.")
-        st.error(f"Import error: {e}")
-    except Exception as e:
-        st.error(f"Error rendering invoice upload section: {e}")
-        import traceback
-        st.code(traceback.format_exc())
+        if BUSINESS_CONTEXT_AVAILABLE:
+            try:
+                context_service = get_business_context_service()
+                if context_service:
+                    contexts = context_service.get_all_context()
 
-    # Customer Data Upload
-    st.markdown("---")
-    st.subheader("👥 Customer Data Upload")
+                    if contexts:
+                        for ctx in contexts:
+                            with st.expander(f"📝 {ctx.get('created_date', 'Unknown date')} - {ctx.get('author_name', 'Unknown')}"):
+                                st.markdown(f"**Context:**\n{ctx.get('context_text', '')}")
+                                st.caption(f"Added: {ctx.get('created_at', 'Unknown')} | ID: {ctx.get('context_id', '')[:8]}...")
 
-    st.markdown("""
-    Upload customer data to enable demographic analysis and customer segmentation insights.
-    This data will be analyzed alongside sales and product data for comprehensive business intelligence.
-    """)
-
-    customer_file = st.file_uploader(
-        "Upload Customer Data CSV",
-        type=['csv'],
-        key='customer_upload',
-        help="Upload a CSV file containing customer demographic and transaction history data"
-    )
-
-    if customer_file:
-        df = pd.read_csv(customer_file)
-        st.success(f"✅ Loaded {len(df)} customer records")
-
-        # Preview
-        with st.expander("Preview Customer Data"):
-            st.dataframe(df.head(10), use_container_width=True)
-            st.caption(f"Columns: {', '.join(df.columns.tolist()[:10])}{'...' if len(df.columns) > 10 else ''}")
-
-        if st.button("Process Customer Data", key="process_customer"):
-            with st.spinner("Processing customer data..."):
-                # Clean and process customer data
-                processed = processor.clean_customer_data(df)
-
-                # Add metadata
-                processed['Upload_Store'] = store_id
-                processed['Upload_Date'] = pd.to_datetime(datetime.now())
-
-                # Merge with existing data or replace
-                if st.session_state.customer_data is not None:
-                    # Merge by Customer ID, keeping latest version
-                    customer_id_col = 'Customer ID' if 'Customer ID' in processed.columns else 'id'
-                    st.session_state.customer_data = pd.concat([
-                        st.session_state.customer_data,
-                        processed
-                    ]).drop_duplicates(subset=[customer_id_col], keep='last')
+                                # Delete button
+                                if st.button(f"🗑️ Delete", key=f"delete_ctx_{ctx.get('context_id')}"):
+                                    if context_service.delete_context(ctx.get('context_id')):
+                                        st.success("Context deleted!")
+                                        st.rerun()
+                                    else:
+                                        st.error("Failed to delete context")
+                    else:
+                        st.info("No context entries yet. Add your first context above!")
                 else:
-                    st.session_state.customer_data = processed
-
-                # Upload to S3
-                customer_file.seek(0)
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                s3_key = f"raw-uploads/{store_id}/customers_{timestamp}.csv"
-
-                success, message = s3_manager.upload_file(customer_file, s3_key)
-                if success:
-                    st.success(f"✅ {message}")
-                else:
-                    st.warning(f"⚠️ S3 upload failed: {message}")
-                    st.info("Data processed locally but NOT saved to S3")
-
-                # Show processing summary
-                st.success("✅ Customer data processed!")
-
-                # Show segments summary
-                if 'Customer Segment' in processed.columns:
-                    segment_counts = processed['Customer Segment'].value_counts()
-                    st.markdown("**Customer Segments:**")
-                    seg_cols = st.columns(5)
-                    for idx, (seg, count) in enumerate(segment_counts.items()):
-                        with seg_cols[idx % 5]:
-                            st.metric(seg, count)
-
-                if 'Recency Segment' in processed.columns:
-                    recency_counts = processed['Recency Segment'].value_counts()
-                    st.markdown("**Recency Segments:**")
-                    rec_cols = st.columns(5)
-                    for idx, (seg, count) in enumerate(recency_counts.items()):
-                        with rec_cols[idx % 5]:
-                            st.metric(seg, count)
-
-                st.rerun()
-
-    # Customer data status
-    if st.session_state.customer_data is not None:
-        with st.expander("📊 Customer Data Status"):
-            df = st.session_state.customer_data
-            st.success(f"✅ {len(df)} customer records loaded")
-
-            cols = st.columns(4)
-            with cols[0]:
-                if 'Customer Segment' in df.columns:
-                    st.caption("**Value Segments:**")
-                    for seg, count in df['Customer Segment'].value_counts().items():
-                        st.text(f"{seg}: {count}")
-
-            with cols[1]:
-                if 'Recency Segment' in df.columns:
-                    st.caption("**Recency:**")
-                    for seg, count in df['Recency Segment'].value_counts().items():
-                        st.text(f"{seg}: {count}")
-
-            with cols[2]:
-                if 'Age' in df.columns:
-                    avg_age = df['Age'].mean()
-                    st.caption("**Demographics:**")
-                    st.text(f"Avg Age: {avg_age:.1f}")
-                    if 'Gender' in df.columns:
-                        gender_dist = df['Gender'].value_counts()
-                        for gender, count in gender_dist.items():
-                            st.text(f"{gender}: {count}")
-
-            with cols[3]:
-                if 'Lifetime Net Sales' in df.columns:
-                    total_ltv = df['Lifetime Net Sales'].sum()
-                    avg_ltv = df['Lifetime Net Sales'].mean()
-                    st.caption("**Lifetime Value:**")
-                    st.text(f"Total: ${total_ltv:,.0f}")
-                    st.text(f"Avg: ${avg_ltv:,.0f}")
-
-    # View uploaded customer files from S3
-    with st.expander("📋 View Uploaded Customer Files"):
-        if s3_connected:
-            customer_files = [f for f in s3_manager.list_files(prefix="raw-uploads/") if '/customers_' in f and f.endswith('.csv')]
-
-            if customer_files:
-                st.success(f"✅ {len(customer_files)} customer data file(s) in S3")
-
-                # Group by store
-                from collections import defaultdict
-                by_store = defaultdict(list)
-
-                for f in customer_files:
-                    store_id = s3_manager._extract_store_from_path(f)
-                    store_name = STORE_DISPLAY_NAMES.get(store_id, store_id.replace('_', ' ').title())
-                    by_store[store_name].append(f)
-
-                for store, files in sorted(by_store.items()):
-                    st.markdown(f"**{store}** ({len(files)} upload(s))")
-                    for f in sorted(files, reverse=True)[:5]:  # Show 5 most recent
-                        filename = f.split('/')[-1]
-                        # Extract timestamp from filename
-                        try:
-                            timestamp_str = filename.split('_')[-1].replace('.csv', '')
-                            timestamp = datetime.strptime(timestamp_str, '%Y%m%d_%H%M%S')
-                            st.text(f"  • {timestamp.strftime('%m/%d/%Y %I:%M %p')}")
-                        except:
-                            st.text(f"  • {filename}")
-                    if len(files) > 5:
-                        st.text(f"  ... and {len(files) - 5} more")
-            else:
-                st.info("No customer data uploaded yet")
+                    st.warning("Could not connect to context service. Check AWS configuration.")
+            except Exception as e:
+                st.error(f"Error loading context: {str(e)}")
         else:
-            st.warning("S3 not connected - cannot view uploaded customer files")
+            st.warning("Business context service not available.")
 
     # Data management section
     st.markdown("---")
@@ -4986,7 +5067,7 @@ def render_upload_page(s3_manager, processor):
     mgmt_col1, mgmt_col2, mgmt_col3 = st.columns(3)
     
     with mgmt_col1:
-        if st.button("🔄 Reload from S3", type="primary", use_container_width=True):
+        if st.button("🔄 Reload from S3", type="primary", width='stretch'):
             with st.spinner("Reloading data from S3..."):
                 # Reload all data from S3
                 loaded_data = s3_manager.load_all_data_from_s3(processor)
@@ -5025,7 +5106,7 @@ def render_upload_page(s3_manager, processor):
                 st.rerun()
     
     with mgmt_col2:
-        if st.button("🗑️ Clear Session Data", type="secondary", use_container_width=True):
+        if st.button("🗑️ Clear Session Data", type="secondary", width='stretch'):
             st.session_state.sales_data = None
             st.session_state.brand_data = None
             st.session_state.product_data = None
@@ -5037,7 +5118,7 @@ def render_upload_page(s3_manager, processor):
     
     with mgmt_col3:
         if st.session_state.sales_data is not None or st.session_state.brand_data is not None:
-            if st.button("📥 Export Summary", use_container_width=True):
+            if st.button("📥 Export Summary", width='stretch'):
                 # Create a summary export
                 export_data = {
                     'export_date': datetime.now().isoformat(),

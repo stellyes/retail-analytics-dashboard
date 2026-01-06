@@ -196,7 +196,7 @@ def render_invoice_upload_section():
         st.info(f"📄 {len(uploaded_files)} file(s) uploaded")
 
         # Process button
-        if st.button("🚀 Process Invoices", type="primary", use_container_width=True):
+        if st.button("🚀 Process Invoices", type="primary", width='stretch'):
             process_invoices(uploaded_files, parser, invoice_service)
 
     # Show recent uploads if any
@@ -635,7 +635,7 @@ def render_date_review_section():
 
         with col4:
             st.markdown("<br>", unsafe_allow_html=True)
-            if st.button("💾 Save", key=f"save_date_{invoice['invoice_id']}", use_container_width=True):
+            if st.button("💾 Save", key=f"save_date_{invoice['invoice_id']}", width='stretch'):
                 if selected_date:
                     # Update the invoice in DynamoDB
                     date_str = selected_date.strftime('%Y-%m-%d')
@@ -665,7 +665,7 @@ def render_date_review_section():
     col1, col2 = st.columns(2)
 
     with col1:
-        if st.button("🗑️ Clear All Pending Reviews", use_container_width=True):
+        if st.button("🗑️ Clear All Pending Reviews", width='stretch'):
             st.session_state.invoices_needing_date_review = []
             st.success("Cleared all pending reviews")
             st.rerun()
@@ -784,7 +784,7 @@ def render_duplicates_section():
 
                 with col3:
                     st.markdown("<br>", unsafe_allow_html=True)
-                    if st.button("🗑️ Delete", key=f"delete_dup_{invoice['invoice_id']}", use_container_width=True):
+                    if st.button("🗑️ Delete", key=f"delete_dup_{invoice['invoice_id']}", width='stretch'):
                         success = _delete_invoice(invoice_service, invoice['invoice_id'])
                         if success:
                             st.success(f"✅ Deleted invoice {invoice['invoice_id']}")
@@ -800,7 +800,7 @@ def render_duplicates_section():
 
     # Bulk actions
     st.subheader("Bulk Actions")
-    if st.button("🔄 Refresh Duplicate Detection", use_container_width=True):
+    if st.button("🔄 Refresh Duplicate Detection", width='stretch'):
         st.session_state.date_review_loaded_from_dynamo = False
         st.session_state.duplicate_invoices = []
         st.rerun()

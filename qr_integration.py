@@ -476,7 +476,7 @@ def generate_qr_tab(dynamodb, redirect_base_url):
         ) / 100
 
         # Generate button
-        generate_clicked = st.button("🎨 Generate QR Code", type="primary", use_container_width=True)
+        generate_clicked = st.button("🎨 Generate QR Code", type="primary", width='stretch')
 
     with col2:
         st.markdown("#### Preview")
@@ -522,7 +522,7 @@ def generate_qr_tab(dynamodb, redirect_base_url):
             qr_data = st.session_state['qr_data']
 
             # Display QR code
-            st.image(qr_img, use_container_width=True)
+            st.image(qr_img, width='stretch')
 
             # Display tracking info
             st.info(f"**Tracking URL:** `{qr_data['tracking_url']}`")
@@ -541,7 +541,7 @@ def generate_qr_tab(dynamodb, redirect_base_url):
                     data=png_buffer.getvalue(),
                     file_name=f"qr_{qr_data['short_code']}.png",
                     mime="image/png",
-                    use_container_width=True
+                    width='stretch'
                 )
 
             # High-res download
@@ -555,12 +555,12 @@ def generate_qr_tab(dynamodb, redirect_base_url):
                     data=hr_buffer.getvalue(),
                     file_name=f"qr_{qr_data['short_code']}_hires.png",
                     mime="image/png",
-                    use_container_width=True
+                    width='stretch'
                 )
 
             # Save to database button
             if dynamodb:
-                if st.button("💾 Save to Database", type="secondary", use_container_width=True):
+                if st.button("💾 Save to Database", type="secondary", width='stretch'):
                     if save_qr_to_database(
                         dynamodb,
                         qr_data['short_code'],
@@ -648,7 +648,7 @@ def analytics_tab(dynamodb):
             data=csv_buffer.getvalue(),
             file_name=f"qr_analytics_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.csv",
             mime="text/csv",
-            use_container_width=True
+            width='stretch'
         )
 
     with col_export2:
@@ -665,7 +665,7 @@ def analytics_tab(dynamodb):
                 data=excel_buffer.getvalue(),
                 file_name=f"qr_analytics_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                use_container_width=True
+                width='stretch'
             )
         except ImportError:
             st.info("Excel export requires 'openpyxl' package")
@@ -697,7 +697,7 @@ def analytics_tab(dynamodb):
     if available_cols:
         st.dataframe(
             df[available_cols].sort_values('timestamp', ascending=False).head(50),
-            use_container_width=True
+            width='stretch'
         )
 
 
@@ -739,7 +739,7 @@ def manage_qr_tab(dynamodb, redirect_base_url):
                     st.warning(f"⏰ Permanent deletion in {minutes_left}m {seconds_left}s")
 
                 with col2:
-                    if st.button("↩️ Undo Delete", key=f"restore_{qr['short_code']}", type="primary", use_container_width=True):
+                    if st.button("↩️ Undo Delete", key=f"restore_{qr['short_code']}", type="primary", width='stretch'):
                         if restore_qr_code(dynamodb, qr['short_code']):
                             st.success(f"✅ QR code {qr['short_code']} restored successfully!")
                             st.rerun()
@@ -795,7 +795,7 @@ def manage_qr_tab(dynamodb, redirect_base_url):
                 )
 
                 # Delete button
-                if st.button("🗑️ Delete", key=f"delete_{qr['short_code']}", type="secondary", use_container_width=True):
+                if st.button("🗑️ Delete", key=f"delete_{qr['short_code']}", type="secondary", width='stretch'):
                     st.session_state[f'confirm_delete_{qr["short_code"]}'] = True
                     st.rerun()
 
@@ -804,7 +804,7 @@ def manage_qr_tab(dynamodb, redirect_base_url):
                     st.warning("⚠️ Are you sure?")
                     col_a, col_b = st.columns(2)
                     with col_a:
-                        if st.button("Yes", key=f"confirm_yes_{qr['short_code']}", type="primary", use_container_width=True):
+                        if st.button("Yes", key=f"confirm_yes_{qr['short_code']}", type="primary", width='stretch'):
                             if delete_qr_code(dynamodb, qr['short_code']):
                                 st.success(f"✅ Deleted {qr['short_code']}!")
                                 del st.session_state[f'confirm_delete_{qr["short_code"]}']
@@ -812,7 +812,7 @@ def manage_qr_tab(dynamodb, redirect_base_url):
                             else:
                                 st.error("Failed to delete QR code")
                     with col_b:
-                        if st.button("Cancel", key=f"confirm_no_{qr['short_code']}", use_container_width=True):
+                        if st.button("Cancel", key=f"confirm_no_{qr['short_code']}", width='stretch'):
                             del st.session_state[f'confirm_delete_{qr["short_code"]}']
                             st.rerun()
 
