@@ -2937,6 +2937,9 @@ def render_recommendations(state, analytics):
         else:
             st.caption("💡 Tip: Set up Brand-Product Mappings for more detailed category insights")
 
+        # Calculate store metrics for Claude context
+        metrics = analytics.calculate_store_metrics(state.sales_data)
+
         # Prepare data summaries for Claude
         sales_summary = {
             'store_metrics': metrics,
