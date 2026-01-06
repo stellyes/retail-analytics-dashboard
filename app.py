@@ -162,67 +162,67 @@ def _get_localstorage_hash_check_js():
     """
 
 def _show_loading_overlay(message: str = "Syncing data...", submessage: str = "New data detected in cloud"):
-    """Show a fullscreen loading overlay with progress animation."""
-    import streamlit.components.v1 as components
-    components.html(f"""
-        <style>
-            @keyframes pulse {{
+    """Show a fullscreen loading overlay with progress animation.
+
+    Uses st.markdown with a script to inject the overlay into the parent document body,
+    bypassing Streamlit's iframe sandbox to cover the entire viewport.
+    """
+    # Generate unique ID to prevent duplicate overlays
+    overlay_id = "retail-loading-overlay"
+
+    # CSS and HTML for the overlay - injected via script into parent document
+    overlay_html = f"""
+    <script>
+    (function() {{
+        // Remove any existing overlay first
+        const existing = document.getElementById('{overlay_id}');
+        if (existing) existing.remove();
+
+        // Create style element for animations
+        const style = document.createElement('style');
+        style.id = '{overlay_id}-styles';
+        style.textContent = `
+            @keyframes retail-pulse {{
                 0%, 100% {{ opacity: 1; }}
                 50% {{ opacity: 0.5; }}
             }}
-            @keyframes progress {{
+            @keyframes retail-progress {{
                 0% {{ width: 0%; }}
                 50% {{ width: 70%; }}
                 100% {{ width: 100%; }}
             }}
-            @keyframes spin {{
+            @keyframes retail-spin {{
                 0% {{ transform: rotate(0deg); }}
                 100% {{ transform: rotate(360deg); }}
             }}
-        </style>
-        <div id="loading-overlay" style="
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            background: rgba(0, 0, 0, 0.85);
-            backdrop-filter: blur(8px);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            z-index: 999999;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        ">
-            <!-- Spinner -->
+        `;
+        document.head.appendChild(style);
+
+        // Create overlay element
+        const overlay = document.createElement('div');
+        overlay.id = '{overlay_id}';
+        overlay.innerHTML = `
             <div style="
                 width: 60px;
                 height: 60px;
                 border: 4px solid rgba(255, 255, 255, 0.1);
                 border-top: 4px solid #4CAF50;
                 border-radius: 50%;
-                animation: spin 1s linear infinite;
+                animation: retail-spin 1s linear infinite;
                 margin-bottom: 24px;
             "></div>
-
-            <!-- Main message -->
             <div style="
                 color: white;
                 font-size: 24px;
                 font-weight: 600;
                 margin-bottom: 8px;
-                animation: pulse 2s ease-in-out infinite;
+                animation: retail-pulse 2s ease-in-out infinite;
             ">{message}</div>
-
-            <!-- Sub message -->
             <div style="
                 color: rgba(255, 255, 255, 0.7);
                 font-size: 14px;
                 margin-bottom: 32px;
             ">{submessage}</div>
-
-            <!-- Progress bar container -->
             <div style="
                 width: 300px;
                 height: 6px;
@@ -234,45 +234,72 @@ def _show_loading_overlay(message: str = "Syncing data...", submessage: str = "N
                     height: 100%;
                     background: linear-gradient(90deg, #4CAF50, #8BC34A);
                     border-radius: 3px;
-                    animation: progress 3s ease-in-out infinite;
+                    animation: retail-progress 3s ease-in-out infinite;
                 "></div>
             </div>
-
-            <!-- Status text -->
             <div style="
                 color: rgba(255, 255, 255, 0.5);
                 font-size: 12px;
                 margin-top: 16px;
             ">Please wait while we fetch the latest data...</div>
-        </div>
+        `;
 
-        <script>
-            // Auto-remove overlay after data loads (Streamlit will rerun)
-            // This is a fallback in case the page doesn't refresh
-            setTimeout(function() {{
-                const overlay = document.getElementById('loading-overlay');
-                if (overlay) {{
-                    overlay.style.transition = 'opacity 0.5s';
-                    overlay.style.opacity = '0';
-                    setTimeout(() => overlay.remove(), 500);
-                }}
-            }}, 10000); // 10 second timeout
-        </script>
-    """, height=0)
+        // Apply styles to overlay container
+        Object.assign(overlay.style, {{
+            position: 'fixed',
+            top: '0',
+            left: '0',
+            width: '100vw',
+            height: '100vh',
+            background: 'rgba(0, 0, 0, 0.85)',
+            backdropFilter: 'blur(8px)',
+            webkitBackdropFilter: 'blur(8px)',
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            alignItems: 'center',
+            zIndex: '999999',
+            fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+        }});
+
+        // Append to body
+        document.body.appendChild(overlay);
+
+        // Auto-remove after 15 seconds as fallback
+        setTimeout(function() {{
+            const el = document.getElementById('{overlay_id}');
+            if (el) {{
+                el.style.transition = 'opacity 0.5s';
+                el.style.opacity = '0';
+                setTimeout(() => el.remove(), 500);
+            }}
+            const styleEl = document.getElementById('{overlay_id}-styles');
+            if (styleEl) styleEl.remove();
+        }}, 15000);
+    }})();
+    </script>
+    """
+
+    st.markdown(overlay_html, unsafe_allow_html=True)
 
 def _hide_loading_overlay():
     """Hide the loading overlay."""
-    import streamlit.components.v1 as components
-    components.html("""
-        <script>
-            const overlay = document.getElementById('loading-overlay');
-            if (overlay) {
-                overlay.style.transition = 'opacity 0.3s';
-                overlay.style.opacity = '0';
-                setTimeout(() => overlay.remove(), 300);
-            }
-        </script>
-    """, height=0)
+    overlay_id = "retail-loading-overlay"
+    hide_script = f"""
+    <script>
+    (function() {{
+        const overlay = document.getElementById('{overlay_id}');
+        if (overlay) {{
+            overlay.style.transition = 'opacity 0.3s';
+            overlay.style.opacity = '0';
+            setTimeout(() => overlay.remove(), 300);
+        }}
+        const style = document.getElementById('{overlay_id}-styles');
+        if (style) style.remove();
+    }})();
+    </script>
+    """
+    st.markdown(hide_script, unsafe_allow_html=True)
 
 # Store mappings based on data prefixes
 STORE_MAPPING = {
@@ -3915,7 +3942,10 @@ Focus on actionable improvements that will drive more organic traffic and local 
         # Model selection toggle
         col_q, col_toggle = st.columns([4, 1])
         with col_q:
-            question = st.text_input("Ask anything about your sales, brands, customers, invoices, purchasing, industry research, SEO, or business strategy:")
+            question = st.text_input(
+                "Ask anything about your sales, brands, customers, invoices, purchasing, industry research, SEO, or business strategy:",
+                key="ai_analysis_question"
+            )
         with col_toggle:
             use_deep_thinking = st.toggle(
                 "Deep Insights",
@@ -3923,7 +3953,18 @@ Focus on actionable improvements that will drive more organic traffic and local 
                 help="**OFF - Fast Insights (Sonnet)**: ~$0.10/query, quick answers\n\n**ON - Deep Insights (Opus)**: ~$2/query, strategic analysis with extended thinking"
             )
 
-        if question:
+        # Submit button to trigger analysis (prevents auto-rerun on tab switch)
+        submit_col1, submit_col2 = st.columns([1, 4])
+        with submit_col1:
+            submit_button = st.button(
+                "🚀 Analyze" if not use_deep_thinking else "🧠 Deep Analyze",
+                type="primary",
+                disabled=not question,
+                key="ai_analysis_submit"
+            )
+
+        # Only run analysis when button is clicked (not on every rerun)
+        if submit_button and question:
             # Prepare comprehensive context with ALL available data sources
             context = {
                 'sales_summary': sales_summary,
@@ -4000,15 +4041,31 @@ Focus on actionable improvements that will drive more organic traffic and local 
                     data_sources=data_sources
                 )
 
-                st.markdown("### Answer")
-                if use_deep_thinking:
-                    st.caption("🧠 *Deep Insights - Analyzed with Claude Opus + Extended Thinking*")
-                else:
-                    st.caption("⚡ *Fast Insights - Analyzed with Claude Sonnet*")
-                st.markdown(answer)
+                # Store result in session state so it persists across tab switches
+                st.session_state.ai_analysis_last_result = {
+                    'question': question,
+                    'answer': answer,
+                    'model_type': model_type,
+                    'report_saved': report_saved
+                }
 
-                if report_saved:
-                    st.success("📁 Report saved to Past Reports")
+        # Display the last result (either just generated or from session state)
+        if 'ai_analysis_last_result' in st.session_state and st.session_state.ai_analysis_last_result:
+            result = st.session_state.ai_analysis_last_result
+            st.markdown("### Answer")
+            if result['model_type'] == 'deep':
+                st.caption("🧠 *Deep Insights - Analyzed with Claude Opus + Extended Thinking*")
+            else:
+                st.caption("⚡ *Fast Insights - Analyzed with Claude Sonnet*")
+            st.markdown(result['answer'])
+
+            if result.get('report_saved'):
+                st.success("📁 Report saved to Past Reports")
+
+            # Add clear button to start fresh
+            if st.button("🗑️ Clear Result", key="clear_ai_result"):
+                st.session_state.ai_analysis_last_result = None
+                st.rerun()
 
     with tab3:
         # Past Reports Tab
