@@ -528,7 +528,60 @@ class S3DataManager:
             return {}
         except Exception:
             return {}
-    
+
+    def get_data_hash(self) -> str:
+        """
+        Get a hash representing the current state of all data files in S3.
+        Uses S3 ETags (MD5 hashes) combined with file list to detect changes.
+        This is a lightweight operation that doesn't download file contents.
+        """
+        if not self.is_configured():
+            return ""
+
+        try:
+            # Get all files in raw-uploads with their ETags
+            response = self.s3_client.list_objects_v2(
+                Bucket=self.bucket_name,
+                Prefix="raw-uploads/"
+            )
+
+            if 'Contents' not in response:
+                return "empty"
+
+            # Build hash from file keys, ETags, and last modified times
+            hash_parts = []
+            for obj in sorted(response['Contents'], key=lambda x: x['Key']):
+                # ETag is already an MD5 hash of the file content
+                hash_parts.append(f"{obj['Key']}:{obj['ETag']}:{obj['LastModified'].isoformat()}")
+
+            # Handle pagination for large buckets
+            while response.get('IsTruncated', False):
+                response = self.s3_client.list_objects_v2(
+                    Bucket=self.bucket_name,
+                    Prefix="raw-uploads/",
+                    ContinuationToken=response['NextContinuationToken']
+                )
+                for obj in sorted(response.get('Contents', []), key=lambda x: x['Key']):
+                    hash_parts.append(f"{obj['Key']}:{obj['ETag']}:{obj['LastModified'].isoformat()}")
+
+            # Also include the mapping file hash
+            try:
+                mapping_response = self.s3_client.head_object(
+                    Bucket=self.bucket_name,
+                    Key="config/brand_product_mapping.json"
+                )
+                hash_parts.append(f"mapping:{mapping_response['ETag']}")
+            except ClientError:
+                hash_parts.append("mapping:none")
+
+            # Create combined hash
+            combined = "|".join(hash_parts)
+            return hashlib.md5(combined.encode()).hexdigest()
+
+        except Exception as e:
+            print(f"Error computing data hash: {e}")
+            return ""
+
     def load_all_data_from_s3(self, processor) -> dict:
         """
         Load all uploaded data from S3 and return merged DataFrames.
@@ -1027,27 +1080,35 @@ def plot_sales_trend(df: pd.DataFrame, store_filter: str = "All Stores"):
         store_id = [k for k, v in STORE_DISPLAY_NAMES.items() if v == store_filter]
         if store_id:
             df = df[df['Store_ID'] == store_id[0]]
-    
+
+    # Filter out invalid data points (zero, null, or suspiciously low values)
+    df = df[
+        (df['Net Sales'].notna()) &
+        (df['Net Sales'] > 100) &  # Filter out zero/near-zero sales days
+        (df['Tickets Count'].notna()) &
+        (df['Tickets Count'] > 10)  # Filter out days with almost no transactions
+    ].copy()
+
     fig = make_subplots(rows=2, cols=1, shared_xaxes=True,
                         subplot_titles=('Net Sales by Day', 'Transaction Count'),
                         vertical_spacing=0.1)
-    
+
     for store_id in df['Store_ID'].unique():
         store_df = df[df['Store_ID'] == store_id]
         store_name = STORE_DISPLAY_NAMES.get(store_id, store_id)
-        
+
         fig.add_trace(
             go.Scatter(x=store_df['Date'], y=store_df['Net Sales'],
                       name=f'{store_name} Sales', mode='lines+markers'),
             row=1, col=1
         )
-        
+
         fig.add_trace(
             go.Scatter(x=store_df['Date'], y=store_df['Tickets Count'],
                       name=f'{store_name} Transactions', mode='lines+markers'),
             row=2, col=1
         )
-    
+
     fig.update_layout(height=500, showlegend=True)
     return fig
 
@@ -1063,10 +1124,22 @@ def plot_category_breakdown(df: pd.DataFrame):
 
 def plot_brand_performance(df: pd.DataFrame, top_n: int = 15):
     """Create brand performance visualization."""
+    # Filter out invalid data
+    df = df[
+        (df['Net Sales'].notna()) &
+        (df['Net Sales'] > 0) &
+        (df['Gross Margin %'].notna())
+    ]
     top_brands = df.nlargest(top_n, 'Net Sales').copy()
-    
-    # Convert margin to percentage for display
-    top_brands['Margin_Pct'] = top_brands['Gross Margin %'] * 100
+
+    # Handle margin percentage - check if already in percentage form or decimal
+    max_margin = top_brands['Gross Margin %'].max() if len(top_brands) > 0 else 0
+    if max_margin <= 1:
+        # Decimal form (0.55), convert to percentage
+        top_brands['Margin_Pct'] = top_brands['Gross Margin %'] * 100
+    else:
+        # Already percentage form (55)
+        top_brands['Margin_Pct'] = top_brands['Gross Margin %']
     
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     
@@ -1262,6 +1335,73 @@ def load_invoice_data_from_dynamodb(invoice_service):
 
 
 # =============================================================================
+# CACHED DATA LOADING WITH HASH VALIDATION
+# =============================================================================
+
+@st.cache_data(ttl=300, show_spinner=False)  # 5 min TTL for hash check
+def _get_s3_data_hash(bucket_name: str, _s3_manager) -> str:
+    """Get the current hash of S3 data (lightweight metadata check)."""
+    return _s3_manager.get_data_hash()
+
+
+@st.cache_data(ttl=300, show_spinner=False)  # 5 min TTL for DynamoDB count
+def _get_dynamodb_hash(_aws_access_key: str, _aws_secret_key: str, _region: str) -> str:
+    """Get a hash based on DynamoDB invoice count (lightweight check)."""
+    try:
+        from invoice_extraction import InvoiceDataService
+        invoice_service = InvoiceDataService(
+            aws_access_key=_aws_access_key,
+            aws_secret_key=_aws_secret_key,
+            region=_region
+        )
+        # Get item count from table (lightweight operation)
+        table = invoice_service.dynamodb.Table(invoice_service.line_items_table_name)
+        # Use describe_table for item count estimate (fast)
+        response = invoice_service.dynamodb.meta.client.describe_table(
+            TableName=invoice_service.line_items_table_name
+        )
+        item_count = response['Table'].get('ItemCount', 0)
+        last_update = response['Table'].get('TableStatus', 'ACTIVE')
+        return hashlib.md5(f"{item_count}:{last_update}".encode()).hexdigest()
+    except Exception as e:
+        return ""
+
+
+def _get_cached_s3_data(data_hash: str, s3_manager, processor) -> dict:
+    """
+    Load S3 data with caching. The data_hash parameter ensures cache invalidation
+    when data changes. Streamlit's cache_data will return cached result if
+    the hash hasn't changed.
+    """
+    @st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
+    def _load_s3_data(_hash: str) -> dict:
+        return s3_manager.load_all_data_from_s3(processor)
+
+    return _load_s3_data(data_hash)
+
+
+def _get_cached_dynamodb_data(data_hash: str, invoice_service) -> tuple:
+    """
+    Load DynamoDB invoice data with caching. Hash parameter ensures
+    cache invalidation when new invoices are added.
+    """
+    @st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
+    def _load_dynamo_data(_hash: str) -> pd.DataFrame:
+        return load_invoice_data_from_dynamodb(invoice_service)
+
+    return _load_dynamo_data(data_hash)
+
+
+def _get_cached_brand_mapping(data_hash: str, s3_manager) -> dict:
+    """Load brand mapping with cache invalidation based on S3 hash."""
+    @st.cache_data(ttl=3600, show_spinner=False)
+    def _load_mapping(_hash: str) -> dict:
+        return s3_manager.load_brand_product_mapping()
+
+    return _load_mapping(data_hash)
+
+
+# =============================================================================
 # MAIN APPLICATION
 # =============================================================================
 
@@ -1278,10 +1418,6 @@ def main():
     analytics = AnalyticsEngine()
     
     # Initialize session state for data
-    # Use a flag to track if we've attempted to load from S3 this session
-    if 'data_loaded_from_s3' not in st.session_state:
-        st.session_state.data_loaded_from_s3 = False
-
     if 'sales_data' not in st.session_state:
         st.session_state.sales_data = None
     if 'brand_data' not in st.session_state:
@@ -1295,70 +1431,106 @@ def main():
     if 'brand_product_mapping' not in st.session_state:
         st.session_state.brand_product_mapping = None
 
+    # Track data hashes for cache invalidation
+    if 'last_s3_hash' not in st.session_state:
+        st.session_state.last_s3_hash = None
+    if 'last_dynamo_hash' not in st.session_state:
+        st.session_state.last_dynamo_hash = None
+
     # Track DynamoDB invoice loading status
     if 'dynamo_invoice_count' not in st.session_state:
         st.session_state.dynamo_invoice_count = 0
     if 'dynamo_load_error' not in st.session_state:
         st.session_state.dynamo_load_error = None
-    
-    # Auto-load data from S3 and DynamoDB on first run of session
-    if not st.session_state.data_loaded_from_s3:
-        with st.spinner("🔄 Loading data from S3 and DynamoDB..."):
-            # Load brand-product mapping
-            st.session_state.brand_product_mapping = s3_manager.load_brand_product_mapping()
 
-            # Load all CSV data from S3
-            loaded_data = s3_manager.load_all_data_from_s3(processor)
+    # Hash-based data loading with caching
+    # Step 1: Get current data hashes (lightweight metadata operations)
+    current_s3_hash = _get_s3_data_hash(s3_manager.bucket_name, s3_manager) if s3_manager.is_configured() else ""
 
-            if loaded_data['sales'] is not None:
-                st.session_state.sales_data = loaded_data['sales']
-            if loaded_data['brand'] is not None:
-                st.session_state.brand_data = loaded_data['brand']
-            if loaded_data['product'] is not None:
-                st.session_state.product_data = loaded_data['product']
-            if loaded_data['customer'] is not None:
-                st.session_state.customer_data = loaded_data['customer']
-            if loaded_data['invoice'] is not None:
-                st.session_state.invoice_data = loaded_data['invoice']
+    # Get DynamoDB hash
+    current_dynamo_hash = ""
+    try:
+        aws_access_key = st.secrets['aws']['access_key_id']
+        aws_secret_key = st.secrets['aws']['secret_access_key']
+        aws_region = st.secrets['aws']['region']
+        current_dynamo_hash = _get_dynamodb_hash(aws_access_key, aws_secret_key, aws_region)
+    except Exception:
+        pass
 
-            # Load invoice data from DynamoDB
-            try:
-                from invoice_extraction import InvoiceDataService
-                aws_config = {
-                    'aws_access_key': st.secrets['aws']['access_key_id'],
-                    'aws_secret_key': st.secrets['aws']['secret_access_key'],
-                    'region': st.secrets['aws']['region']
-                }
-                invoice_service = InvoiceDataService(**aws_config)
+    # Step 2: Check if data needs refresh (hash changed or first load)
+    s3_needs_refresh = current_s3_hash != st.session_state.last_s3_hash
+    dynamo_needs_refresh = current_dynamo_hash != st.session_state.last_dynamo_hash
 
-                # Verify tables exist before attempting to load
+    if s3_needs_refresh or dynamo_needs_refresh:
+        refresh_type = []
+        if s3_needs_refresh and current_s3_hash:
+            refresh_type.append("S3")
+        if dynamo_needs_refresh and current_dynamo_hash:
+            refresh_type.append("DynamoDB")
+
+        spinner_msg = "🔄 Loading data..." if not st.session_state.last_s3_hash else f"🔄 Refreshing data ({', '.join(refresh_type)} changed)..."
+
+        with st.spinner(spinner_msg):
+            # Load S3 data if hash changed
+            if s3_needs_refresh and current_s3_hash:
+                # Load brand-product mapping (cached by hash)
+                st.session_state.brand_product_mapping = _get_cached_brand_mapping(current_s3_hash, s3_manager)
+
+                # Load all CSV data from S3 (cached by hash)
+                loaded_data = _get_cached_s3_data(current_s3_hash, s3_manager, processor)
+
+                if loaded_data['sales'] is not None:
+                    st.session_state.sales_data = loaded_data['sales']
+                if loaded_data['brand'] is not None:
+                    st.session_state.brand_data = loaded_data['brand']
+                if loaded_data['product'] is not None:
+                    st.session_state.product_data = loaded_data['product']
+                if loaded_data['customer'] is not None:
+                    st.session_state.customer_data = loaded_data['customer']
+                if loaded_data['invoice'] is not None:
+                    st.session_state.invoice_data = loaded_data['invoice']
+
+                st.session_state.last_s3_hash = current_s3_hash
+
+            # Load DynamoDB invoice data if hash changed
+            if dynamo_needs_refresh and current_dynamo_hash:
                 try:
-                    invoice_service.dynamodb.Table(invoice_service.line_items_table_name).table_status
-                except Exception as table_err:
-                    raise Exception(f"DynamoDB table not accessible: {invoice_service.line_items_table_name}")
+                    from invoice_extraction import InvoiceDataService
+                    invoice_service = InvoiceDataService(
+                        aws_access_key=aws_access_key,
+                        aws_secret_key=aws_secret_key,
+                        region=aws_region
+                    )
 
-                # Load all invoice line items from DynamoDB
-                dynamo_invoice_df = load_invoice_data_from_dynamodb(invoice_service)
-                if dynamo_invoice_df is not None and len(dynamo_invoice_df) > 0:
-                    st.session_state.dynamo_invoice_count = len(dynamo_invoice_df)
-                    # Merge with existing invoice data from S3 if any
-                    if st.session_state.invoice_data is not None:
-                        st.session_state.invoice_data = pd.concat([
-                            st.session_state.invoice_data,
-                            dynamo_invoice_df
-                        ], ignore_index=True).drop_duplicates()
+                    # Verify table exists
+                    try:
+                        invoice_service.dynamodb.Table(invoice_service.line_items_table_name).table_status
+                    except Exception as table_err:
+                        raise Exception(f"DynamoDB table not accessible: {invoice_service.line_items_table_name}")
+
+                    # Load invoice data (cached by hash)
+                    dynamo_invoice_df = _get_cached_dynamodb_data(current_dynamo_hash, invoice_service)
+                    if dynamo_invoice_df is not None and len(dynamo_invoice_df) > 0:
+                        st.session_state.dynamo_invoice_count = len(dynamo_invoice_df)
+                        # Merge with existing S3 invoice data if any
+                        if st.session_state.invoice_data is not None:
+                            st.session_state.invoice_data = pd.concat([
+                                st.session_state.invoice_data,
+                                dynamo_invoice_df
+                            ], ignore_index=True).drop_duplicates()
+                        else:
+                            st.session_state.invoice_data = dynamo_invoice_df
                     else:
-                        st.session_state.invoice_data = dynamo_invoice_df
-                else:
+                        st.session_state.dynamo_invoice_count = 0
+
+                    st.session_state.last_dynamo_hash = current_dynamo_hash
+                    st.session_state.dynamo_load_error = None
+
+                except Exception as e:
+                    st.session_state.dynamo_load_error = str(e)
                     st.session_state.dynamo_invoice_count = 0
-            except Exception as e:
-                # Store error but don't block app startup
-                st.session_state.dynamo_load_error = str(e)
-                st.session_state.dynamo_invoice_count = 0
 
-            st.session_state.data_loaded_from_s3 = True
-
-            # Show what was loaded
+            # Show what was loaded/refreshed
             loaded_items = []
             if st.session_state.sales_data is not None:
                 loaded_items.append(f"Sales ({len(st.session_state.sales_data)} records)")
@@ -1377,9 +1549,9 @@ def main():
                 loaded_items.append(f"Mappings ({len(st.session_state.brand_product_mapping)} brands)")
 
             if loaded_items:
-                st.toast(f"✅ Loaded: {', '.join(loaded_items)}", icon="📊")
+                cache_status = "cached" if st.session_state.last_s3_hash else "loaded"
+                st.toast(f"✅ Data {cache_status}: {', '.join(loaded_items)}", icon="📊")
 
-            # Show DynamoDB error if any
             if st.session_state.dynamo_load_error:
                 st.toast(f"⚠️ DynamoDB Error: {st.session_state.dynamo_load_error[:100]}", icon="⚠️")
     
@@ -1662,6 +1834,14 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
             if store_id:
                 df = df[df['Store_ID'] == store_id[0]]
 
+        # Filter out invalid data points (zero, null, or suspiciously low values)
+        df = df[
+            (df['Net Sales'].notna()) &
+            (df['Net Sales'] > 100) &
+            (df['Customers Count'].notna()) &
+            (df['Customers Count'] > 5)
+        ].copy()
+
         col1, col2 = st.columns(2)
 
         with col1:
@@ -1746,40 +1926,56 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
                 # Margin vs Sales scatter
                 st.subheader("Margin vs. Sales Analysis")
 
-                # Filter to significant brands
-                significant_brands = df_brand[df_brand['Net Sales'] > 10000].copy()
-                significant_brands['Margin_Pct'] = significant_brands['Gross Margin %'] * 100
+                # Filter to significant brands with valid margin data
+                significant_brands = df_brand[
+                    (df_brand['Net Sales'] > 1000) &  # Lowered threshold
+                    (df_brand['Gross Margin %'].notna()) &
+                    (df_brand['Gross Margin %'] > 0)
+                ].copy()
 
-                # Color by margin performance
-                fig = px.scatter(
-                    significant_brands,
-                    x='Net Sales',
-                    y='Margin_Pct',
-                    hover_name='Brand',
-                    color='Margin_Pct',
-                    color_continuous_scale='RdYlGn',  # Red (low) to Green (high)
-                    size='Net Sales',
-                    size_max=30,
-                    title='Brand Positioning: Sales vs Margin',
-                    log_x=True,
-                    labels={'Margin_Pct': 'Gross Margin %', 'Net Sales': 'Net Sales ($)'}
-                )
+                # Handle margin percentage - check if already in percentage form or decimal
+                # If max value > 1, it's already a percentage; if <= 1, it's a decimal
+                if len(significant_brands) > 0:
+                    max_margin = significant_brands['Gross Margin %'].max()
+                    if max_margin <= 1:
+                        # Decimal form (0.55), convert to percentage
+                        significant_brands['Margin_Pct'] = significant_brands['Gross Margin %'] * 100
+                    else:
+                        # Already percentage form (55)
+                        significant_brands['Margin_Pct'] = significant_brands['Gross Margin %']
 
-                # Add quadrant lines
-                fig.add_hline(
-                    y=55,
-                    line_dash="dash",
-                    line_color="rgba(255,255,255,0.5)",
-                    annotation_text="55% Target Margin",
-                    annotation_position="right"
-                )
+                    # Color by margin performance
+                    fig = px.scatter(
+                        significant_brands,
+                        x='Net Sales',
+                        y='Margin_Pct',
+                        hover_name='Brand',
+                        color='Margin_Pct',
+                        color_continuous_scale='RdYlGn',  # Red (low) to Green (high)
+                        size='Net Sales',
+                        size_max=30,
+                        title='Brand Positioning: Sales vs Margin',
+                        log_x=True,
+                        labels={'Margin_Pct': 'Gross Margin %', 'Net Sales': 'Net Sales ($)'}
+                    )
 
-                fig.update_layout(
-                    height=500,
-                    coloraxis_colorbar=dict(title="Margin %")
-                )
+                    # Add quadrant lines
+                    fig.add_hline(
+                        y=55,
+                        line_dash="dash",
+                        line_color="rgba(255,255,255,0.5)",
+                        annotation_text="55% Target Margin",
+                        annotation_position="right"
+                    )
 
-                st.plotly_chart(fig, use_container_width=True)
+                    fig.update_layout(
+                        height=500,
+                        coloraxis_colorbar=dict(title="Margin %")
+                    )
+
+                    st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.info("No brand data with sufficient sales volume to display.")
 
                 # Add interpretation help
                 with st.expander("📖 How to read this chart"):
@@ -2592,41 +2788,56 @@ def render_brand_analysis(state, analytics, store_filter, date_filter=None):
     
     # Margin vs Sales scatter
     st.subheader("Margin vs. Sales Analysis")
-    
-    # Filter to significant brands
-    significant_brands = df[df['Net Sales'] > 10000].copy()
-    significant_brands['Margin_Pct'] = significant_brands['Gross Margin %'] * 100
-    
-    # Color by margin performance
-    fig = px.scatter(
-        significant_brands, 
-        x='Net Sales', 
-        y='Margin_Pct',
-        hover_name='Brand',
-        color='Margin_Pct',
-        color_continuous_scale='RdYlGn',  # Red (low) to Green (high)
-        size='Net Sales',
-        size_max=30,
-        title='Brand Positioning: Sales vs Margin',
-        log_x=True,
-        labels={'Margin_Pct': 'Gross Margin %', 'Net Sales': 'Net Sales ($)'}
-    )
-    
-    # Add quadrant lines
-    fig.add_hline(
-        y=55, 
-        line_dash="dash", 
-        line_color="rgba(255,255,255,0.5)", 
-        annotation_text="55% Target Margin",
-        annotation_position="right"
-    )
-    
-    fig.update_layout(
-        height=500,
-        coloraxis_colorbar=dict(title="Margin %")
-    )
-    
-    st.plotly_chart(fig, use_container_width=True)
+
+    # Filter to significant brands with valid margin data
+    significant_brands = df[
+        (df['Net Sales'] > 1000) &  # Lowered threshold
+        (df['Gross Margin %'].notna()) &
+        (df['Gross Margin %'] > 0)
+    ].copy()
+
+    # Handle margin percentage - check if already in percentage form or decimal
+    if len(significant_brands) > 0:
+        max_margin = significant_brands['Gross Margin %'].max()
+        if max_margin <= 1:
+            # Decimal form (0.55), convert to percentage
+            significant_brands['Margin_Pct'] = significant_brands['Gross Margin %'] * 100
+        else:
+            # Already percentage form (55)
+            significant_brands['Margin_Pct'] = significant_brands['Gross Margin %']
+
+        # Color by margin performance
+        fig = px.scatter(
+            significant_brands,
+            x='Net Sales',
+            y='Margin_Pct',
+            hover_name='Brand',
+            color='Margin_Pct',
+            color_continuous_scale='RdYlGn',  # Red (low) to Green (high)
+            size='Net Sales',
+            size_max=30,
+            title='Brand Positioning: Sales vs Margin',
+            log_x=True,
+            labels={'Margin_Pct': 'Gross Margin %', 'Net Sales': 'Net Sales ($)'}
+        )
+
+        # Add quadrant lines
+        fig.add_hline(
+            y=55,
+            line_dash="dash",
+            line_color="rgba(255,255,255,0.5)",
+            annotation_text="55% Target Margin",
+            annotation_position="right"
+        )
+
+        fig.update_layout(
+            height=500,
+            coloraxis_colorbar=dict(title="Margin %")
+        )
+
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("No brand data with sufficient sales volume to display.")
     
     # Add interpretation help
     with st.expander("📖 How to read this chart"):
