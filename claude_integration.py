@@ -514,8 +514,9 @@ Respond with a clear, data-driven answer that demonstrates you have access to an
 
         try:
             if use_deep_thinking:
-                # Use Claude Opus with extended thinking for deeper analysis
-                response = self.client.messages.create(
+                # Use Claude Opus with extended thinking - requires streaming for long operations
+                result_text = ""
+                with self.client.messages.stream(
                     model="claude-opus-4-20250514",
                     max_tokens=16000,
                     thinking={
@@ -523,13 +524,13 @@ Respond with a clear, data-driven answer that demonstrates you have access to an
                         "budget_tokens": 10000  # Allow up to 10k tokens for thinking
                     },
                     messages=[{"role": "user", "content": prompt}]
-                )
-
-                # Extract the text response (skip thinking blocks)
-                result_text = ""
-                for block in response.content:
-                    if block.type == "text":
-                        result_text += block.text
+                ) as stream:
+                    for event in stream:
+                        # Handle text events (skip thinking blocks)
+                        if hasattr(event, 'type'):
+                            if event.type == 'content_block_delta':
+                                if hasattr(event.delta, 'text'):
+                                    result_text += event.delta.text
 
                 return result_text if result_text else "No response generated."
             else:
