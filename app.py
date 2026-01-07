@@ -3566,15 +3566,83 @@ def render_recommendations(state, analytics):
 
         @st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
         def _load_research_data_cached():
-            """Load research data from S3 with 1-hour cache."""
+            """Load research data from S3 with 1-hour cache.
+
+            Tries multiple sources:
+            1. Automated research findings (research-findings/summary/latest.json)
+            2. Manual research monthly summaries (most recent)
+            """
             if not RESEARCH_AVAILABLE:
                 return None
+
+            # First, try automated research findings
             try:
                 research_viewer = ResearchFindingsViewer()
                 if research_viewer.is_available():
-                    return research_viewer.load_latest_summary()
+                    automated_summary = research_viewer.load_latest_summary()
+                    if automated_summary:
+                        return automated_summary
             except Exception:
                 pass
+
+            # Fall back to manual research summaries if available
+            if MANUAL_RESEARCH_AVAILABLE:
+                try:
+                    api_key = os.environ.get("ANTHROPIC_API_KEY")
+                    if not api_key:
+                        try:
+                            api_key = st.secrets.get("ANTHROPIC_API_KEY")
+                        except Exception:
+                            pass
+                    if not api_key:
+                        try:
+                            api_key = st.secrets.get("anthropic", {}).get("ANTHROPIC_API_KEY")
+                        except Exception:
+                            pass
+
+                    if api_key:
+                        summarizer = MonthlyResearchSummarizer(api_key)
+                        # Get most recent monthly summary
+                        manual_summary = summarizer.recall_summary()
+                        if manual_summary:
+                            # Convert to format expected by recommendations tab
+                            return {
+                                'executive_summary': manual_summary.get('executive_summary', ''),
+                                'key_findings': [
+                                    {
+                                        'finding': insight.get('insight', ''),
+                                        'importance': insight.get('importance', 'medium'),
+                                        'category': insight.get('category', 'other'),
+                                        'status': 'new',
+                                        'first_identified': manual_summary.get('generated_at', '')[:10]
+                                    }
+                                    for insight in manual_summary.get('key_insights', [])
+                                ],
+                                'action_items': [
+                                    {
+                                        'action': action.get('action', ''),
+                                        'priority': action.get('priority', 'medium'),
+                                        'deadline': action.get('timeline', 'Ongoing')
+                                    }
+                                    for insight in manual_summary.get('key_insights', [])
+                                    for action in insight.get('recommended_actions', [])
+                                ],
+                                'tracking_items': [
+                                    {
+                                        'item': risk.get('risk', ''),
+                                        'severity': risk.get('severity', 'medium'),
+                                        'mitigation': risk.get('mitigation', '')
+                                    }
+                                    for risk in manual_summary.get('risks_and_challenges', [])
+                                ],
+                                'generated_at': manual_summary.get('generated_at', ''),
+                                'source': 'manual_research',
+                                'month_name': manual_summary.get('month_name', ''),
+                                'documents_analyzed': manual_summary.get('documents_analyzed', 0)
+                            }
+                except Exception:
+                    pass
+
             return None
 
         @st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
