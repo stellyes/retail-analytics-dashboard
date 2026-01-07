@@ -271,43 +271,104 @@ class TreezInvoiceParser:
                 if line and line not in ['Need', 'Help?', 'Need Help?']:
                     header_lines.append(line)
 
-            # Parse the merged header - first line typically has all 4 column headers
-            # Pattern: "VENDOR_NAME Barbary Coast Dispensary FULFILLED INVOICE#"
+            # Parse the merged header - PyMuPDF extracts line-by-line
+            # Format 1 (no vendor): "Grass Roots" on first line, address on second
+            # Format 2 (with vendor): Vendor on first line(s), then "Barbary Coast Dispensary" or "Grass Roots"
             if header_lines:
                 first_line = header_lines[0]
 
-                # Extract Distributor name - everything before "Barbary Coast" or "Grass Roots"
-                distributor_match = re.match(
-                    r'^(.+?)\s+(Barbary Coast Dispensary|Grass Roots)\s+(FULFILLED|PENDING|CANCELLED)\s+INVOICE#',
-                    first_line
-                )
-                if distributor_match:
-                    invoice['distributor'] = distributor_match.group(1).strip()
-                    invoice['receiver'] = distributor_match.group(2).strip()
-                    invoice['invoice_status'] = distributor_match.group(3).strip()
+                # Check if first line is just the receiver name (no vendor format)
+                if first_line.strip() == 'Grass Roots':
+                    invoice['receiver'] = 'Grass Roots'
+                    # Address should be on next line: "1077 Post St. San Francisco CA 94109"
+                    if len(header_lines) > 1:
+                        addr_line = header_lines[1]
+                        if 'Post St' in addr_line:
+                            invoice['receiver_address'] = addr_line.strip()
+                    # Status and other info on subsequent lines
+                    for line in header_lines[2:10]:
+                        if 'FULFILLED' in line:
+                            invoice['invoice_status'] = 'FULFILLED'
+                        elif 'PENDING' in line:
+                            invoice['invoice_status'] = 'PENDING'
+                        elif 'CANCELLED' in line:
+                            invoice['invoice_status'] = 'CANCELLED'
+                elif first_line.strip() == 'Barbary Coast Dispensary':
+                    invoice['receiver'] = 'Barbary Coast Dispensary'
+                    if len(header_lines) > 1:
+                        addr_line = header_lines[1]
+                        if 'Mission St' in addr_line:
+                            invoice['receiver_address'] = addr_line.strip()
+                    for line in header_lines[2:10]:
+                        if 'FULFILLED' in line:
+                            invoice['invoice_status'] = 'FULFILLED'
+                        elif 'PENDING' in line:
+                            invoice['invoice_status'] = 'PENDING'
+                        elif 'CANCELLED' in line:
+                            invoice['invoice_status'] = 'CANCELLED'
                 else:
-                    # Try alternate pattern - vendor may have LLC/INC at end or split across lines
-                    # Example: "GCM MANAGEMENT SERVICES, Barbary Coast Dispensary..."
-                    # with "INC" on the next line
-                    alt_match = re.match(
-                        r'^(.+?(?:LLC|INC|CORP|SERVICES)?[,.\s]*)\s*(Barbary Coast Dispensary|Grass Roots)',
-                        first_line,
-                        re.IGNORECASE
-                    )
-                    if alt_match:
-                        distributor_name = alt_match.group(1).strip().rstrip(',').strip()
-                        invoice['receiver'] = alt_match.group(2).strip()
+                    # First line is likely vendor name - search for receiver in subsequent lines
+                    # Build vendor name from lines until we find receiver
+                    vendor_parts = []
+                    receiver_line_idx = -1
 
-                        # Check if the vendor name is incomplete (ends with comma or is "SERVICES,")
-                        # and the next line contains the continuation (e.g., "INC")
-                        if len(header_lines) > 1:
-                            second_line = header_lines[1]
-                            # Check if second line starts with INC, LLC, CORP (continuation of vendor name)
-                            continuation_match = re.match(r'^(INC|LLC|CORP)\b', second_line.strip(), re.IGNORECASE)
-                            if continuation_match and (distributor_name.endswith(',') or 'SERVICES' in distributor_name.upper()):
-                                distributor_name = distributor_name.rstrip(',').strip() + ' ' + continuation_match.group(1)
+                    for idx, line in enumerate(header_lines):
+                        line_clean = line.strip()
+                        if line_clean == 'Grass Roots':
+                            invoice['receiver'] = 'Grass Roots'
+                            receiver_line_idx = idx
+                            break
+                        elif line_clean == 'Barbary Coast Dispensary':
+                            invoice['receiver'] = 'Barbary Coast Dispensary'
+                            receiver_line_idx = idx
+                            break
+                        elif 'Grass Roots' in line_clean or 'Barbary Coast' in line_clean:
+                            # Mixed on one line - try to extract
+                            for store in ['Barbary Coast Dispensary', 'Grass Roots']:
+                                if store in line_clean:
+                                    invoice['receiver'] = store
+                                    # Everything before is vendor
+                                    vendor_part = line_clean.split(store)[0].strip().rstrip(',').strip()
+                                    if vendor_part:
+                                        vendor_parts.append(vendor_part)
+                                    receiver_line_idx = idx
+                                    break
+                            if invoice['receiver']:
+                                break
+                        # Otherwise accumulate as vendor name (skip address-like lines)
+                        elif not re.match(r'^\d+\s', line_clean) and 'Mission St' not in line_clean and 'Post St' not in line_clean:
+                            # Skip status, dates, etc
+                            if line_clean not in ['FULFILLED', 'PENDING', 'CANCELLED'] and not line_clean.startswith('Created:'):
+                                if not re.match(r'^[\(\d]', line_clean):  # Skip phone/zip
+                                    if not '@' in line_clean and not 'LIC' in line_clean:  # Skip email/license
+                                        vendor_parts.append(line_clean)
 
-                        invoice['distributor'] = distributor_name
+                    # Build vendor name from parts (usually first 1-2 lines)
+                    if vendor_parts:
+                        # Take first 2 lines max for vendor name
+                        vendor_name = ' '.join(vendor_parts[:2]).strip()
+                        # Clean up common issues
+                        vendor_name = re.sub(r'\s+', ' ', vendor_name)
+                        if vendor_name and vendor_name not in ['FULFILLED', 'PENDING', 'CANCELLED']:
+                            invoice['distributor'] = vendor_name
+
+                    # Extract receiver address from line after receiver
+                    if receiver_line_idx >= 0 and receiver_line_idx + 1 < len(header_lines):
+                        addr_line = header_lines[receiver_line_idx + 1]
+                        if 'Mission St' in addr_line or 'Post St' in addr_line:
+                            invoice['receiver_address'] = addr_line.strip()
+
+                    # Find status in remaining lines
+                    for line in header_lines:
+                        if 'FULFILLED' in line:
+                            invoice['invoice_status'] = 'FULFILLED'
+                            break
+                        elif 'PENDING' in line:
+                            invoice['invoice_status'] = 'PENDING'
+                            break
+                        elif 'CANCELLED' in line:
+                            invoice['invoice_status'] = 'CANCELLED'
+                            break
 
                 # Extract addresses from second header line
                 # Pattern: "ADDRESS1 952 Mission St, San Francisco, CA Created: MM/DD/YYYY INVOICE_NUM"
@@ -355,14 +416,20 @@ class TreezInvoiceParser:
 
                 # If receiver address not found, try alternate patterns or set default
                 if not invoice['receiver_address']:
-                    # Look for any Mission St reference in all header lines
+                    # Look for any Mission St or Post St reference in all header lines
                     for line in header_lines:
                         if 'Mission St' in line or 'Mission' in line:
                             invoice['receiver_address'] = '952 Mission St, San Francisco, CA 94103'
                             break
+                        if 'Post St' in line:
+                            invoice['receiver_address'] = '1077 Post St, San Francisco, CA 94109'
+                            break
                     # If still not found, set default based on receiver
-                    if not invoice['receiver_address'] and invoice['receiver'] == 'Barbary Coast Dispensary':
-                        invoice['receiver_address'] = '952 Mission St, San Francisco, CA 94103'
+                    if not invoice['receiver_address']:
+                        if invoice['receiver'] == 'Barbary Coast Dispensary':
+                            invoice['receiver_address'] = '952 Mission St, San Francisco, CA 94103'
+                        elif invoice['receiver'] == 'Grass Roots':
+                            invoice['receiver_address'] = '1077 Post St, San Francisco, CA 94109'
 
                 # Look for additional distributor info in subsequent lines
                 for idx, line in enumerate(header_lines[2:8]):
@@ -689,7 +756,8 @@ class TreezInvoiceParser:
                         subtype = type_cell if type_cell else 'UNKNOWN'
 
                 # Column 4: Trace ID
-                # 1A prefix is for cannabis items tracked by Metrc
+                # 1A prefix is for cannabis items tracked by Metrc (Barbary Coast)
+                # 7D prefix is used by Grass Roots (Treez internal ID format)
                 # Non-cannabis products (MERCH, ACCESSORY, ROLLING PAPERS, etc.) may have different IDs or N/A
                 trace_id = self._clean_text(row[offset + 4] or '')
 
@@ -699,9 +767,9 @@ class TreezInvoiceParser:
                 if not trace_id:
                     continue
 
-                # For cannabis products, require 1A prefix
+                # For cannabis products, accept 1A (Metrc) or 7D (Treez internal) prefixes
                 # For non-cannabis, accept any non-empty trace ID
-                if not is_non_cannabis and not re.match(r'1A', trace_id):
+                if not is_non_cannabis and not re.match(r'(1A|7D)', trace_id):
                     continue
 
                 # Column 5: SKU (usually empty, skip)

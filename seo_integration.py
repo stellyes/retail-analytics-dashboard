@@ -902,10 +902,10 @@ def render_historical_archives(viewer: SEOFindingsViewer):
 
     with col1:
         current_year = datetime.now().year
-        year = st.selectbox("Year", range(current_year, current_year - 3, -1))
+        year = st.selectbox("Year", range(current_year, current_year - 3, -1), key="seo_archive_year")
 
     with col2:
-        month = st.selectbox("Month", range(1, 13), format_func=lambda x: datetime(2000, x, 1).strftime('%B'))
+        month = st.selectbox("Month", range(1, 13), format_func=lambda x: datetime(2000, x, 1).strftime('%B'), key="seo_archive_month")
 
     with col3:
         st.write("")  # Spacing
