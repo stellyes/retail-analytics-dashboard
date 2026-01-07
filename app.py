@@ -1559,23 +1559,14 @@ def main():
             "📊 Dashboard",
             "📈 Sales Analysis",
             "👥 Customer Analytics",
-            "🔗 Brand-Product Mapping",
             "💡 Recommendations",
         ]
-
-        # Add research page if available
-        if RESEARCH_AVAILABLE:
-            nav_options.append("🔬 Industry Research")
-
-        # Add SEO page if available
-        if SEO_AVAILABLE:
-            nav_options.append("🔍 SEO Analysis")
 
         # Add QR Code page if available
         if QR_AVAILABLE:
             nav_options.append("📱 QR Code Portal")
 
-        nav_options.append("📤 Data Upload")
+        nav_options.append("🗄️ Data Center")
 
         # Handle navigation override from dashboard buttons
         if 'nav_override' in st.session_state:
@@ -1615,23 +1606,8 @@ def main():
     elif page == "👥 Customer Analytics":
         render_customer_analytics(st.session_state, analytics, selected_store, date_range)
 
-    elif page == "🔗 Brand-Product Mapping":
-        render_brand_product_mapping(st.session_state, s3_manager)
-    
     elif page == "💡 Recommendations":
         render_recommendations(st.session_state, analytics)
-
-    elif page == "🔬 Industry Research":
-        if RESEARCH_AVAILABLE:
-            render_research_page()
-        else:
-            st.error("Research integration module not found. Make sure `research_integration.py` is in the same directory.")
-
-    elif page == "🔍 SEO Analysis":
-        if SEO_AVAILABLE:
-            render_seo_page()
-        else:
-            st.error("SEO integration module not found. Make sure `seo_integration.py` is in the same directory.")
 
     elif page == "📱 QR Code Portal":
         if QR_AVAILABLE:
@@ -1639,8 +1615,8 @@ def main():
         else:
             st.error("QR Code integration module not found. Make sure `qr_integration.py` is in the same directory.")
 
-    elif page == "📤 Data Upload":
-        render_upload_page(s3_manager, processor)
+    elif page == "🗄️ Data Center":
+        render_data_center(s3_manager, processor)
 
 
 def render_dashboard(state, analytics, store_filter):
@@ -1648,7 +1624,7 @@ def render_dashboard(state, analytics, store_filter):
     st.header("Overview Dashboard")
     
     if state.sales_data is None:
-        st.info("👆 Upload your data files using the 'Data Upload' page to get started.")
+        st.info("👆 Upload your data files using the 'Data Center' page to get started.")
         
         # Show demo data option
         if st.button("Load Demo Data"):
@@ -2089,7 +2065,7 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
     st.header("Customer Analytics")
 
     if state.customer_data is None:
-        st.warning("Please upload customer data first using the 'Data Upload' page.")
+        st.warning("Please upload customer data first using the 'Data Center' page.")
         st.info("💡 Upload a CSV file containing customer demographics, transaction history, and loyalty information.")
         return
 
@@ -4156,11 +4132,9 @@ Focus on actionable improvements that will drive more organic traffic and local 
 
 
 def render_brand_product_mapping(state, s3_manager):
-    """Render brand-product mapping configuration page."""
-    st.header("🔗 Brand-Product Mapping")
-    
+    """Render brand-product mapping configuration interface."""
     st.markdown("""
-    Link brands to their product categories. This helps the AI provide more accurate 
+    Link brands to their product categories. This helps the AI provide more accurate
     insights by understanding which brands sell which types of products.
     """)
     
@@ -4429,9 +4403,9 @@ def render_brand_product_mapping(state, s3_manager):
                 st.rerun()
 
 
-def render_upload_page(s3_manager, processor):
-    """Render data upload page with tabbed interface."""
-    st.header("📤 Data Upload")
+def render_data_center(s3_manager, processor):
+    """Render Data Center page with tabbed interface for all data management features."""
+    st.header("🗄️ Data Center")
 
     # S3 Connection Status with consolidated record counts
     s3_connected, s3_message = s3_manager.test_connection()
@@ -4561,13 +4535,39 @@ def render_upload_page(s3_manager, processor):
     
     st.markdown("---")
 
-    # Create main tabs for Data Upload
-    sales_tab, invoice_tab, customer_tab, context_tab = st.tabs([
+    # Create main tabs for Data Center
+    # Build tab list dynamically based on available modules
+    tab_names = [
         "📊 Sales Data",
         "📋 Invoice Data",
         "👥 Customer Data",
-        "💡 Define Context"
-    ])
+        "💡 Define Context",
+        "🔗 Brand Mapping",
+    ]
+
+    # Add optional tabs based on available modules
+    if RESEARCH_AVAILABLE:
+        tab_names.append("🔬 Industry Research")
+    if SEO_AVAILABLE:
+        tab_names.append("🔍 SEO Analysis")
+
+    tabs = st.tabs(tab_names)
+
+    # Assign tabs to variables (handle dynamic count)
+    tab_idx = 0
+    sales_tab = tabs[tab_idx]; tab_idx += 1
+    invoice_tab = tabs[tab_idx]; tab_idx += 1
+    customer_tab = tabs[tab_idx]; tab_idx += 1
+    context_tab = tabs[tab_idx]; tab_idx += 1
+    brand_mapping_tab = tabs[tab_idx]; tab_idx += 1
+
+    research_tab = None
+    if RESEARCH_AVAILABLE:
+        research_tab = tabs[tab_idx]; tab_idx += 1
+
+    seo_tab = None
+    if SEO_AVAILABLE:
+        seo_tab = tabs[tab_idx]; tab_idx += 1
 
     # =========================================================================
     # SALES DATA TAB - Sales, Brand, and Product uploads
@@ -5014,6 +5014,33 @@ def render_upload_page(s3_manager, processor):
                 st.error(f"Error loading context: {str(e)}")
         else:
             st.warning("Business context service not available.")
+
+    # =========================================================================
+    # BRAND MAPPING TAB
+    # =========================================================================
+    with brand_mapping_tab:
+        # Render the brand-product mapping interface
+        render_brand_product_mapping(st.session_state, s3_manager)
+
+    # =========================================================================
+    # INDUSTRY RESEARCH TAB (if available)
+    # =========================================================================
+    if research_tab is not None:
+        with research_tab:
+            if RESEARCH_AVAILABLE:
+                render_research_page()
+            else:
+                st.error("Research integration module not found.")
+
+    # =========================================================================
+    # SEO ANALYSIS TAB (if available)
+    # =========================================================================
+    if seo_tab is not None:
+        with seo_tab:
+            if SEO_AVAILABLE:
+                render_seo_page()
+            else:
+                st.error("SEO integration module not found.")
 
     # Data management section
     st.markdown("---")
