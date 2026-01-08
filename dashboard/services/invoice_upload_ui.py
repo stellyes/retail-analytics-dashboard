@@ -15,7 +15,7 @@ import json
 from datetime import datetime, date
 
 try:
-    from invoice_extraction import TreezInvoiceParser, InvoiceDataService
+    from .invoice_extraction import TreezInvoiceParser, InvoiceDataService
     INVOICE_EXTRACTION_AVAILABLE = True
 except ImportError:
     INVOICE_EXTRACTION_AVAILABLE = False
