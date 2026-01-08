@@ -89,18 +89,41 @@ def _load_invoices_needing_review_from_dynamo():
                         'added_at': datetime.now().isoformat()
                     })
 
-        # Find duplicates (same invoice_number appearing multiple times)
+        # Find duplicates (same invoice_number AND store appearing multiple times)
+        # Group by invoice_number + store combination
+        invoice_store_seen = {}
         for inv_num, invoices in invoice_numbers_seen.items():
+            for inv in invoices:
+                # Get store name from receiver or customer_name field
+                store_name = inv.get('receiver') or inv.get('customer_name') or 'Unknown'
+                # Normalize store name for comparison
+                if 'barbary' in store_name.lower():
+                    store_key = 'Barbary Coast'
+                elif 'grass' in store_name.lower():
+                    store_key = 'Grass Roots'
+                else:
+                    store_key = store_name
+
+                composite_key = f"{inv_num}|{store_key}"
+                if composite_key not in invoice_store_seen:
+                    invoice_store_seen[composite_key] = []
+                invoice_store_seen[composite_key].append(inv)
+
+        # Now find actual duplicates (same invoice_number + store combination appearing multiple times)
+        for composite_key, invoices in invoice_store_seen.items():
             if len(invoices) > 1:
+                inv_num, store_name = composite_key.split('|', 1)
                 # Sort by extracted_at to find oldest and newest
                 sorted_invoices = sorted(invoices, key=lambda x: x.get('extracted_at', ''))
                 st.session_state.duplicate_invoices.append({
                     'invoice_number': inv_num,
+                    'store_name': store_name,
                     'count': len(invoices),
                     'invoices': [
                         {
                             'invoice_id': inv.get('invoice_id'),
                             'vendor': inv.get('vendor'),
+                            'store_name': store_name,
                             'total': float(inv.get('total', 0)),
                             'invoice_date': inv.get('invoice_date'),
                             'download_date': inv.get('download_date'),
@@ -261,19 +284,43 @@ def process_invoices(uploaded_files: List, parser: TreezInvoiceParser,
                     })
                 else:
                     # Check for duplicates before storing
+                    # Duplicates are defined as same invoice_number + same store
                     invoice_number = invoice_data.get('invoice_number')
+                    store_name = invoice_data.get('receiver') or invoice_data.get('customer_name') or ''
                     is_duplicate = False
+
+                    # Normalize store name for comparison
+                    if 'barbary' in store_name.lower():
+                        store_key = 'Barbary Coast'
+                    elif 'grass' in store_name.lower():
+                        store_key = 'Grass Roots'
+                    else:
+                        store_key = store_name
 
                     if invoice_number:
                         try:
-                            # Query DynamoDB to check if invoice already exists
+                            # Query DynamoDB to check if invoice already exists for THIS store
                             invoices_table = invoice_service.dynamodb.Table(invoice_service.invoices_table_name)
                             response = invoices_table.scan(
                                 FilterExpression='invoice_number = :inv_num',
                                 ExpressionAttributeValues={':inv_num': invoice_number}
                             )
+                            # Check if any matching invoice is for the same store
                             if response.get('Items'):
-                                is_duplicate = True
+                                for existing_inv in response['Items']:
+                                    existing_store = existing_inv.get('receiver') or existing_inv.get('customer_name') or ''
+                                    # Normalize existing store name
+                                    if 'barbary' in existing_store.lower():
+                                        existing_store_key = 'Barbary Coast'
+                                    elif 'grass' in existing_store.lower():
+                                        existing_store_key = 'Grass Roots'
+                                    else:
+                                        existing_store_key = existing_store
+
+                                    # Only mark as duplicate if same store
+                                    if existing_store_key == store_key:
+                                        is_duplicate = True
+                                        break
                         except:
                             pass  # If check fails, proceed with storing
 
@@ -286,6 +333,7 @@ def process_invoices(uploaded_files: List, parser: TreezInvoiceParser,
                             'invoice_number': invoice_data.get('invoice_number'),
                             'invoice_id': invoice_data.get('invoice_id') or invoice_data.get('invoice_number'),
                             'vendor': invoice_data.get('vendor'),
+                            'store_name': store_key,  # Include store for display
                             'total': invoice_data.get('invoice_total', 0),
                             'line_items': len(invoice_data.get('line_items', [])),
                             'invoice_date': invoice_data.get('invoice_date'),
@@ -393,9 +441,11 @@ def display_processing_results(results: Dict, container):
                     date_display = item['invoice_date'] if item['invoice_date'] else "⚠️ Needs manual entry"
                     date_warning = " *(date extraction failed)*" if item.get('date_extraction_failed') else ""
                     duplicate_warning = " **⚠️ DUPLICATE**" if item.get('is_duplicate') else ""
+                    store_display = item.get('store_name', 'Unknown')
                     st.markdown(f"""
                     **{item['filename']}**{duplicate_warning}
                     - Invoice #: `{item['invoice_number']}`
+                    - Store: {store_display}
                     - Vendor: {item['vendor']}
                     - Date: {date_display}{date_warning}
                     - Total: ${item['total']:,.2f}
@@ -735,13 +785,14 @@ def render_duplicates_section():
 
     if not duplicates:
         st.success("✅ No duplicate invoices found!")
-        st.info("Duplicate detection looks for invoices with the same invoice number. When duplicates are found, they'll appear here for review.")
+        st.info("Duplicate detection looks for invoices with the same invoice number **and** store. Invoice #665 for Grass Roots and #665 for Barbary Coast are NOT duplicates.")
         return
 
     st.markdown(f"""
-    **{len(duplicates)} invoice number(s)** have duplicates in the database.
+    **{len(duplicates)} invoice/store combination(s)** have duplicates in the database.
 
     Review each duplicate set below and delete unwanted copies.
+    *Note: Only invoices with the same number AND same store are considered duplicates.*
     """)
 
     # Get AWS credentials and service
@@ -764,8 +815,9 @@ def render_duplicates_section():
 
     # Process each duplicate set
     for dup_set in duplicates:
-        with st.expander(f"Invoice #{dup_set['invoice_number']} - {dup_set['count']} copies", expanded=False):
-            st.markdown(f"**{dup_set['count']} entries found for invoice #{dup_set['invoice_number']}**")
+        store_label = dup_set.get('store_name', 'Unknown Store')
+        with st.expander(f"Invoice #{dup_set['invoice_number']} ({store_label}) - {dup_set['count']} copies", expanded=False):
+            st.markdown(f"**{dup_set['count']} entries found for invoice #{dup_set['invoice_number']} at {store_label}**")
 
             for idx, invoice in enumerate(dup_set['invoices']):
                 col1, col2, col3 = st.columns([3, 2, 1])
@@ -773,6 +825,7 @@ def render_duplicates_section():
                 with col1:
                     st.markdown(f"**Copy {idx + 1}**")
                     st.caption(f"Invoice ID: {invoice['invoice_id']}")
+                    st.caption(f"Store: {invoice.get('store_name', store_label)}")
                     st.caption(f"Vendor: {invoice.get('vendor', 'Unknown')}")
                     st.caption(f"File: {invoice.get('source_file', 'Unknown')}")
 
