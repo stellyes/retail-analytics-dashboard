@@ -1466,6 +1466,8 @@ def main():
         st.session_state.customer_data = None
     if 'invoice_data' not in st.session_state:
         st.session_state.invoice_data = None
+    if 'budtender_data' not in st.session_state:
+        st.session_state.budtender_data = None
     if 'brand_product_mapping' not in st.session_state:
         st.session_state.brand_product_mapping = None
 
@@ -1815,14 +1817,15 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
         st.warning("Please upload sales data first.")
         return
 
-    # Tabs for different sales views (including Customer Analytics)
-    tab1, tab2, tab3, tab4, tab5, tab_customers = st.tabs([
+    # Tabs for different sales views (including Customer Analytics and Budtender Analytics)
+    tab1, tab2, tab3, tab4, tab5, tab_customers, tab_budtenders = st.tabs([
         "📈 Sales Trends",
         "🏷️ Brand Performance",
         "📦 Product Categories",
         "📊 Daily Breakdown",
         "🔍 Raw Data",
-        "👥 Customer Analytics"
+        "👥 Customer Analytics",
+        "🎯 Budtender Analytics"
     ])
     
     # ===== TAB 1: Sales Trends =====
@@ -2094,6 +2097,607 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
     # ===== TAB 6: Customer Analytics =====
     with tab_customers:
         _render_customer_analytics_content(state, analytics, store_filter, date_filter)
+
+    # ===== TAB 7: Budtender Analytics =====
+    with tab_budtenders:
+        _render_budtender_analytics(state, analytics, store_filter)
+
+
+def _render_budtender_analytics(state, analytics, store_filter):
+    """Render comprehensive budtender performance analytics."""
+
+    if state.budtender_data is None:
+        st.warning("No budtender data loaded. Please upload Budtender Performance files in the Data Center.")
+        st.info("Go to **Data Center → Budtender Performance** to upload your Treez BudtenderPerformanceLifetime reports.")
+        return
+
+    df = state.budtender_data.copy()
+
+    # Standardize column names (handle both formats)
+    col_mapping = {
+        'Product Brand': 'Product_Brand',
+        'Units Sold': 'Units_Sold',
+        'Net Sales': 'Net_Sales',
+        'Gross  Margin ': 'Gross_Margin',
+        'Discount %': 'Discount_Pct',
+        'Store Name': 'Store_Name'
+    }
+    for old, new in col_mapping.items():
+        if old in df.columns and new not in df.columns:
+            df[new] = df[old]
+
+    # Apply store filter first
+    if store_filter != "All Stores":
+        store_id = 'barbary_coast' if store_filter == "Barbary Coast" else 'grass_roots'
+        if 'Store_ID' in df.columns:
+            df = df[df['Store_ID'] == store_id]
+
+    # =========================================================================
+    # BUDTENDER FILTER - Allow user to select/deselect specific budtenders
+    # =========================================================================
+    all_budtenders = sorted(df['Employee'].unique().tolist())
+
+    # Calculate sales for each budtender for the filter display
+    budtender_sales = df.groupby('Employee')['Net_Sales'].sum().sort_values(ascending=False)
+
+    with st.expander("🎯 **Filter by Budtender** (click to expand)", expanded=False):
+        st.caption("Select which budtenders to include in the analysis. By default, all budtenders are selected.")
+
+        # Quick action buttons
+        filter_col1, filter_col2, filter_col3, filter_col4 = st.columns(4)
+
+        with filter_col1:
+            if st.button("Select All", key="budtender_select_all"):
+                st.session_state.selected_budtenders_filter = all_budtenders
+                st.rerun()
+
+        with filter_col2:
+            if st.button("Clear All", key="budtender_clear_all"):
+                st.session_state.selected_budtenders_filter = []
+                st.rerun()
+
+        with filter_col3:
+            if st.button("Top 10", key="budtender_top_10"):
+                st.session_state.selected_budtenders_filter = budtender_sales.head(10).index.tolist()
+                st.rerun()
+
+        with filter_col4:
+            if st.button("Top 25", key="budtender_top_25"):
+                st.session_state.selected_budtenders_filter = budtender_sales.head(25).index.tolist()
+                st.rerun()
+
+        # Initialize session state for selected budtenders if not exists
+        if 'selected_budtenders_filter' not in st.session_state:
+            st.session_state.selected_budtenders_filter = all_budtenders
+
+        # Ensure selected budtenders are valid (in case data changed)
+        valid_selected = [b for b in st.session_state.selected_budtenders_filter if b in all_budtenders]
+
+        # Create options with sales info for better context
+        budtender_options = []
+        for budtender in all_budtenders:
+            sales = budtender_sales.get(budtender, 0)
+            budtender_options.append(f"{budtender} (${sales:,.0f})")
+
+        # Map display names back to actual names
+        display_to_actual = {f"{b} (${budtender_sales.get(b, 0):,.0f})": b for b in all_budtenders}
+
+        # Multi-select with checkboxes
+        selected_display = st.multiselect(
+            "Select Budtenders",
+            options=budtender_options,
+            default=[f"{b} (${budtender_sales.get(b, 0):,.0f})" for b in valid_selected],
+            key="budtender_multiselect_filter",
+            help="Select one or more budtenders to filter the analysis"
+        )
+
+        # Convert display names back to actual budtender names
+        selected_budtenders = [display_to_actual[d] for d in selected_display]
+
+        # Update session state
+        st.session_state.selected_budtenders_filter = selected_budtenders
+
+        # Show selection summary
+        if len(selected_budtenders) < len(all_budtenders):
+            st.info(f"**{len(selected_budtenders)}** of **{len(all_budtenders)}** budtenders selected")
+
+    # Apply budtender filter
+    if 'selected_budtenders_filter' in st.session_state and st.session_state.selected_budtenders_filter:
+        df = df[df['Employee'].isin(st.session_state.selected_budtenders_filter)]
+    elif 'selected_budtenders_filter' in st.session_state and len(st.session_state.selected_budtenders_filter) == 0:
+        st.warning("No budtenders selected. Please select at least one budtender from the filter above.")
+        return
+
+    # Show current filter status
+    active_budtenders = df['Employee'].nunique()
+    total_budtenders = len(all_budtenders)
+
+    if active_budtenders < total_budtenders:
+        st.info(f"Analyzing **{len(df):,}** records | **{active_budtenders}** of **{total_budtenders}** budtenders selected")
+    else:
+        st.info(f"Analyzing **{len(df):,}** performance records across **{active_budtenders}** budtenders")
+
+    # Create subtabs for different analytics views
+    bud_tab1, bud_tab2, bud_tab3, bud_tab4, bud_tab5 = st.tabs([
+        "Overview",
+        "Top Performers",
+        "Product Insights",
+        "Brand Analysis",
+        "Performance Comparison"
+    ])
+
+    # ===== Overview Tab =====
+    with bud_tab1:
+        st.subheader("Budtender Performance Overview")
+
+        # Key metrics row
+        metric_col1, metric_col2, metric_col3, metric_col4 = st.columns(4)
+
+        with metric_col1:
+            total_budtenders = df['Employee'].nunique()
+            st.metric("Total Budtenders", total_budtenders)
+
+        with metric_col2:
+            total_sales = df['Net_Sales'].sum() if 'Net_Sales' in df.columns else 0
+            st.metric("Total Net Sales", f"${total_sales:,.0f}")
+
+        with metric_col3:
+            total_units = df['Units_Sold'].sum() if 'Units_Sold' in df.columns else 0
+            st.metric("Total Units Sold", f"{total_units:,.0f}")
+
+        with metric_col4:
+            avg_margin = df['Gross_Margin'].mean() * 100 if 'Gross_Margin' in df.columns else 0
+            st.metric("Avg Gross Margin", f"{avg_margin:.1f}%")
+
+        st.markdown("---")
+
+        # Sales distribution by budtender
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**Sales Distribution by Budtender**")
+            budtender_sales = df.groupby('Employee')['Net_Sales'].sum().sort_values(ascending=False)
+
+            fig = go.Figure(data=[go.Bar(
+                x=budtender_sales.head(15).index,
+                y=budtender_sales.head(15).values,
+                marker_color='#6c5ce7'
+            )])
+            fig.update_layout(
+                height=350,
+                xaxis_title="Budtender",
+                yaxis_title="Net Sales ($)",
+                xaxis_tickangle=-45
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            st.markdown("**Units Sold Distribution**")
+            budtender_units = df.groupby('Employee')['Units_Sold'].sum().sort_values(ascending=False)
+
+            fig = go.Figure(data=[go.Bar(
+                x=budtender_units.head(15).index,
+                y=budtender_units.head(15).values,
+                marker_color='#00b894'
+            )])
+            fig.update_layout(
+                height=350,
+                xaxis_title="Budtender",
+                yaxis_title="Units Sold",
+                xaxis_tickangle=-45
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        # Sales concentration analysis
+        st.markdown("---")
+        st.markdown("**Sales Concentration Analysis**")
+
+        budtender_totals = df.groupby('Employee')['Net_Sales'].sum().sort_values(ascending=False)
+        total_sales = budtender_totals.sum()
+
+        # Calculate cumulative percentage
+        cumsum = budtender_totals.cumsum()
+        cumsum_pct = (cumsum / total_sales * 100).values
+
+        # Find key thresholds
+        top_10_pct_count = max(1, int(len(budtender_totals) * 0.1))
+        top_20_pct_count = max(1, int(len(budtender_totals) * 0.2))
+
+        top_10_contribution = budtender_totals.head(top_10_pct_count).sum() / total_sales * 100
+        top_20_contribution = budtender_totals.head(top_20_pct_count).sum() / total_sales * 100
+
+        conc_col1, conc_col2, conc_col3 = st.columns(3)
+        with conc_col1:
+            st.metric(f"Top 10% ({top_10_pct_count} budtenders)", f"{top_10_contribution:.1f}% of sales")
+        with conc_col2:
+            st.metric(f"Top 20% ({top_20_pct_count} budtenders)", f"{top_20_contribution:.1f}% of sales")
+        with conc_col3:
+            median_sales = budtender_totals.median()
+            st.metric("Median Sales/Budtender", f"${median_sales:,.0f}")
+
+    # ===== Top Performers Tab =====
+    with bud_tab2:
+        st.subheader("Top Performing Budtenders")
+
+        # Aggregated performance table
+        performance_df = df.groupby('Employee').agg({
+            'Net_Sales': 'sum',
+            'Units_Sold': 'sum',
+            'Product_Brand': 'nunique',
+            'Gross_Margin': 'mean',
+            'Discount_Pct': 'mean'
+        }).round(4)
+
+        performance_df.columns = ['Total Sales', 'Units Sold', 'Brands Sold', 'Avg Margin', 'Avg Discount']
+        performance_df['Avg Margin'] = (performance_df['Avg Margin'] * 100).round(1)
+        performance_df['Avg Discount'] = (performance_df['Avg Discount'] * 100).round(2)
+        performance_df['Avg Sale Value'] = (performance_df['Total Sales'] / performance_df['Units Sold']).round(2)
+        performance_df = performance_df.sort_values('Total Sales', ascending=False)
+
+        # Top performers selector
+        top_n = st.slider("Number of budtenders to display", 10, 50, 20, key="top_budtenders_slider")
+
+        # Display table
+        display_df = performance_df.head(top_n).copy()
+        display_df['Total Sales'] = display_df['Total Sales'].apply(lambda x: f"${x:,.0f}")
+        display_df['Units Sold'] = display_df['Units Sold'].apply(lambda x: f"{x:,.0f}")
+        display_df['Avg Sale Value'] = display_df['Avg Sale Value'].apply(lambda x: f"${x:.2f}")
+        display_df['Avg Margin'] = display_df['Avg Margin'].apply(lambda x: f"{x:.1f}%")
+        display_df['Avg Discount'] = display_df['Avg Discount'].apply(lambda x: f"{x:.2f}%")
+
+        st.dataframe(display_df, use_container_width=True, height=400)
+
+        st.markdown("---")
+
+        # Performance scatter plot
+        st.markdown("**Sales vs. Units Sold (Bubble = Brands Sold)**")
+
+        scatter_df = performance_df.reset_index().head(30)
+        fig = px.scatter(
+            scatter_df,
+            x='Units Sold',
+            y=scatter_df['Total Sales'].str.replace('$', '').str.replace(',', '').astype(float) if isinstance(scatter_df['Total Sales'].iloc[0], str) else scatter_df['Total Sales'],
+            size='Brands Sold',
+            color='Avg Margin',
+            hover_name='Employee',
+            color_continuous_scale='RdYlGn',
+            labels={'y': 'Total Sales ($)'}
+        )
+        fig.update_layout(height=450)
+        st.plotly_chart(fig, use_container_width=True)
+
+    # ===== Product Insights Tab =====
+    with bud_tab3:
+        st.subheader("Product Sales Insights")
+
+        # Top products overall
+        product_sales = df.groupby('Product_Brand').agg({
+            'Units_Sold': 'sum',
+            'Net_Sales': 'sum',
+            'Employee': 'nunique',
+            'Gross_Margin': 'mean'
+        }).round(4)
+        product_sales.columns = ['Units Sold', 'Net Sales', 'Budtenders Selling', 'Avg Margin']
+        product_sales['Avg Margin'] = (product_sales['Avg Margin'] * 100).round(1)
+        product_sales = product_sales.sort_values('Net Sales', ascending=False)
+
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**Top 20 Products by Revenue**")
+            top_products_sales = product_sales.head(20).copy()
+
+            fig = go.Figure(data=[go.Bar(
+                y=top_products_sales.index,
+                x=top_products_sales['Net Sales'],
+                orientation='h',
+                marker_color='#e17055',
+                text=[f"${x:,.0f}" for x in top_products_sales['Net Sales']],
+                textposition='auto'
+            )])
+            fig.update_layout(height=500, yaxis={'categoryorder': 'total ascending'})
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            st.markdown("**Top 20 Products by Units Sold**")
+            top_products_units = product_sales.sort_values('Units Sold', ascending=False).head(20)
+
+            fig = go.Figure(data=[go.Bar(
+                y=top_products_units.index,
+                x=top_products_units['Units Sold'],
+                orientation='h',
+                marker_color='#00cec9',
+                text=[f"{x:,.0f}" for x in top_products_units['Units Sold']],
+                textposition='auto'
+            )])
+            fig.update_layout(height=500, yaxis={'categoryorder': 'total ascending'})
+            st.plotly_chart(fig, use_container_width=True)
+
+        st.markdown("---")
+
+        # Product adoption by budtenders
+        st.markdown("**Product Adoption Across Budtenders**")
+
+        total_budtenders = df['Employee'].nunique()
+        product_adoption = product_sales[['Budtenders Selling', 'Net Sales']].copy()
+        product_adoption['Adoption Rate'] = (product_adoption['Budtenders Selling'] / total_budtenders * 100).round(1)
+        product_adoption = product_adoption.sort_values('Adoption Rate', ascending=False).head(30)
+
+        fig = go.Figure()
+        fig.add_trace(go.Bar(
+            x=product_adoption.index,
+            y=product_adoption['Adoption Rate'],
+            name='Adoption Rate (%)',
+            marker_color='#74b9ff'
+        ))
+        fig.update_layout(
+            height=400,
+            xaxis_tickangle=-45,
+            yaxis_title="% of Budtenders Selling",
+            showlegend=False
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+        # High-margin products
+        st.markdown("---")
+        st.markdown("**High-Margin Products (Top 20 by Margin)**")
+
+        high_margin = product_sales[product_sales['Net Sales'] > product_sales['Net Sales'].median()].sort_values('Avg Margin', ascending=False).head(20)
+
+        fig = go.Figure(data=[go.Bar(
+            x=high_margin.index,
+            y=high_margin['Avg Margin'],
+            marker_color=high_margin['Avg Margin'],
+            marker_colorscale='RdYlGn',
+            text=[f"{x:.1f}%" for x in high_margin['Avg Margin']],
+            textposition='auto'
+        )])
+        fig.update_layout(height=350, xaxis_tickangle=-45, yaxis_title="Gross Margin %")
+        st.plotly_chart(fig, use_container_width=True)
+
+    # ===== Brand Analysis Tab =====
+    with bud_tab4:
+        st.subheader("Brand Performance Analysis")
+
+        # Brand selector
+        all_brands = sorted(df['Product_Brand'].unique().tolist())
+        selected_brands = st.multiselect(
+            "Select brands to analyze (leave empty for all)",
+            options=all_brands,
+            default=[],
+            key="brand_analysis_select"
+        )
+
+        if selected_brands:
+            brand_df = df[df['Product_Brand'].isin(selected_brands)]
+        else:
+            brand_df = df
+
+        # Brand-level metrics
+        brand_metrics = brand_df.groupby('Product_Brand').agg({
+            'Net_Sales': 'sum',
+            'Units_Sold': 'sum',
+            'Employee': 'nunique',
+            'Gross_Margin': 'mean',
+            'Discount_Pct': 'mean'
+        }).round(4)
+        brand_metrics.columns = ['Total Sales', 'Units Sold', 'Budtenders', 'Avg Margin', 'Avg Discount']
+        brand_metrics['Avg Margin'] = (brand_metrics['Avg Margin'] * 100).round(1)
+        brand_metrics['Avg Discount'] = (brand_metrics['Avg Discount'] * 100).round(2)
+        brand_metrics['Revenue/Unit'] = (brand_metrics['Total Sales'] / brand_metrics['Units Sold']).round(2)
+        brand_metrics = brand_metrics.sort_values('Total Sales', ascending=False)
+
+        # Display top brands
+        st.markdown("**Brand Performance Summary**")
+        display_brand = brand_metrics.head(25).copy()
+        display_brand['Total Sales'] = display_brand['Total Sales'].apply(lambda x: f"${x:,.0f}")
+        display_brand['Units Sold'] = display_brand['Units Sold'].apply(lambda x: f"{x:,.0f}")
+        display_brand['Revenue/Unit'] = display_brand['Revenue/Unit'].apply(lambda x: f"${x:.2f}")
+        display_brand['Avg Margin'] = display_brand['Avg Margin'].apply(lambda x: f"{x:.1f}%")
+        display_brand['Avg Discount'] = display_brand['Avg Discount'].apply(lambda x: f"{x:.2f}%")
+
+        st.dataframe(display_brand, use_container_width=True)
+
+        st.markdown("---")
+
+        # Brand comparison chart
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**Revenue vs Margin by Brand**")
+            top_brands_chart = brand_metrics.head(20).reset_index()
+
+            fig = px.scatter(
+                top_brands_chart,
+                x='Units Sold',
+                y='Avg Margin',
+                size='Total Sales',
+                color='Avg Discount',
+                hover_name='Product_Brand',
+                color_continuous_scale='RdYlBu_r',
+                labels={'Avg Margin': 'Gross Margin (%)'}
+            )
+            fig.update_layout(height=400)
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            st.markdown("**Top Budtenders per Brand**")
+
+            # Select a brand to see its top performers
+            selected_brand_detail = st.selectbox(
+                "Select brand for detailed view",
+                options=brand_metrics.head(30).index.tolist(),
+                key="brand_detail_select"
+            )
+
+            if selected_brand_detail:
+                brand_budtenders = df[df['Product_Brand'] == selected_brand_detail].groupby('Employee').agg({
+                    'Net_Sales': 'sum',
+                    'Units_Sold': 'sum'
+                }).sort_values('Net_Sales', ascending=False).head(10)
+
+                fig = go.Figure(data=[go.Bar(
+                    x=brand_budtenders.index,
+                    y=brand_budtenders['Net_Sales'],
+                    marker_color='#a29bfe',
+                    text=[f"${x:,.0f}" for x in brand_budtenders['Net_Sales']],
+                    textposition='auto'
+                )])
+                fig.update_layout(
+                    height=350,
+                    xaxis_tickangle=-45,
+                    yaxis_title="Net Sales ($)",
+                    title=f"Top 10 Budtenders for {selected_brand_detail}"
+                )
+                st.plotly_chart(fig, use_container_width=True)
+
+    # ===== Performance Comparison Tab =====
+    with bud_tab5:
+        st.subheader("Budtender Performance Comparison")
+
+        # Select budtenders to compare
+        all_budtenders = sorted(df['Employee'].unique().tolist())
+
+        # Default to top 5 by sales
+        top_5_sales = df.groupby('Employee')['Net_Sales'].sum().sort_values(ascending=False).head(5).index.tolist()
+
+        selected_budtenders = st.multiselect(
+            "Select budtenders to compare",
+            options=all_budtenders,
+            default=top_5_sales[:min(5, len(top_5_sales))],
+            key="budtender_compare_select"
+        )
+
+        if len(selected_budtenders) >= 2:
+            compare_df = df[df['Employee'].isin(selected_budtenders)]
+
+            # Comparison metrics
+            comparison_metrics = compare_df.groupby('Employee').agg({
+                'Net_Sales': 'sum',
+                'Units_Sold': 'sum',
+                'Product_Brand': 'nunique',
+                'Gross_Margin': 'mean',
+                'Discount_Pct': 'mean'
+            }).round(4)
+            comparison_metrics.columns = ['Total Sales', 'Units Sold', 'Brands', 'Avg Margin', 'Avg Discount']
+
+            # Radar chart data
+            st.markdown("**Performance Radar Comparison**")
+
+            # Normalize metrics for radar chart
+            normalized = comparison_metrics.copy()
+            for col in normalized.columns:
+                max_val = normalized[col].max()
+                if max_val > 0:
+                    normalized[col] = normalized[col] / max_val * 100
+
+            fig = go.Figure()
+            colors = ['#6c5ce7', '#00b894', '#e17055', '#0984e3', '#fdcb6e']
+
+            for i, employee in enumerate(normalized.index):
+                fig.add_trace(go.Scatterpolar(
+                    r=normalized.loc[employee].values.tolist() + [normalized.loc[employee].values[0]],
+                    theta=['Sales', 'Units', 'Brand Variety', 'Margin', 'Discount'] + ['Sales'],
+                    fill='toself',
+                    name=employee,
+                    line_color=colors[i % len(colors)],
+                    opacity=0.6
+                ))
+
+            fig.update_layout(
+                polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
+                showlegend=True,
+                height=450
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.markdown("---")
+
+            # Side-by-side metrics
+            st.markdown("**Detailed Comparison**")
+
+            comparison_display = comparison_metrics.copy()
+            comparison_display['Total Sales'] = comparison_display['Total Sales'].apply(lambda x: f"${x:,.0f}")
+            comparison_display['Units Sold'] = comparison_display['Units Sold'].apply(lambda x: f"{x:,.0f}")
+            comparison_display['Avg Margin'] = (comparison_display['Avg Margin'] * 100).apply(lambda x: f"{x:.1f}%")
+            comparison_display['Avg Discount'] = (comparison_display['Avg Discount'] * 100).apply(lambda x: f"{x:.2f}%")
+
+            st.dataframe(comparison_display.T, use_container_width=True)
+
+            st.markdown("---")
+
+            # Brand overlap analysis
+            st.markdown("**Brand Overlap Analysis**")
+
+            brand_sets = {}
+            for emp in selected_budtenders:
+                emp_brands = set(df[df['Employee'] == emp]['Product_Brand'].unique())
+                brand_sets[emp] = emp_brands
+
+            # Calculate overlap
+            if len(selected_budtenders) == 2:
+                emp1, emp2 = selected_budtenders[:2]
+                common_brands = brand_sets[emp1] & brand_sets[emp2]
+                only_emp1 = brand_sets[emp1] - brand_sets[emp2]
+                only_emp2 = brand_sets[emp2] - brand_sets[emp1]
+
+                overlap_col1, overlap_col2, overlap_col3 = st.columns(3)
+                with overlap_col1:
+                    st.metric(f"Only {emp1}", len(only_emp1))
+                with overlap_col2:
+                    st.metric("Shared Brands", len(common_brands))
+                with overlap_col3:
+                    st.metric(f"Only {emp2}", len(only_emp2))
+
+                if common_brands:
+                    with st.expander("View shared brands"):
+                        st.write(", ".join(sorted(common_brands)[:20]))
+                        if len(common_brands) > 20:
+                            st.caption(f"... and {len(common_brands) - 20} more")
+
+        else:
+            st.info("Select at least 2 budtenders to compare their performance.")
+
+        st.markdown("---")
+
+        # Store comparison if applicable
+        if 'Store_ID' in df.columns and df['Store_ID'].nunique() > 1 and store_filter == "All Stores":
+            st.markdown("**Performance by Store**")
+
+            store_comparison = df.groupby('Store_ID').agg({
+                'Employee': 'nunique',
+                'Net_Sales': 'sum',
+                'Units_Sold': 'sum',
+                'Product_Brand': 'nunique'
+            }).round(2)
+            store_comparison.columns = ['Budtenders', 'Total Sales', 'Units Sold', 'Brands Sold']
+
+            # Map store IDs to names
+            store_comparison.index = store_comparison.index.map(lambda x: STORE_DISPLAY_NAMES.get(x, x))
+
+            col1, col2 = st.columns(2)
+
+            with col1:
+                fig = go.Figure(data=[go.Bar(
+                    x=store_comparison.index,
+                    y=store_comparison['Total Sales'],
+                    marker_color=['#6c5ce7', '#00b894'],
+                    text=[f"${x:,.0f}" for x in store_comparison['Total Sales']],
+                    textposition='auto'
+                )])
+                fig.update_layout(height=300, yaxis_title="Total Sales ($)")
+                st.plotly_chart(fig, use_container_width=True)
+
+            with col2:
+                fig = go.Figure(data=[go.Bar(
+                    x=store_comparison.index,
+                    y=store_comparison['Budtenders'],
+                    marker_color=['#6c5ce7', '#00b894'],
+                    text=store_comparison['Budtenders'],
+                    textposition='auto'
+                )])
+                fig.update_layout(height=300, yaxis_title="Number of Budtenders")
+                st.plotly_chart(fig, use_container_width=True)
 
 
 def _render_customer_overview(df):
@@ -5234,6 +5838,7 @@ def render_data_center(s3_manager, processor):
         "📊 Sales Data",
         "📋 Invoice Data",
         "👥 Customer Data",
+        "🎯 Budtender Performance",
         "💡 Define Context",
         "🔗 Brand Mapping",
     ]
@@ -5253,6 +5858,7 @@ def render_data_center(s3_manager, processor):
     sales_tab = tabs[tab_idx]; tab_idx += 1
     invoice_tab = tabs[tab_idx]; tab_idx += 1
     customer_tab = tabs[tab_idx]; tab_idx += 1
+    budtender_tab = tabs[tab_idx]; tab_idx += 1
     context_tab = tabs[tab_idx]; tab_idx += 1
     brand_mapping_tab = tabs[tab_idx]; tab_idx += 1
 
@@ -5637,6 +6243,275 @@ def render_data_center(s3_manager, processor):
                 st.warning("S3 not connected - cannot view uploaded customer files")
 
     # =========================================================================
+    # BUDTENDER PERFORMANCE TAB
+    # =========================================================================
+    with budtender_tab:
+        st.markdown("""
+        Upload Budtender Performance Lifetime reports from Treez to track employee sales performance
+        and identify top-selling products by budtender. This data helps with staff training,
+        performance reviews, and understanding product sales patterns.
+        """)
+
+        # File uploaders for each store
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.subheader("Barbary Coast")
+            bc_budtender_file = st.file_uploader(
+                "Upload BC Budtender Performance CSV",
+                type=['csv'],
+                key='bc_budtender_upload',
+                help="BudtenderPerformanceLifetime report from Treez for Barbary Coast"
+            )
+
+            if bc_budtender_file:
+                try:
+                    bc_df = pd.read_csv(bc_budtender_file)
+                    bc_df['Store_ID'] = 'barbary_coast'
+                    st.success(f"Loaded {len(bc_df):,} records from Barbary Coast")
+
+                    # Show preview
+                    with st.expander("Preview Data", expanded=False):
+                        st.dataframe(bc_df.head(20), height=300)
+
+                    # Show summary stats
+                    if 'Employee' in bc_df.columns:
+                        unique_employees = bc_df['Employee'].nunique()
+                        unique_brands = bc_df['Product Brand'].nunique() if 'Product Brand' in bc_df.columns else 0
+                        total_units = bc_df['Units Sold'].sum() if 'Units Sold' in bc_df.columns else 0
+                        total_sales = bc_df['Net Sales'].sum() if 'Net Sales' in bc_df.columns else 0
+
+                        st.markdown(f"""
+                        **Summary:**
+                        - **Budtenders:** {unique_employees}
+                        - **Brands Sold:** {unique_brands}
+                        - **Total Units:** {total_units:,.0f}
+                        - **Total Net Sales:** ${total_sales:,.2f}
+                        """)
+                except Exception as e:
+                    st.error(f"Error reading file: {str(e)}")
+                    bc_df = None
+            else:
+                bc_df = None
+
+        with col2:
+            st.subheader("Grass Roots")
+            gr_budtender_file = st.file_uploader(
+                "Upload GR Budtender Performance CSV",
+                type=['csv'],
+                key='gr_budtender_upload',
+                help="BudtenderPerformanceLifetime report from Treez for Grass Roots"
+            )
+
+            if gr_budtender_file:
+                try:
+                    gr_df = pd.read_csv(gr_budtender_file)
+                    gr_df['Store_ID'] = 'grass_roots'
+                    st.success(f"Loaded {len(gr_df):,} records from Grass Roots")
+
+                    # Show preview
+                    with st.expander("Preview Data", expanded=False):
+                        st.dataframe(gr_df.head(20), height=300)
+
+                    # Show summary stats
+                    if 'Employee' in gr_df.columns:
+                        unique_employees = gr_df['Employee'].nunique()
+                        unique_brands = gr_df['Product Brand'].nunique() if 'Product Brand' in gr_df.columns else 0
+                        total_units = gr_df['Units Sold'].sum() if 'Units Sold' in gr_df.columns else 0
+                        total_sales = gr_df['Net Sales'].sum() if 'Net Sales' in gr_df.columns else 0
+
+                        st.markdown(f"""
+                        **Summary:**
+                        - **Budtenders:** {unique_employees}
+                        - **Brands Sold:** {unique_brands}
+                        - **Total Units:** {total_units:,.0f}
+                        - **Total Net Sales:** ${total_sales:,.2f}
+                        """)
+                except Exception as e:
+                    st.error(f"Error reading file: {str(e)}")
+                    gr_df = None
+            else:
+                gr_df = None
+
+        # Combine and save button
+        st.markdown("---")
+
+        if bc_df is not None or gr_df is not None:
+            # Combine dataframes
+            dfs_to_combine = []
+            if bc_df is not None:
+                dfs_to_combine.append(bc_df)
+            if gr_df is not None:
+                dfs_to_combine.append(gr_df)
+
+            combined_df = pd.concat(dfs_to_combine, ignore_index=True)
+
+            # Standardize column names
+            column_mapping = {
+                'Store Name': 'Store_Name',
+                'Product Brand': 'Product_Brand',
+                'Units Sold': 'Units_Sold',
+                'Store Average': 'Store_Avg_Units',
+                'Discount %': 'Discount_Pct',
+                'Store Average.1': 'Store_Avg_Discount',
+                'Net Sales': 'Net_Sales',
+                'Store Average.2': 'Store_Avg_Sales',
+                'Gross  Margin ': 'Gross_Margin',
+                'Store Average.3': 'Store_Avg_Margin'
+            }
+            combined_df = combined_df.rename(columns=column_mapping)
+
+            # Add upload timestamp
+            combined_df['Upload_Date'] = datetime.now()
+
+            col1, col2, col3 = st.columns(3)
+
+            with col1:
+                if st.button("💾 Save to Session", type="primary", key="save_budtender_session"):
+                    st.session_state.budtender_data = combined_df
+                    st.success(f"Saved {len(combined_df):,} budtender records to session!")
+                    st.rerun()
+
+            with col2:
+                if s3_manager.is_configured():
+                    if st.button("☁️ Upload to S3", key="upload_budtender_s3"):
+                        with st.spinner("Uploading to S3..."):
+                            try:
+                                # Convert to CSV and upload
+                                csv_buffer = io.StringIO()
+                                combined_df.to_csv(csv_buffer, index=False)
+                                csv_content = csv_buffer.getvalue()
+
+                                s3_manager.s3_client.put_object(
+                                    Bucket=s3_manager.bucket_name,
+                                    Key="data/budtender_performance.csv",
+                                    Body=csv_content.encode('utf-8'),
+                                    ContentType='text/csv'
+                                )
+
+                                # Also save to session
+                                st.session_state.budtender_data = combined_df
+                                st.success(f"Uploaded {len(combined_df):,} records to S3!")
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Upload failed: {str(e)}")
+                else:
+                    st.info("Configure S3 to enable cloud storage")
+
+            with col3:
+                # Download combined data
+                csv = combined_df.to_csv(index=False)
+                st.download_button(
+                    "📥 Download Combined",
+                    csv,
+                    "budtender_performance_combined.csv",
+                    "text/csv",
+                    key="download_budtender"
+                )
+
+            # Show combined summary
+            st.markdown("---")
+            st.subheader("Combined Data Summary")
+
+            summary_col1, summary_col2, summary_col3, summary_col4 = st.columns(4)
+
+            with summary_col1:
+                total_employees = combined_df['Employee'].nunique()
+                st.metric("Total Budtenders", total_employees)
+
+            with summary_col2:
+                total_brands = combined_df['Product_Brand'].nunique() if 'Product_Brand' in combined_df.columns else 0
+                st.metric("Unique Brands", total_brands)
+
+            with summary_col3:
+                total_units = combined_df['Units_Sold'].sum() if 'Units_Sold' in combined_df.columns else 0
+                st.metric("Total Units Sold", f"{total_units:,.0f}")
+
+            with summary_col4:
+                total_net = combined_df['Net_Sales'].sum() if 'Net_Sales' in combined_df.columns else 0
+                st.metric("Total Net Sales", f"${total_net:,.0f}")
+
+            # Top performers preview
+            st.markdown("---")
+            st.subheader("Top Performers Preview")
+
+            preview_col1, preview_col2 = st.columns(2)
+
+            with preview_col1:
+                st.markdown("**Top 10 Budtenders by Net Sales**")
+                if 'Net_Sales' in combined_df.columns:
+                    top_budtenders = combined_df.groupby('Employee').agg({
+                        'Net_Sales': 'sum',
+                        'Units_Sold': 'sum',
+                        'Product_Brand': 'nunique'
+                    }).round(2)
+                    top_budtenders.columns = ['Total Sales', 'Units Sold', 'Brands Sold']
+                    top_budtenders = top_budtenders.sort_values('Total Sales', ascending=False).head(10)
+                    top_budtenders['Total Sales'] = top_budtenders['Total Sales'].apply(lambda x: f"${x:,.0f}")
+                    st.dataframe(top_budtenders, use_container_width=True)
+
+            with preview_col2:
+                st.markdown("**Top 10 Brands by Units Sold**")
+                if 'Units_Sold' in combined_df.columns and 'Product_Brand' in combined_df.columns:
+                    top_brands = combined_df.groupby('Product_Brand').agg({
+                        'Units_Sold': 'sum',
+                        'Net_Sales': 'sum',
+                        'Employee': 'nunique'
+                    }).round(2)
+                    top_brands.columns = ['Units Sold', 'Net Sales', 'Budtenders']
+                    top_brands = top_brands.sort_values('Units Sold', ascending=False).head(10)
+                    top_brands['Net Sales'] = top_brands['Net Sales'].apply(lambda x: f"${x:,.0f}")
+                    st.dataframe(top_brands, use_container_width=True)
+
+        else:
+            st.info("Upload budtender performance files above to get started.")
+
+        # Show existing data if available
+        st.markdown("---")
+        st.subheader("Current Budtender Data")
+
+        if st.session_state.budtender_data is not None:
+            df = st.session_state.budtender_data
+            st.success(f"**{len(df):,}** budtender performance records loaded")
+
+            # Quick stats
+            stat_col1, stat_col2, stat_col3, stat_col4 = st.columns(4)
+            with stat_col1:
+                st.metric("Budtenders", df['Employee'].nunique())
+            with stat_col2:
+                brands_col = 'Product_Brand' if 'Product_Brand' in df.columns else 'Product Brand'
+                st.metric("Brands", df[brands_col].nunique() if brands_col in df.columns else 0)
+            with stat_col3:
+                units_col = 'Units_Sold' if 'Units_Sold' in df.columns else 'Units Sold'
+                st.metric("Total Units", f"{df[units_col].sum():,.0f}" if units_col in df.columns else "N/A")
+            with stat_col4:
+                sales_col = 'Net_Sales' if 'Net_Sales' in df.columns else 'Net Sales'
+                st.metric("Total Sales", f"${df[sales_col].sum():,.0f}" if sales_col in df.columns else "N/A")
+
+            with st.expander("View Data", expanded=False):
+                st.dataframe(df.head(100), height=400)
+        else:
+            st.info("No budtender data loaded. Upload files above or reload from S3.")
+
+            # Load from S3 button
+            if s3_manager.is_configured():
+                if st.button("📥 Load from S3", key="load_budtender_s3"):
+                    with st.spinner("Loading from S3..."):
+                        try:
+                            response = s3_manager.s3_client.get_object(
+                                Bucket=s3_manager.bucket_name,
+                                Key="data/budtender_performance.csv"
+                            )
+                            df = pd.read_csv(io.BytesIO(response['Body'].read()))
+                            st.session_state.budtender_data = df
+                            st.success(f"Loaded {len(df):,} records from S3!")
+                            st.rerun()
+                        except s3_manager.s3_client.exceptions.NoSuchKey:
+                            st.info("No budtender data found in S3. Upload files to get started.")
+                        except Exception as e:
+                            st.error(f"Error loading from S3: {str(e)}")
+
+    # =========================================================================
     # DEFINE CONTEXT TAB
     # =========================================================================
     with context_tab:
@@ -5806,6 +6681,7 @@ def render_data_center(s3_manager, processor):
             st.session_state.product_data = None
             st.session_state.customer_data = None
             st.session_state.invoice_data = None
+            st.session_state.budtender_data = None
             st.session_state.data_loaded_from_s3 = False
             st.success("Session data cleared! (S3 data preserved)")
             st.rerun()
