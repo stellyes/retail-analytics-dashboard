@@ -44,6 +44,16 @@ class TreezInvoiceParser:
     Provides superior table extraction and layout analysis compared to PyPDF2.
     """
 
+    # Pre-compiled regex patterns for better performance
+    _RE_ITEM_NUM = re.compile(r'^\d+$')
+    _RE_INVOICE_FILENAME = re.compile(r'invoice[_\s-]*(\d+)_(\d{8})_(\d{6})', re.IGNORECASE)
+    _RE_INVOICE_FILENAME_SIMPLE = re.compile(r'invoice[_\s-]*(\d+)', re.IGNORECASE)
+    _RE_TYPE_KEYWORD = re.compile(r'^(CARTRIDGE|EDIBLE|PREROLL|FLOWER|EXTRACT|BEVERAGE|TINCTURE|TOPICAL|CAPSULE|CONCENTRATE|VAPE|MERCH|MERCHANDISE|ACCESSORY|SUPPLY|SUPPLIES|ROLLING|INFUSED|APPAREL|GEAR|DEVICE|HARDWARE|PILL|TABLET|SUBLINGUAL|OIL|SPRAY|PATCH|BALM|LOTION|CREAM)\s*-', re.IGNORECASE)
+    _RE_TRACE_ID = re.compile(r'^[A-Z0-9]{20,}')
+    _RE_TOTALS = re.compile(r'^(Fees|Discounts|Subtotal|Subt\s*otal|Total\s*Cost|Excise\s*Tax|Payments|Balance)', re.IGNORECASE)
+    _RE_PRICE = re.compile(r'^\d+[\d,]*\.\d{2}$')
+    _RE_SIZE = re.compile(r'(\d+\.?\d*\s*[MG]+)', re.IGNORECASE)
+
     def __init__(self):
         self.extraction_errors = []
 
@@ -60,6 +70,7 @@ class TreezInvoiceParser:
         """
         try:
             # Extract text using PyMuPDF (handles problematic fonts that render as null bytes)
+            # PyMuPDF is ~4x faster than pdfplumber for text extraction
             all_text = ""
             if PYMUPDF_AVAILABLE:
                 try:
@@ -71,22 +82,27 @@ class TreezInvoiceParser:
                     # Fall back to pdfplumber if PyMuPDF fails
                     all_text = ""
 
-            # Extract tables using pdfplumber (better at table extraction)
+            # OPTIMIZATION: Try fast text-based line item extraction first (~5ms)
+            # Only fall back to pdfplumber table extraction (~300ms) if text parsing fails
+            line_items_from_text = self._extract_line_items_from_pymupdf_text(all_text)
+
             all_tables = []
-            with pdfplumber.open(pdf_path) as pdf:
-                # If PyMuPDF wasn't available or failed, use pdfplumber for text too
-                if not all_text:
+            if not line_items_from_text:
+                # Fall back to pdfplumber for table extraction (slower but more reliable)
+                with pdfplumber.open(pdf_path) as pdf:
+                    # Only use pdfplumber for text if PyMuPDF wasn't available or failed
+                    if not all_text:
+                        for page in pdf.pages:
+                            all_text += (page.extract_text() or "") + "\n"
+
+                    # Extract tables from all pages (pdfplumber excels at this)
                     for page in pdf.pages:
-                        all_text += (page.extract_text() or "") + "\n"
+                        tables = page.extract_tables()
+                        if tables:
+                            all_tables.extend(tables)
 
-                # Extract tables from all pages
-                for page in pdf.pages:
-                    tables = page.extract_tables()
-                    if tables:
-                        all_tables.extend(tables)
-
-            # Parse the invoice
-            invoice_data = self._parse_treez_invoice(all_text, all_tables)
+            # Parse the invoice (will use pre-extracted line items if available)
+            invoice_data = self._parse_treez_invoice(all_text, all_tables, line_items_from_text)
 
             # Add metadata
             invoice_data['source_file'] = os.path.basename(pdf_path)
@@ -97,7 +113,7 @@ class TreezInvoiceParser:
             # Format: invoice_13608_20251230_173551.pdf
             # Parts: invoice_[NUMBER]_[YYYYMMDD]_[HHMMSS].pdf
             filename = os.path.basename(pdf_path)
-            filename_match = re.search(r'invoice[_\s-]*(\d+)_(\d{8})_(\d{6})', filename, re.IGNORECASE)
+            filename_match = self._RE_INVOICE_FILENAME.search(filename)
 
             if filename_match:
                 invoice_num, date_str, time_str = filename_match.groups()
@@ -125,7 +141,7 @@ class TreezInvoiceParser:
             else:
                 # Fallback: try simpler pattern for invoice number only
                 # Filename is always authoritative for invoice number
-                filename_match = re.search(r'invoice[_\s-]*(\d+)', filename, re.IGNORECASE)
+                filename_match = self._RE_INVOICE_FILENAME_SIMPLE.search(filename)
                 if filename_match:
                     invoice_data['invoice_number'] = filename_match.group(1)
                     invoice_data['invoice_id'] = filename_match.group(1)
@@ -195,7 +211,7 @@ class TreezInvoiceParser:
 
         return vendor if vendor else None
 
-    def _parse_treez_invoice(self, text: str, tables: List[List[List[str]]]) -> Dict:
+    def _parse_treez_invoice(self, text: str, tables: List[List[List[str]]], preextracted_line_items: List[Dict] = None) -> Dict:
         """Parse Treez invoice format from extracted text and tables."""
 
         # Detect non-Treez invoice formats (e.g., inventory receiving system)
@@ -597,8 +613,11 @@ class TreezInvoiceParser:
         if balance_match:
             invoice['balance'] = float(balance_match.group(1).replace(',', ''))
 
-        # Extract line items using tables (primary) or text fallback
-        invoice['line_items'] = self._extract_line_items_from_tables(tables, text)
+        # Extract line items: use pre-extracted if available, otherwise use tables/text
+        if preextracted_line_items:
+            invoice['line_items'] = preextracted_line_items
+        else:
+            invoice['line_items'] = self._extract_line_items_from_tables(tables, text)
 
         return invoice
 
@@ -632,6 +651,240 @@ class TreezInvoiceParser:
 
         # Otherwise fall back to text parsing
         return self._extract_line_items_from_text(text)
+
+    def _extract_line_items_from_pymupdf_text(self, text: str) -> List[Dict]:
+        """
+        FAST: Extract line items directly from PyMuPDF text output.
+        PyMuPDF extracts text line-by-line, so we parse the multi-line structure.
+
+        This is ~300ms faster than pdfplumber table extraction.
+
+        Expected format (each line item spans multiple lines):
+        1
+        BRAND_NAME
+        PRODUCT NAME [SIZE]
+        TYPE - SUBTYPE
+        TRACE_ID SKU_INFO
+        UNITS
+        $UNIT_COST
+        $EXCISE
+        $TOTAL
+        $TOTAL_W_EXCISE
+        """
+        line_items = []
+        lines = text.split('\n')
+
+        # Find where line items start (after header, which contains "Item #" or "Item" + "#")
+        start_idx = -1
+        for i, line in enumerate(lines):
+            line_stripped = line.strip()
+            # Check for "Item #" on one line or "Item" followed by "#" on next line
+            if 'Item #' in line:
+                start_idx = i + 1
+                break
+            elif line_stripped == 'Item' and i + 1 < len(lines) and lines[i + 1].strip() == '#':
+                start_idx = i + 2  # Skip both "Item" and "#"
+                break
+
+        if start_idx < 0:
+            return []
+
+        # Skip header lines (Brand, Product, Type - Subtype, etc.)
+        header_keywords = {
+            'Brand', 'Product', 'Type - Subtype', 'Trace Treez ID', 'SKU',
+            'Units Cost', 'Excise / unit Total Cost Total Cost w/ Excise',
+            'Excise /', 'unit', 'Total', 'Cost', 'Total Cost w/', 'Excise', ''
+        }
+        while start_idx < len(lines) and lines[start_idx].strip() in header_keywords:
+            start_idx += 1
+
+        # Parse line items - each item consists of:
+        # item_num, brand, product, type-subtype, trace_id [sku], units, cost, excise, total, total_w_excise
+        i = start_idx
+        expected_item_num = 1  # Track expected item number for better detection
+        while i < len(lines):
+            line = lines[i].strip()
+
+            # Stop at totals section
+            if self._RE_TOTALS.match(line):
+                break
+
+            # Skip empty lines and page breaks
+            if not line or 'Print Window' in line or 'Need Help' in line or line == 'menu':
+                i += 1
+                continue
+
+            # Line item starts with the expected item number (1, 2, 3, ...)
+            # This distinguishes from units values like "18", "24", etc.
+            if self._RE_ITEM_NUM.match(line):
+                num = int(line)
+                # Must be the expected item number (allow some tolerance for skipped items)
+                if num != expected_item_num and (num < expected_item_num or num > expected_item_num + 3):
+                    i += 1
+                    continue
+
+                item_num = num
+                expected_item_num = item_num + 1
+
+                # Collect the next lines for this item
+                # We need: brand, product, type, trace_id, units, cost, excise, total, total_w_excise
+                item_lines = []
+                i += 1
+                found_type_line = False
+                found_trace_id = False
+
+                while i < len(lines) and len(item_lines) < 15:
+                    next_line = lines[i].strip()
+
+                    # Stop conditions
+                    if not next_line or 'Print Window' in next_line or 'Need Help' in next_line:
+                        i += 1
+                        continue
+                    if self._RE_TOTALS.match(next_line):
+                        break
+
+                    # Track if we've seen the TYPE - line and trace_id
+                    if self._RE_TYPE_KEYWORD.match(next_line):
+                        found_type_line = True
+                    if found_type_line and self._RE_TRACE_ID.match(next_line):
+                        found_trace_id = True
+
+                    # Next item number signals end of current item
+                    # Only check after we have TYPE and trace_id, and have prices
+                    if self._RE_ITEM_NUM.match(next_line):
+                        next_num = int(next_line)
+                        # If this looks like the next item number and we have enough data
+                        if next_num == expected_item_num and found_type_line and found_trace_id:
+                            break
+
+                    item_lines.append(next_line)
+                    i += 1
+
+                # Parse collected lines
+                if len(item_lines) >= 6:  # Minimum needed: brand, product, type, trace_id, units, prices
+                    try:
+                        # Find the TYPE - line to anchor our parsing
+                        # TYPE is one of: CARTRIDGE, EDIBLE, PREROLL, FLOWER, etc.
+                        type_line_idx = -1
+                        for idx, item_line in enumerate(item_lines):
+                            if self._RE_TYPE_KEYWORD.match(item_line.strip()):
+                                type_line_idx = idx
+                                break
+
+                        if type_line_idx < 0:
+                            i += 1
+                            continue
+
+                        # Everything before TYPE is brand + product (could be 1-4 lines)
+                        # Everything after TYPE is trace_id, units, prices
+                        brand_product_lines = item_lines[:type_line_idx]
+                        type_line = self._clean_text(item_lines[type_line_idx])
+                        trace_line_idx = type_line_idx + 1
+
+                        # Parse brand and product from collected lines
+                        # Common patterns:
+                        # 1. Single line each: "HIMALAYA", "GORILLA GLUE #4 1G"
+                        # 2. Brand split: "ABSOLUTE", "XTRACTS", "25MG SOFT GELS"
+                        # 3. Merged: "HIMALAYA SOUR BANANA SHERBET 1G"
+                        if len(brand_product_lines) == 1:
+                            # Merged brand + product
+                            merged = self._clean_text(brand_product_lines[0])
+                            parts = merged.split(' ', 1)
+                            brand = parts[0]
+                            product = parts[1] if len(parts) > 1 else merged
+                        elif len(brand_product_lines) == 2:
+                            brand = self._clean_text(brand_product_lines[0])
+                            product = self._clean_text(brand_product_lines[1])
+                        elif len(brand_product_lines) >= 3:
+                            # Multi-line brand (e.g., "ABSOLUTE" + "XTRACTS") and product
+                            # Heuristic: brand is first 1-2 short uppercase words
+                            brand_parts = []
+                            product_start = 0
+                            for idx, bp_line in enumerate(brand_product_lines):
+                                bp_clean = self._clean_text(bp_line)
+                                # Brand lines are typically short and all caps
+                                if len(bp_clean) <= 15 and bp_clean.isupper() and not re.search(r'\d', bp_clean):
+                                    brand_parts.append(bp_clean)
+                                    product_start = idx + 1
+                                else:
+                                    break
+                            brand = ' '.join(brand_parts) if brand_parts else self._clean_text(brand_product_lines[0])
+                            product = ' '.join(self._clean_text(l) for l in brand_product_lines[product_start:])
+                        else:
+                            brand = 'UNKNOWN'
+                            product = 'UNKNOWN'
+
+                        # Type - Subtype (may be just "TYPE -" or "TYPE - SUBTYPE")
+                        type_match = re.match(r'([A-Z]+)\s*-\s*(.*)?', type_line, re.IGNORECASE)
+                        if type_match:
+                            prod_type = type_match.group(1).upper()
+                            subtype = type_match.group(2).strip() if type_match.group(2) else ''
+                        else:
+                            prod_type = type_line.upper() if type_line else 'UNKNOWN'
+                            subtype = ''
+
+                        # Trace ID (with optional SKU suffix)
+                        trace_line = self._clean_text(item_lines[trace_line_idx]) if trace_line_idx < len(item_lines) else ''
+                        trace_match = re.match(r'([A-Z0-9]+)', trace_line)
+                        trace_id = trace_match.group(1) if trace_match else trace_line
+
+                        # Parse numeric fields (units, costs)
+                        # Find the lines with pricing data
+                        units = 0
+                        unit_cost = 0.0
+                        excise = 0.0
+                        total_cost = 0.0
+                        total_w_excise = 0.0
+
+                        # Start looking for numeric data after trace_id
+                        numeric_start_idx = trace_line_idx + 1
+                        for j, val in enumerate(item_lines[numeric_start_idx:]):
+                            val = val.strip()
+                            # Units (first plain number)
+                            if self._RE_ITEM_NUM.match(val) and units == 0:
+                                units = int(val)
+                            # Cost values (with $ sign)
+                            elif val.startswith('$') or self._RE_PRICE.match(val):
+                                amount = float(val.replace('$', '').replace(',', ''))
+                                if unit_cost == 0:
+                                    unit_cost = amount
+                                elif excise == 0:
+                                    excise = amount
+                                elif total_cost == 0:
+                                    total_cost = amount
+                                elif total_w_excise == 0:
+                                    total_w_excise = amount
+                                    break
+
+                        # Validate we got reasonable data
+                        if units > 0 and trace_id:
+                            # Extract size from product
+                            size_match = self._RE_SIZE.search(product)
+                            unit_size = size_match.group(1).strip() if size_match else None
+
+                            line_item = {
+                                'line_number': item_num,
+                                'brand': brand,
+                                'product_name': product,
+                                'product_type': prod_type,
+                                'product_subtype': subtype,
+                                'strain': None,
+                                'unit_size': unit_size,
+                                'trace_id': trace_id,
+                                'sku_units': units,
+                                'unit_cost': unit_cost,
+                                'excise_per_unit': excise,
+                                'total_cost': total_cost,
+                                'total_cost_with_excise': total_w_excise if total_w_excise else total_cost,
+                                'is_promo': '[PROMO]' in product
+                            }
+                            line_items.append(line_item)
+                    except Exception:
+                        pass  # Skip malformed items
+            else:
+                i += 1
+
+        return line_items
 
     def _is_non_treez_format(self, text: str) -> bool:
         """
