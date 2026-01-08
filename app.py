@@ -2155,6 +2155,33 @@ def _render_budtender_analytics(state, analytics, store_filter):
         if 'selected_budtenders_filter' not in st.session_state:
             st.session_state.selected_budtenders_filter = all_budtenders
 
+        # Text search for budtenders
+        st.markdown("---")
+        search_col1, search_col2 = st.columns([3, 1])
+        with search_col1:
+            budtender_search = st.text_input(
+                "🔍 Search budtenders by name",
+                placeholder="Type a name to filter...",
+                key="budtender_search_input",
+                help="Type part of a budtender's name to filter the list"
+            )
+        with search_col2:
+            if st.button("Select Matches", key="budtender_select_matches", disabled=not budtender_search):
+                # Find budtenders matching the search term (case-insensitive)
+                matching = [b for b in all_budtenders if budtender_search.lower() in b.lower()]
+                if matching:
+                    st.session_state.selected_budtenders_filter = matching
+                    st.rerun()
+
+        # Show search results preview
+        if budtender_search:
+            matching_budtenders = [b for b in all_budtenders if budtender_search.lower() in b.lower()]
+            if matching_budtenders:
+                st.caption(f"Found **{len(matching_budtenders)}** matching budtender(s): {', '.join(matching_budtenders[:5])}{'...' if len(matching_budtenders) > 5 else ''}")
+            else:
+                st.caption("No budtenders match your search.")
+        st.markdown("---")
+
         # Ensure selected budtenders are valid (in case data changed)
         valid_selected = [b for b in st.session_state.selected_budtenders_filter if b in all_budtenders]
 
