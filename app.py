@@ -1394,6 +1394,51 @@ def _get_cached_brand_mapping(data_hash: str, s3_manager) -> dict:
     return _load_mapping(data_hash)
 
 
+def _clear_all_data_caches():
+    """
+    Clear all data caches across the application.
+    Call this function when user requests a manual refresh to ensure data consistency.
+    This ensures document counts, research data, and all other cached data stays in sync.
+    """
+    # Clear hash check caches (always defined at module level)
+    try:
+        _get_s3_data_hash.clear()
+    except:
+        pass
+    try:
+        _get_dynamodb_hash.clear()
+    except:
+        pass
+
+    # Clear data fetch caches (defined later in the file, but available at runtime)
+    try:
+        _fetch_invoice_data_cached.clear()
+    except:
+        pass
+    try:
+        _fetch_research_data_cached.clear()
+    except:
+        pass
+    try:
+        _fetch_seo_data_cached.clear()
+    except:
+        pass
+    try:
+        _fetch_research_documents_cached.clear()
+    except:
+        pass
+
+    # Reset session state for hash tracking to force fresh data loads
+    if 'last_s3_hash' in st.session_state:
+        st.session_state.last_s3_hash = None
+    if 'last_dynamo_hash' in st.session_state:
+        st.session_state.last_dynamo_hash = None
+    if 'recommendations_data_loaded' in st.session_state:
+        st.session_state.recommendations_data_loaded = False
+    if 'recommendations_data_hash' in st.session_state:
+        st.session_state.recommendations_data_hash = None
+
+
 # =============================================================================
 # MAIN APPLICATION
 # =============================================================================
@@ -4004,14 +4049,14 @@ def render_recommendations(state, analytics):
             if st.button("🔄 Refresh Data", key="refresh_recommendations_data", help="Reload all data from sources"):
                 # Show loading overlay for manual refresh
                 _show_loading_overlay("Refreshing data...", "Fetching latest data from cloud")
-                # Clear the function caches to force a refresh
+                # Clear all global caches for data consistency
+                _clear_all_data_caches()
+                # Also clear local recommendation page caches
                 _get_data_fingerprint.clear()
                 _load_invoice_data_cached.clear()
                 _load_research_data_cached.clear()
                 _load_seo_data_cached.clear()
                 needs_refresh = True
-                st.session_state.recommendations_data_loaded = False
-                st.session_state.recommendations_data_hash = None
 
         if needs_refresh:
             with st.spinner("Loading data sources..."):
@@ -5715,6 +5760,9 @@ def render_data_center(s3_manager, processor):
     with mgmt_col1:
         if st.button("🔄 Reload from S3", type="primary", width='stretch'):
             with st.spinner("Reloading data from S3..."):
+                # Clear all caches to ensure fresh data
+                _clear_all_data_caches()
+
                 # Reload all data from S3
                 loaded_data = s3_manager.load_all_data_from_s3(processor)
 
