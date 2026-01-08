@@ -1331,13 +1331,13 @@ def load_invoice_data_from_dynamodb(invoice_service):
 # CACHED DATA LOADING WITH HASH VALIDATION
 # =============================================================================
 
-@st.cache_data(ttl=300, show_spinner=False)  # 5 min TTL for hash check
+@st.cache_data(ttl=86400, show_spinner=False)  # 24-hour TTL for hash check (use manual refresh for immediate updates)
 def _get_s3_data_hash(bucket_name: str, _s3_manager) -> str:
     """Get the current hash of S3 data (lightweight metadata check)."""
     return _s3_manager.get_data_hash()
 
 
-@st.cache_data(ttl=300, show_spinner=False)  # 5 min TTL for DynamoDB count
+@st.cache_data(ttl=86400, show_spinner=False)  # 24-hour TTL for DynamoDB hash check (use manual refresh for immediate updates)
 def _get_dynamodb_hash(_aws_access_key: str, _aws_secret_key: str, _region: str) -> str:
     """Get a hash based on DynamoDB invoice count (lightweight check)."""
     try:
@@ -1366,7 +1366,7 @@ def _get_cached_s3_data(data_hash: str, s3_manager, processor) -> dict:
     when data changes. Streamlit's cache_data will return cached result if
     the hash hasn't changed.
     """
-    @st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
+    @st.cache_data(ttl=86400, show_spinner=False)  # Cache for 24 hours (use manual refresh for immediate updates)
     def _load_s3_data(_hash: str) -> dict:
         return s3_manager.load_all_data_from_s3(processor)
 
@@ -1378,7 +1378,7 @@ def _get_cached_dynamodb_data(data_hash: str, invoice_service) -> tuple:
     Load DynamoDB invoice data with caching. Hash parameter ensures
     cache invalidation when new invoices are added.
     """
-    @st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
+    @st.cache_data(ttl=86400, show_spinner=False)  # Cache for 24 hours (use manual refresh for immediate updates)
     def _load_dynamo_data(_hash: str) -> pd.DataFrame:
         return load_invoice_data_from_dynamodb(invoice_service)
 
@@ -1387,7 +1387,7 @@ def _get_cached_dynamodb_data(data_hash: str, invoice_service) -> tuple:
 
 def _get_cached_brand_mapping(data_hash: str, s3_manager) -> dict:
     """Load brand mapping with cache invalidation based on S3 hash."""
-    @st.cache_data(ttl=3600, show_spinner=False)
+    @st.cache_data(ttl=86400, show_spinner=False)  # Cache for 24 hours
     def _load_mapping(_hash: str) -> dict:
         return s3_manager.load_brand_product_mapping()
 
@@ -3174,7 +3174,7 @@ def render_recommendations(state, analytics):
         # Only reloads data when the underlying data has actually changed
         # =============================================================================
 
-        @st.cache_data(ttl=300, show_spinner=False)  # 5-minute TTL for quick hash check
+        @st.cache_data(ttl=86400, show_spinner=False)  # 24-hour TTL for fingerprint check (use manual refresh for immediate updates)
         def _get_data_fingerprint():
             """
             Get a lightweight fingerprint of current data state.
@@ -3198,9 +3198,9 @@ def render_recommendations(state, analytics):
                 pass
             return _compute_data_hash(fingerprint)
 
-        @st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
+        @st.cache_data(ttl=86400, show_spinner=False)  # Cache for 24 hours (use manual refresh for immediate updates)
         def _load_invoice_data_cached():
-            """Load invoice data from DynamoDB with 1-hour cache."""
+            """Load invoice data from DynamoDB with 24-hour cache."""
             if not INVOICE_DATA_AVAILABLE:
                 return None, None
             try:
@@ -3216,9 +3216,9 @@ def render_recommendations(state, analytics):
             except Exception:
                 return None, None
 
-        @st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
+        @st.cache_data(ttl=86400, show_spinner=False)  # Cache for 24 hours (use manual refresh for immediate updates)
         def _load_research_data_cached():
-            """Load research data from S3 with 1-hour cache.
+            """Load research data from S3 with 24-hour cache.
 
             Tries multiple sources:
             1. Automated research findings (research-findings/summary/latest.json)
@@ -3297,9 +3297,9 @@ def render_recommendations(state, analytics):
 
             return None
 
-        @st.cache_data(ttl=3600, show_spinner=False)  # Cache for 1 hour
+        @st.cache_data(ttl=86400, show_spinner=False)  # Cache for 24 hours (use manual refresh for immediate updates)
         def _load_seo_data_cached():
-            """Load SEO data from S3 with 1-hour cache."""
+            """Load SEO data from S3 with 24-hour cache."""
             if not SEO_AVAILABLE:
                 return {}
             try:
@@ -3367,7 +3367,7 @@ def render_recommendations(state, analytics):
 
         if needs_refresh:
             with st.spinner("Loading data sources..."):
-                # Load all data using cached functions (1-hour TTL)
+                # Load all data using cached functions (24-hour TTL)
                 # These functions cache their results, so subsequent calls are instant
                 inv_data = _load_invoice_data_cached()
                 st.session_state.recommendations_invoice_summary = inv_data[0] if inv_data else None
