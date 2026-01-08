@@ -1557,8 +1557,7 @@ def main():
         # Navigation
         nav_options = [
             "📊 Dashboard",
-            "📈 Sales Analysis",
-            "👥 Customer Analytics",
+            "📈 Sales Analytics",
             "💡 Recommendations",
         ]
 
@@ -1600,11 +1599,8 @@ def main():
     if page == "📊 Dashboard":
         render_dashboard(st.session_state, analytics, selected_store)
 
-    elif page == "📈 Sales Analysis":
+    elif page == "📈 Sales Analytics":
         render_sales_analysis(st.session_state, analytics, selected_store, date_range)
-
-    elif page == "👥 Customer Analytics":
-        render_customer_analytics(st.session_state, analytics, selected_store, date_range)
 
     elif page == "💡 Recommendations":
         render_recommendations(st.session_state, analytics)
@@ -1778,19 +1774,20 @@ def render_dashboard(state, analytics, store_filter):
 
 def render_sales_analysis(state, analytics, store_filter, date_filter=None):
     """Render comprehensive sales analysis page with all sales-related insights."""
-    st.header("Sales Analysis")
+    st.header("Sales Analytics")
 
     if state.sales_data is None:
         st.warning("Please upload sales data first.")
         return
 
-    # Tabs for different sales views
-    tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    # Tabs for different sales views (including Customer Analytics)
+    tab1, tab2, tab3, tab4, tab5, tab_customers = st.tabs([
         "📈 Sales Trends",
         "🏷️ Brand Performance",
         "📦 Product Categories",
         "📊 Daily Breakdown",
-        "🔍 Raw Data"
+        "🔍 Raw Data",
+        "👥 Customer Analytics"
     ])
     
     # ===== TAB 1: Sales Trends =====
@@ -2058,6 +2055,667 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
         # Download button
         csv = df.to_csv(index=False)
         st.download_button("📥 Download Data", csv, "sales_data.csv", "text/csv")
+
+    # ===== TAB 6: Customer Analytics =====
+    with tab_customers:
+        _render_customer_analytics_content(state, analytics, store_filter, date_filter)
+
+
+def _render_customer_overview(df):
+    """Render customer overview tab content."""
+    st.subheader("Customer Base Overview")
+
+    # Key metrics
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        total_customers = len(df)
+        st.metric("Total Customers", f"{total_customers:,}")
+
+    with col2:
+        if 'Lifetime Net Sales' in df.columns:
+            total_ltv = df['Lifetime Net Sales'].sum()
+            st.metric("Total Lifetime Value", f"${total_ltv:,.0f}")
+
+    with col3:
+        if 'Lifetime Net Sales' in df.columns:
+            avg_ltv = df['Lifetime Net Sales'].mean()
+            st.metric("Avg Customer LTV", f"${avg_ltv:,.0f}")
+
+    with col4:
+        if 'Lifetime Avg Order Value' in df.columns:
+            avg_aov = df['Lifetime Avg Order Value'].mean()
+            st.metric("Avg Order Value", f"${avg_aov:.2f}")
+
+    st.markdown("---")
+
+    # Customer distribution visualizations
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if 'Customer Segment' in df.columns:
+            st.markdown("**Customer Value Distribution**")
+            segment_counts = df['Customer Segment'].value_counts()
+            fig = go.Figure(data=[go.Pie(
+                labels=segment_counts.index,
+                values=segment_counts.values,
+                hole=0.4,
+                marker=dict(colors=['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7'])
+            )])
+            fig.update_layout(height=350, margin=dict(t=30, b=0, l=0, r=0))
+            st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        if 'Recency Segment' in df.columns:
+            st.markdown("**Customer Activity Status**")
+            recency_counts = df['Recency Segment'].value_counts()
+            fig = go.Figure(data=[go.Pie(
+                labels=recency_counts.index,
+                values=recency_counts.values,
+                hole=0.4,
+                marker=dict(colors=['#55efc4', '#74b9ff', '#a29bfe', '#fd79a8', '#636e72'])
+            )])
+            fig.update_layout(height=350, margin=dict(t=30, b=0, l=0, r=0))
+            st.plotly_chart(fig, use_container_width=True)
+
+    # Customer growth over time
+    if 'Sign-Up Date' in df.columns:
+        st.markdown("---")
+        st.markdown("**Customer Acquisition Over Time**")
+        df_sorted = df.sort_values('Sign-Up Date')
+        df_sorted['Cumulative Customers'] = range(1, len(df_sorted) + 1)
+
+        fig = go.Figure()
+        fig.add_trace(go.Scatter(
+            x=df_sorted['Sign-Up Date'],
+            y=df_sorted['Cumulative Customers'],
+            mode='lines',
+            fill='tozeroy',
+            line=dict(color='#6c5ce7', width=2)
+        ))
+        fig.update_layout(
+            height=300,
+            xaxis_title="Date",
+            yaxis_title="Total Customers",
+            margin=dict(t=30, b=0, l=0, r=0)
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_customer_segments(df, analytics):
+    """Render customer segments tab content."""
+    st.subheader("Customer Segmentation Analysis")
+
+    if 'Customer Segment' not in df.columns or 'Recency Segment' not in df.columns:
+        st.warning("Customer segmentation data not available")
+        return
+
+    segment_order = ['Whale', 'VIP', 'Good', 'Regular', 'New/Low']
+
+    # Segment selector
+    segment_type = st.radio(
+        "Segment Type",
+        ["Value Segments", "Recency Segments", "Combined Matrix"],
+        horizontal=True,
+        key="cust_segment_type"
+    )
+
+    if segment_type == "Value Segments":
+        # Value segment analysis
+        segment_data = df.groupby('Customer Segment').agg({
+            'Customer ID': 'count',
+            'Lifetime Net Sales': ['sum', 'mean'],
+            'Lifetime Transactions': 'mean',
+            'Lifetime Avg Order Value': 'mean'
+        }).round(2)
+
+        segment_data.columns = ['Customer Count', 'Total Sales', 'Avg LTV', 'Avg Transactions', 'Avg Order Value']
+        segment_data = segment_data.reindex([s for s in segment_order if s in segment_data.index])
+
+        st.dataframe(segment_data, width='stretch')
+
+        # Visualizations
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**Sales Contribution by Segment**")
+            fig = go.Figure(data=[go.Bar(
+                x=segment_data.index,
+                y=segment_data['Total Sales'],
+                marker_color=['#ffeaa7', '#96ceb4', '#45b7d1', '#4ecdc4', '#ff6b6b']
+            )])
+            fig.update_layout(height=300, xaxis_title="Segment", yaxis_title="Total Sales ($)")
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            st.markdown("**Average LTV by Segment**")
+            fig = go.Figure(data=[go.Bar(
+                x=segment_data.index,
+                y=segment_data['Avg LTV'],
+                marker_color=['#ffeaa7', '#96ceb4', '#45b7d1', '#4ecdc4', '#ff6b6b']
+            )])
+            fig.update_layout(height=300, xaxis_title="Segment", yaxis_title="Avg LTV ($)")
+            st.plotly_chart(fig, use_container_width=True)
+
+    elif segment_type == "Recency Segments":
+        # Recency segment analysis
+        recency_order = ['Active', 'Warm', 'Cool', 'Cold', 'Lost']
+        recency_data = df.groupby('Recency Segment').agg({
+            'Customer ID': 'count',
+            'Days Since Last Visit': 'mean',
+            'Lifetime Net Sales': ['sum', 'mean']
+        }).round(2)
+
+        recency_data.columns = ['Customer Count', 'Avg Days Since Visit', 'Total Sales', 'Avg LTV']
+        recency_data = recency_data.reindex([s for s in recency_order if s in recency_data.index])
+
+        st.dataframe(recency_data, width='stretch')
+
+        # Visualizations
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**Customer Count by Recency**")
+            fig = go.Figure(data=[go.Bar(
+                x=recency_data.index,
+                y=recency_data['Customer Count'],
+                marker_color=['#55efc4', '#74b9ff', '#a29bfe', '#fd79a8', '#636e72']
+            )])
+            fig.update_layout(height=300, xaxis_title="Recency Status", yaxis_title="Customers")
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            st.markdown("**Avg Days Since Last Visit**")
+            fig = go.Figure(data=[go.Bar(
+                x=recency_data.index,
+                y=recency_data['Avg Days Since Visit'],
+                marker_color=['#55efc4', '#74b9ff', '#a29bfe', '#fd79a8', '#636e72']
+            )])
+            fig.update_layout(height=300, xaxis_title="Recency Status", yaxis_title="Days")
+            st.plotly_chart(fig, use_container_width=True)
+
+    else:  # Combined Matrix
+        # RFM-style matrix
+        st.markdown("**Customer Segment Matrix (Value × Recency)**")
+        matrix = pd.crosstab(
+            df['Customer Segment'],
+            df['Recency Segment'],
+            values=df['Customer ID'],
+            aggfunc='count',
+            margins=True
+        )
+
+        # Reorder for better visualization
+        recency_order = ['Active', 'Warm', 'Cool', 'Cold', 'Lost']
+
+        row_order = [s for s in segment_order if s in matrix.index] + ['All']
+        col_order = [s for s in recency_order if s in matrix.columns] + ['All']
+
+        matrix = matrix.reindex(index=row_order, columns=col_order)
+        st.dataframe(matrix, width='stretch')
+
+        # Heatmap
+        matrix_no_totals = matrix.drop('All', errors='ignore').drop('All', axis=1, errors='ignore')
+        fig = go.Figure(data=go.Heatmap(
+            z=matrix_no_totals.values,
+            x=matrix_no_totals.columns,
+            y=matrix_no_totals.index,
+            colorscale='Blues',
+            text=matrix_no_totals.values,
+            texttemplate='%{text}',
+            textfont={"size": 12}
+        ))
+        fig.update_layout(height=400, xaxis_title="Recency", yaxis_title="Value Segment")
+        st.plotly_chart(fig, use_container_width=True)
+
+    # Demographics by Segment Analysis
+    st.markdown("---")
+    st.subheader("Demographics by Customer Segment")
+
+    if 'Age' in df.columns and 'Gender' in df.columns:
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**Average Age by Customer Segment**")
+            age_by_segment = df.groupby('Customer Segment')['Age'].mean().reindex(segment_order)
+            fig = go.Figure(data=[go.Bar(
+                x=age_by_segment.index,
+                y=age_by_segment.values,
+                marker_color=['#ffeaa7', '#96ceb4', '#45b7d1', '#4ecdc4', '#ff6b6b'],
+                text=[f"{v:.1f}" for v in age_by_segment.values],
+                textposition='auto'
+            )])
+            fig.update_layout(height=300, xaxis_title="Segment", yaxis_title="Average Age")
+            st.plotly_chart(fig, use_container_width=True)
+
+        with col2:
+            st.markdown("**Gender Distribution by Segment**")
+            segment_gender = pd.crosstab(df['Customer Segment'], df['Gender'], normalize='index') * 100
+            segment_gender = segment_gender.reindex([s for s in segment_order if s in segment_gender.index])
+
+            fig = go.Figure()
+            for gender in segment_gender.columns:
+                fig.add_trace(go.Bar(
+                    name=gender,
+                    x=segment_gender.index,
+                    y=segment_gender[gender],
+                    text=[f"{v:.1f}%" for v in segment_gender[gender]],
+                    textposition='auto'
+                ))
+
+            fig.update_layout(
+                height=300,
+                barmode='stack',
+                xaxis_title="Segment",
+                yaxis_title="Percentage (%)",
+                showlegend=True
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+    if 'Age' in df.columns:
+        st.markdown("---")
+        st.markdown("**Age Distribution Across Segments**")
+
+        fig = go.Figure()
+        for segment in [s for s in segment_order if s in df['Customer Segment'].unique()]:
+            segment_data = df[df['Customer Segment'] == segment]['Age']
+            fig.add_trace(go.Box(
+                y=segment_data,
+                name=segment,
+                boxmean='sd'
+            ))
+
+        fig.update_layout(height=350, yaxis_title="Age", xaxis_title="Customer Segment")
+        st.plotly_chart(fig, use_container_width=True)
+
+    if 'City' in df.columns:
+        st.markdown("---")
+        st.markdown("**Top Cities by Customer Segment**")
+
+        top_cities = df['City'].value_counts().head(5).index.tolist()
+
+        city_segment_data = []
+        for city in top_cities:
+            for segment in [s for s in segment_order if s in df['Customer Segment'].unique()]:
+                count = len(df[(df['City'] == city) & (df['Customer Segment'] == segment)])
+                city_segment_data.append({
+                    'City': city,
+                    'Segment': segment,
+                    'Count': count
+                })
+
+        city_df = pd.DataFrame(city_segment_data)
+
+        fig = go.Figure()
+        for segment in [s for s in segment_order if s in df['Customer Segment'].unique()]:
+            seg_data = city_df[city_df['Segment'] == segment]
+            fig.add_trace(go.Bar(
+                name=segment,
+                x=seg_data['City'],
+                y=seg_data['Count']
+            ))
+
+        fig.update_layout(
+            height=350,
+            barmode='group',
+            xaxis_title="City",
+            yaxis_title="Customer Count",
+            showlegend=True
+        )
+        st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_customer_demographics(df):
+    """Render customer demographics tab content."""
+    st.subheader("Customer Demographics")
+
+    col1, col2, col3 = st.columns(3)
+
+    # Age distribution
+    with col1:
+        if 'Age' in df.columns:
+            st.markdown("**Age Distribution**")
+            avg_age = df['Age'].mean()
+            median_age = df['Age'].median()
+
+            st.metric("Average Age", f"{avg_age:.1f} years")
+            st.metric("Median Age", f"{median_age:.0f} years")
+
+            fig = go.Figure(data=[go.Histogram(
+                x=df['Age'],
+                nbinsx=20,
+                marker_color='#6c5ce7'
+            )])
+            fig.update_layout(height=250, xaxis_title="Age", yaxis_title="Count", margin=dict(t=20, b=0))
+            st.plotly_chart(fig, use_container_width=True)
+
+    # Gender distribution
+    with col2:
+        if 'Gender' in df.columns:
+            st.markdown("**Gender Distribution**")
+            gender_counts = df['Gender'].value_counts()
+
+            for gender, count in gender_counts.items():
+                pct = (count / len(df)) * 100
+                st.metric(gender, f"{count} ({pct:.1f}%)")
+
+            fig = go.Figure(data=[go.Pie(
+                labels=gender_counts.index,
+                values=gender_counts.values,
+                hole=0.4
+            )])
+            fig.update_layout(height=250, margin=dict(t=20, b=0, l=0, r=0))
+            st.plotly_chart(fig, use_container_width=True)
+
+    # Customer type
+    with col3:
+        if 'Customer Status' in df.columns:
+            st.markdown("**Customer Type**")
+            type_counts = df['Customer Status'].value_counts()
+
+            for ctype, count in type_counts.items():
+                pct = (count / len(df)) * 100
+                st.metric(str(ctype)[:15], f"{count} ({pct:.1f}%)")
+
+            fig = go.Figure(data=[go.Pie(
+                labels=type_counts.index,
+                values=type_counts.values,
+                hole=0.4
+            )])
+            fig.update_layout(height=250, margin=dict(t=20, b=0, l=0, r=0))
+            st.plotly_chart(fig, use_container_width=True)
+
+    st.markdown("---")
+
+    # Geographic distribution
+    if 'City' in df.columns:
+        st.markdown("**Geographic Distribution**")
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**Top Cities**")
+            top_cities = df['City'].value_counts().head(10)
+            st.dataframe(top_cities, width='stretch')
+
+        with col2:
+            if 'State' in df.columns:
+                st.markdown("**States/Regions**")
+                state_counts = df['State'].value_counts().head(10)
+                fig = go.Figure(data=[go.Bar(
+                    x=state_counts.index,
+                    y=state_counts.values,
+                    marker_color='#00b894'
+                )])
+                fig.update_layout(height=300, xaxis_title="State", yaxis_title="Customers")
+                st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_customer_ltv(df):
+    """Render customer lifetime value tab content."""
+    st.subheader("Customer Lifetime Value Analysis")
+
+    if 'Lifetime Net Sales' not in df.columns:
+        st.warning("Lifetime value data not available")
+        return
+
+    # LTV metrics
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        total_ltv = df['Lifetime Net Sales'].sum()
+        st.metric("Total LTV", f"${total_ltv:,.0f}")
+
+    with col2:
+        avg_ltv = df['Lifetime Net Sales'].mean()
+        st.metric("Average LTV", f"${avg_ltv:,.0f}")
+
+    with col3:
+        median_ltv = df['Lifetime Net Sales'].median()
+        st.metric("Median LTV", f"${median_ltv:,.0f}")
+
+    with col4:
+        top_10_pct_ltv = df.nlargest(int(len(df) * 0.1), 'Lifetime Net Sales')['Lifetime Net Sales'].sum()
+        top_10_pct = (top_10_pct_ltv / total_ltv) * 100
+        st.metric("Top 10% Contribution", f"{top_10_pct:.1f}%")
+
+    st.markdown("---")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("**LTV Distribution**")
+        fig = go.Figure(data=[go.Histogram(
+            x=df['Lifetime Net Sales'],
+            nbinsx=50,
+            marker_color='#fdcb6e'
+        )])
+        fig.update_layout(height=300, xaxis_title="Lifetime Value ($)", yaxis_title="Customers")
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        st.markdown("**Top 20 Customers by LTV**")
+        top_customers = df.nlargest(20, 'Lifetime Net Sales')[
+            ['Customer Name', 'Lifetime Net Sales', 'Customer Segment']
+        ] if 'Customer Name' in df.columns else df.nlargest(20, 'Lifetime Net Sales')[
+            ['Lifetime Net Sales', 'Customer Segment']
+        ]
+        st.dataframe(top_customers, width='stretch', height=300)
+
+    # LTV by segment
+    if 'Customer Segment' in df.columns:
+        st.markdown("---")
+        st.markdown("**LTV Distribution by Customer Segment**")
+
+        fig = go.Figure()
+        for segment in df['Customer Segment'].unique():
+            segment_data = df[df['Customer Segment'] == segment]['Lifetime Net Sales']
+            fig.add_trace(go.Box(
+                y=segment_data,
+                name=segment,
+                boxmean='sd'
+            ))
+
+        fig.update_layout(height=400, yaxis_title="Lifetime Value ($)", xaxis_title="Segment")
+        st.plotly_chart(fig, use_container_width=True)
+
+
+def _render_customer_recency(df):
+    """Render customer recency & retention tab content."""
+    st.subheader("Customer Recency & Retention")
+
+    if 'Days Since Last Visit' not in df.columns:
+        st.warning("Recency data not available")
+        return
+
+    # Recency metrics
+    col1, col2, col3, col4 = st.columns(4)
+
+    with col1:
+        active_customers = len(df[df['Days Since Last Visit'] <= 30]) if 'Days Since Last Visit' in df.columns else 0
+        st.metric("Active (30d)", active_customers)
+
+    with col2:
+        at_risk = len(df[df['Days Since Last Visit'] > 90]) if 'Days Since Last Visit' in df.columns else 0
+        st.metric("At Risk (90d+)", at_risk)
+
+    with col3:
+        avg_days_since = df['Days Since Last Visit'].mean()
+        st.metric("Avg Days Since Visit", f"{avg_days_since:.0f}")
+
+    with col4:
+        if 'Lifetime In-Store Visits' in df.columns:
+            avg_visits = df['Lifetime In-Store Visits'].mean()
+            st.metric("Avg Lifetime Visits", f"{avg_visits:.1f}")
+
+    st.markdown("---")
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+        st.markdown("**Days Since Last Visit Distribution**")
+        fig = go.Figure(data=[go.Histogram(
+            x=df['Days Since Last Visit'],
+            nbinsx=30,
+            marker_color='#e17055'
+        )])
+        fig.update_layout(height=300, xaxis_title="Days Since Last Visit", yaxis_title="Customers")
+        st.plotly_chart(fig, use_container_width=True)
+
+    with col2:
+        if 'Lifetime In-Store Visits' in df.columns:
+            st.markdown("**Visit Frequency Distribution**")
+            fig = go.Figure(data=[go.Histogram(
+                x=df['Lifetime In-Store Visits'],
+                nbinsx=30,
+                marker_color='#00b894'
+            )])
+            fig.update_layout(height=300, xaxis_title="Lifetime Visits", yaxis_title="Customers")
+            st.plotly_chart(fig, use_container_width=True)
+
+    # Churn risk analysis
+    st.markdown("---")
+    st.markdown("**Churn Risk Analysis**")
+
+    if 'Recency Segment' in df.columns and 'Customer Segment' in df.columns:
+        # At-risk high value customers
+        at_risk_vip = df[
+            (df['Recency Segment'].isin(['Cold', 'Lost'])) &
+            (df['Customer Segment'].isin(['VIP', 'Whale']))
+        ]
+
+        if len(at_risk_vip) > 0:
+            st.warning(f"⚠️ {len(at_risk_vip)} high-value customers are at risk of churning!")
+
+            cols = ['Customer Name', 'Customer Segment', 'Recency Segment',
+                   'Lifetime Net Sales', 'Days Since Last Visit']
+            display_cols = [c for c in cols if c in at_risk_vip.columns]
+
+            st.dataframe(
+                at_risk_vip[display_cols].head(20),
+                width='stretch'
+            )
+
+
+def _render_customer_search(df):
+    """Render customer search tab content."""
+    st.subheader("Customer Search & Filter")
+
+    # Search and filter options
+    col1, col2, col3 = st.columns(3)
+
+    with col1:
+        if 'Customer Name' in df.columns:
+            search_name = st.text_input("Search by Name", "", key="cust_search_name")
+
+    with col2:
+        if 'Customer Segment' in df.columns:
+            segment_filter = st.multiselect(
+                "Filter by Segment",
+                options=df['Customer Segment'].unique().tolist(),
+                default=[],
+                key="cust_segment_filter"
+            )
+
+    with col3:
+        if 'Recency Segment' in df.columns:
+            recency_filter = st.multiselect(
+                "Filter by Recency",
+                options=df['Recency Segment'].unique().tolist(),
+                default=[],
+                key="cust_recency_filter"
+            )
+
+    # Apply filters
+    filtered_df = df.copy()
+
+    if 'Customer Name' in df.columns and 'search_name' in dir() and search_name:
+        filtered_df = filtered_df[
+            filtered_df['Customer Name'].str.contains(search_name, case=False, na=False)
+        ]
+
+    if 'segment_filter' in dir() and segment_filter and 'Customer Segment' in df.columns:
+        filtered_df = filtered_df[filtered_df['Customer Segment'].isin(segment_filter)]
+
+    if 'recency_filter' in dir() and recency_filter and 'Recency Segment' in df.columns:
+        filtered_df = filtered_df[filtered_df['Recency Segment'].isin(recency_filter)]
+
+    st.info(f"Showing {len(filtered_df)} of {len(df)} customers")
+
+    # Display filtered results
+    display_cols = [
+        'Customer Name', 'Email', 'Phone', 'Customer Segment', 'Recency Segment',
+        'Lifetime Net Sales', 'Lifetime Transactions', 'Days Since Last Visit',
+        'Age', 'Gender', 'City', 'State'
+    ]
+    display_cols = [c for c in display_cols if c in filtered_df.columns]
+
+    st.dataframe(
+        filtered_df[display_cols],
+        width='stretch',
+        height=400
+    )
+
+    # Download filtered data
+    csv = filtered_df.to_csv(index=False)
+    st.download_button(
+        "Download Filtered Customer Data",
+        csv,
+        "filtered_customers.csv",
+        "text/csv",
+        key="cust_download_btn"
+    )
+
+
+def _render_customer_analytics_content(state, analytics, store_filter, date_filter=None):
+    """Render customer analytics content (used as nested tab within Sales Analytics)."""
+    if state.customer_data is None:
+        st.warning("Please upload customer data first using the 'Data Center' page.")
+        st.info("Upload a CSV file containing customer demographics, transaction history, and loyalty information.")
+        return
+
+    df = state.customer_data.copy()
+
+    # Apply store filter
+    if store_filter != "All Stores":
+        store_id = 'barbary_coast' if store_filter == "Barbary Coast" else 'grass_roots'
+        if 'Store_ID' in df.columns:
+            df = df[df['Store_ID'] == store_id]
+
+    st.info(f"Analyzing {len(df)} customers")
+
+    # Create subtabs for different analytics views
+    cust_tab1, cust_tab2, cust_tab3, cust_tab4, cust_tab5, cust_tab6 = st.tabs([
+        "Overview",
+        "Customer Segments",
+        "Demographics",
+        "Lifetime Value",
+        "Recency & Retention",
+        "Customer Search"
+    ])
+
+    # ===== Overview =====
+    with cust_tab1:
+        _render_customer_overview(df)
+
+    # ===== Customer Segments =====
+    with cust_tab2:
+        _render_customer_segments(df, analytics)
+
+    # ===== Demographics =====
+    with cust_tab3:
+        _render_customer_demographics(df)
+
+    # ===== Lifetime Value =====
+    with cust_tab4:
+        _render_customer_ltv(df)
+
+    # ===== Recency & Retention =====
+    with cust_tab5:
+        _render_customer_recency(df)
+
+    # ===== Customer Search =====
+    with cust_tab6:
+        _render_customer_search(df)
 
 
 def render_customer_analytics(state, analytics, store_filter, date_filter=None):
