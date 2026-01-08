@@ -2126,92 +2126,98 @@ def _render_budtender_analytics(state, analytics, store_filter):
     budtender_sales = df.groupby('Employee')['Net_Sales'].sum().sort_values(ascending=False)
 
     with st.expander("🎯 **Filter by Budtender** (click to expand)", expanded=False):
-        st.caption("Select which budtenders to include in the analysis. By default, all budtenders are selected.")
+        # Initialize session state for selected budtenders if not exists
+        if 'selected_budtenders_filter' not in st.session_state:
+            st.session_state.selected_budtenders_filter = all_budtenders.copy()
 
-        # Quick action buttons
-        filter_col1, filter_col2, filter_col3, filter_col4 = st.columns(4)
+        # Ensure selected budtenders are valid (in case data changed)
+        st.session_state.selected_budtenders_filter = [
+            b for b in st.session_state.selected_budtenders_filter if b in all_budtenders
+        ]
 
-        with filter_col1:
-            if st.button("Select All", key="budtender_select_all"):
-                st.session_state.selected_budtenders_filter = all_budtenders
+        # Search input
+        budtender_search = st.text_input(
+            "🔍 Search and add budtenders",
+            placeholder="Type a name to search...",
+            key="budtender_search_input",
+            help="Search for budtenders by name, then click to add them"
+        )
+
+        # Filter available budtenders based on search (exclude already selected)
+        available_budtenders = [b for b in all_budtenders if b not in st.session_state.selected_budtenders_filter]
+        if budtender_search:
+            filtered_available = [b for b in available_budtenders if budtender_search.lower() in b.lower()]
+        else:
+            filtered_available = available_budtenders
+
+        # Searchable dropdown to add budtenders
+        if filtered_available:
+            # Create display options with sales info
+            dropdown_options = [""] + [f"{b} (${budtender_sales.get(b, 0):,.0f})" for b in filtered_available]
+            display_to_actual = {f"{b} (${budtender_sales.get(b, 0):,.0f})": b for b in filtered_available}
+
+            selected_to_add = st.selectbox(
+                "Select a budtender to add",
+                options=dropdown_options,
+                index=0,
+                key="budtender_add_dropdown",
+                help="Choose a budtender from the dropdown to add them to your filter"
+            )
+
+            if selected_to_add and selected_to_add in display_to_actual:
+                budtender_to_add = display_to_actual[selected_to_add]
+                st.session_state.selected_budtenders_filter.append(budtender_to_add)
                 st.rerun()
+        else:
+            if budtender_search:
+                st.caption("No matching budtenders available to add.")
+            else:
+                st.caption("All budtenders are already selected.")
 
-        with filter_col2:
-            if st.button("Clear All", key="budtender_clear_all"):
+        st.markdown("---")
+
+        # Quick actions row
+        action_col1, action_col2, action_col3 = st.columns(3)
+        with action_col1:
+            if st.button("Select All", key="budtender_select_all", use_container_width=True):
+                st.session_state.selected_budtenders_filter = all_budtenders.copy()
+                st.rerun()
+        with action_col2:
+            if st.button("Clear All", key="budtender_clear_all", use_container_width=True):
                 st.session_state.selected_budtenders_filter = []
                 st.rerun()
-
-        with filter_col3:
-            if st.button("Top 10", key="budtender_top_10"):
+        with action_col3:
+            if st.button("Top 10 Sellers", key="budtender_top_10", use_container_width=True):
                 st.session_state.selected_budtenders_filter = budtender_sales.head(10).index.tolist()
                 st.rerun()
 
-        with filter_col4:
-            if st.button("Top 25", key="budtender_top_25"):
-                st.session_state.selected_budtenders_filter = budtender_sales.head(25).index.tolist()
-                st.rerun()
-
-        # Initialize session state for selected budtenders if not exists
-        if 'selected_budtenders_filter' not in st.session_state:
-            st.session_state.selected_budtenders_filter = all_budtenders
-
-        # Text search for budtenders
-        st.markdown("---")
-        search_col1, search_col2 = st.columns([3, 1])
-        with search_col1:
-            budtender_search = st.text_input(
-                "🔍 Search budtenders by name",
-                placeholder="Type a name to filter...",
-                key="budtender_search_input",
-                help="Type part of a budtender's name to filter the list"
-            )
-        with search_col2:
-            if st.button("Select Matches", key="budtender_select_matches", disabled=not budtender_search):
-                # Find budtenders matching the search term (case-insensitive)
-                matching = [b for b in all_budtenders if budtender_search.lower() in b.lower()]
-                if matching:
-                    st.session_state.selected_budtenders_filter = matching
-                    st.rerun()
-
-        # Show search results preview
-        if budtender_search:
-            matching_budtenders = [b for b in all_budtenders if budtender_search.lower() in b.lower()]
-            if matching_budtenders:
-                st.caption(f"Found **{len(matching_budtenders)}** matching budtender(s): {', '.join(matching_budtenders[:5])}{'...' if len(matching_budtenders) > 5 else ''}")
-            else:
-                st.caption("No budtenders match your search.")
         st.markdown("---")
 
-        # Ensure selected budtenders are valid (in case data changed)
-        valid_selected = [b for b in st.session_state.selected_budtenders_filter if b in all_budtenders]
+        # Display selected budtenders as removable chips
+        selected_budtenders = st.session_state.selected_budtenders_filter
+        if selected_budtenders:
+            st.markdown(f"**Selected Budtenders ({len(selected_budtenders)}):**")
 
-        # Create options with sales info for better context
-        budtender_options = []
-        for budtender in all_budtenders:
-            sales = budtender_sales.get(budtender, 0)
-            budtender_options.append(f"{budtender} (${sales:,.0f})")
-
-        # Map display names back to actual names
-        display_to_actual = {f"{b} (${budtender_sales.get(b, 0):,.0f})": b for b in all_budtenders}
-
-        # Multi-select with checkboxes
-        selected_display = st.multiselect(
-            "Select Budtenders",
-            options=budtender_options,
-            default=[f"{b} (${budtender_sales.get(b, 0):,.0f})" for b in valid_selected],
-            key="budtender_multiselect_filter",
-            help="Select one or more budtenders to filter the analysis"
-        )
-
-        # Convert display names back to actual budtender names
-        selected_budtenders = [display_to_actual[d] for d in selected_display]
-
-        # Update session state
-        st.session_state.selected_budtenders_filter = selected_budtenders
-
-        # Show selection summary
-        if len(selected_budtenders) < len(all_budtenders):
-            st.info(f"**{len(selected_budtenders)}** of **{len(all_budtenders)}** budtenders selected")
+            # Display in a grid of removable items
+            cols_per_row = 3
+            for i in range(0, len(selected_budtenders), cols_per_row):
+                cols = st.columns(cols_per_row)
+                for j, col in enumerate(cols):
+                    idx = i + j
+                    if idx < len(selected_budtenders):
+                        budtender = selected_budtenders[idx]
+                        sales = budtender_sales.get(budtender, 0)
+                        with col:
+                            if st.button(
+                                f"✕ {budtender[:20]}{'...' if len(budtender) > 20 else ''}",
+                                key=f"remove_budtender_{idx}",
+                                help=f"Remove {budtender} (${sales:,.0f})",
+                                use_container_width=True
+                            ):
+                                st.session_state.selected_budtenders_filter.remove(budtender)
+                                st.rerun()
+        else:
+            st.warning("No budtenders selected. Use the dropdown above to add budtenders.")
 
     # Apply budtender filter
     if 'selected_budtenders_filter' in st.session_state and st.session_state.selected_budtenders_filter:
