@@ -17,54 +17,39 @@ from datetime import datetime, timedelta
 import hashlib
 import json
 
-# Import Claude AI integration (optional)
-try:
-    from claude_integration import ClaudeAnalytics
-    CLAUDE_AVAILABLE = True
-except ImportError:
-    CLAUDE_AVAILABLE = False
-
-# Import Invoice Analytics for DynamoDB data access in Claude Q&A (optional)
-try:
-    from invoice_extraction import InvoiceDataService
-    INVOICE_DATA_AVAILABLE = True
-except ImportError:
-    INVOICE_DATA_AVAILABLE = False
-
-# Import Research Integration (optional)
-try:
-    from research_integration import render_research_page, ResearchFindingsViewer
-    RESEARCH_AVAILABLE = True
-except ImportError:
-    RESEARCH_AVAILABLE = False
-
-# Import SEO Integration (optional)
-try:
-    from seo_integration import render_seo_page, SEOFindingsViewer
-    SEO_AVAILABLE = True
-except ImportError:
-    SEO_AVAILABLE = False
-
-# Import Manual Research Integration for findings access (optional)
-try:
-    from manual_research_integration import MonthlyResearchSummarizer
-    MANUAL_RESEARCH_AVAILABLE = True
-except ImportError:
-    MANUAL_RESEARCH_AVAILABLE = False
-
-# Import QR Code Integration (optional)
-try:
-    from qr_integration import render_qr_page
-    QR_AVAILABLE = True
-except ImportError:
-    QR_AVAILABLE = False
-
-# Import Business Context Service for employee-provided insights (optional)
-try:
-    from business_context import BusinessContextService, get_business_context_service
-    BUSINESS_CONTEXT_AVAILABLE = True
-except ImportError:
-    BUSINESS_CONTEXT_AVAILABLE = False
+# Import all services from the dashboard package
+from dashboard import (
+    # Service availability flags
+    CLAUDE_AVAILABLE,
+    INVOICE_AVAILABLE as INVOICE_DATA_AVAILABLE,
+    RESEARCH_AVAILABLE,
+    SEO_AVAILABLE,
+    MANUAL_RESEARCH_AVAILABLE,
+    QR_AVAILABLE,
+    BUSINESS_CONTEXT_AVAILABLE,
+    INVOICE_UPLOAD_AVAILABLE,
+    # Claude AI
+    ClaudeAnalytics,
+    # Invoice
+    InvoiceDataService,
+    # Research
+    render_research_page,
+    ResearchFindingsViewer,
+    # SEO
+    render_seo_page,
+    SEOFindingsViewer,
+    # Manual Research
+    MonthlyResearchSummarizer,
+    DocumentStorage,
+    S3_BUCKET,
+    # QR
+    render_qr_page,
+    # Business Context
+    BusinessContextService,
+    get_business_context_service,
+    # Invoice Upload UI
+    render_full_invoice_section,
+)
 
 # =============================================================================
 # CONFIGURATION
@@ -1717,7 +1702,7 @@ def render_dashboard(state, analytics, store_filter):
         st.markdown("### 🔍 SEO Status")
         if SEO_AVAILABLE:
             try:
-                from seo_integration import SEOFindingsViewer
+                # SEOFindingsViewer already imported from dashboard package
 
                 # Try to load latest SEO summary
                 viewer = SEOFindingsViewer(website="https://barbarycoastsf.com")
@@ -1764,7 +1749,7 @@ def render_dashboard(state, analytics, store_filter):
         st.markdown("### 🔬 Industry Insights")
         if RESEARCH_AVAILABLE:
             try:
-                from manual_research_integration import MonthlyResearchSummarizer
+                # MonthlyResearchSummarizer already imported from dashboard package
 
                 # Get API key
                 api_key = os.environ.get("ANTHROPIC_API_KEY")
@@ -4241,7 +4226,7 @@ def _fetch_research_documents_cached(_aws_access_key: str, _aws_secret_key: str,
     """Fetch list of research documents from S3 with daily caching."""
     try:
         if MANUAL_RESEARCH_AVAILABLE:
-            from manual_research_integration import DocumentStorage, S3_BUCKET
+            # DocumentStorage and S3_BUCKET already imported from dashboard package
             storage = DocumentStorage(S3_BUCKET)
             documents = storage.list_uploaded_documents(days=365)  # Get documents from the last year
             return documents if documents else []
@@ -4254,7 +4239,7 @@ def _load_document_content(doc_s3_key: str) -> str:
     """Load a specific document's content from S3."""
     try:
         if MANUAL_RESEARCH_AVAILABLE:
-            from manual_research_integration import DocumentStorage, S3_BUCKET
+            # DocumentStorage and S3_BUCKET already imported from dashboard package
             storage = DocumentStorage(S3_BUCKET)
             content, error = storage.get_document_content(doc_s3_key)
             if error:
@@ -4415,9 +4400,9 @@ def render_recommendations(state, analytics):
     tab1, tab2 = st.tabs(["🤖 AI Analysis", "📁 Past Reports"])
 
     with tab1:
-        # Claude AI Integration
+        # Claude AI Integration (imported from dashboard package)
         if not CLAUDE_AVAILABLE:
-            st.warning("Claude integration module not found. Make sure `claude_integration.py` is in the same directory.")
+            st.warning("Claude integration module not found. Check the dashboard package installation.")
             return
 
         # Get API key from environment variable or secrets
@@ -6079,17 +6064,17 @@ def render_data_center(s3_manager, processor):
         """)
 
         # Use the integrated invoice upload UI with all tabs (Upload, View Data, Date Review)
-        try:
-            from invoice_upload_ui import render_full_invoice_section
-            render_full_invoice_section()
-        except ImportError as e:
-            st.warning("Invoice upload module not available. Make sure invoice_upload_ui.py is installed.")
-            st.info("📦 Install the invoice_upload_ui module to enable automatic PDF extraction and DynamoDB storage.")
-            st.error(f"Import error: {e}")
-        except Exception as e:
-            st.error(f"Error rendering invoice upload section: {e}")
-            import traceback
-            st.code(traceback.format_exc())
+        # render_full_invoice_section already imported from dashboard package
+        if INVOICE_UPLOAD_AVAILABLE and render_full_invoice_section:
+            try:
+                render_full_invoice_section()
+            except Exception as e:
+                st.error(f"Error rendering invoice upload section: {e}")
+                import traceback
+                st.code(traceback.format_exc())
+        else:
+            st.warning("Invoice upload module not available.")
+            st.info("📦 The invoice upload module is not installed or failed to load.")
 
     # =========================================================================
     # CUSTOMER DATA TAB
