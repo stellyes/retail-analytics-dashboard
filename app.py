@@ -568,12 +568,12 @@ class S3DataManager:
             processor: DataProcessor instance for cleaning data
 
         Returns:
-            Dict with 'sales', 'brand', 'product', 'customer', 'invoice' DataFrames (or None if no data)
+            Dict with 'sales', 'brand', 'product', 'customer', 'invoice', 'budtender' DataFrames (or None if no data)
         """
         if not self.is_configured():
-            return {'sales': None, 'brand': None, 'product': None, 'customer': None, 'invoice': None}
+            return {'sales': None, 'brand': None, 'product': None, 'customer': None, 'invoice': None, 'budtender': None}
 
-        result = {'sales': None, 'brand': None, 'product': None, 'customer': None, 'invoice': None}
+        result = {'sales': None, 'brand': None, 'product': None, 'customer': None, 'invoice': None, 'budtender': None}
         
         try:
             # List all files in raw-uploads
@@ -588,6 +588,7 @@ class S3DataManager:
             product_files = [f for f in files if '/product_' in f and f.endswith('.csv')]
             customer_files = [f for f in files if '/customers_' in f and f.endswith('.csv')]
             invoice_files = [f for f in files if '/invoices_' in f and f.endswith('.csv')]
+            budtender_files = [f for f in files if '/budtender_' in f and f.endswith('.csv')]
             
             # Load and merge sales data
             if sales_files:
@@ -732,6 +733,29 @@ class S3DataManager:
                     if 'Upload_Start_Date' in result['invoice'].columns and 'Invoice Number' in result['invoice'].columns:
                         result['invoice'] = result['invoice'].drop_duplicates(
                             subset=['Invoice Number', 'Upload_Store', 'Upload_Start_Date'],
+                            keep='last'
+                        )
+
+            # Load and merge budtender data
+            if budtender_files:
+                budtender_dfs = []
+                for f in budtender_files:
+                    try:
+                        df = self.download_file(f)
+                        if df is not None and not df.empty:
+                            store_id = self._extract_store_from_path(f)
+                            df['Store_ID'] = store_id
+                            budtender_dfs.append(df)
+                    except Exception as e:
+                        print(f"Error loading {f}: {e}")
+                        continue
+
+                if budtender_dfs:
+                    result['budtender'] = pd.concat(budtender_dfs, ignore_index=True)
+                    # Remove duplicates based on Employee and Product
+                    if 'Employee' in result['budtender'].columns and 'Product' in result['budtender'].columns:
+                        result['budtender'] = result['budtender'].drop_duplicates(
+                            subset=['Employee', 'Product', 'Store_ID'],
                             keep='last'
                         )
 
@@ -1326,7 +1350,9 @@ def _get_s3_data_hash(bucket_name: str, _s3_manager) -> str:
 def _get_dynamodb_hash(_aws_access_key: str, _aws_secret_key: str, _region: str) -> str:
     """Get a hash based on DynamoDB invoice count (lightweight check)."""
     try:
-        from invoice_extraction import InvoiceDataService
+        # InvoiceDataService is imported from dashboard package at module level
+        if not INVOICE_DATA_AVAILABLE or InvoiceDataService is None:
+            return ""
         invoice_service = InvoiceDataService(
             aws_access_key=_aws_access_key,
             aws_secret_key=_aws_secret_key,
@@ -1514,13 +1540,15 @@ def main():
                     st.session_state.customer_data = loaded_data['customer']
                 if loaded_data['invoice'] is not None:
                     st.session_state.invoice_data = loaded_data['invoice']
+                if loaded_data['budtender'] is not None:
+                    st.session_state.budtender_data = loaded_data['budtender']
 
                 st.session_state.last_s3_hash = current_s3_hash
 
             # Load DynamoDB invoice data if hash changed
             if dynamo_needs_refresh and current_dynamo_hash:
                 try:
-                    from invoice_extraction import InvoiceDataService
+                    # InvoiceDataService imported from dashboard package at top of file
                     invoice_service = InvoiceDataService(
                         aws_access_key=aws_access_key,
                         aws_secret_key=aws_secret_key,
@@ -1570,6 +1598,8 @@ def main():
                 if st.session_state.dynamo_invoice_count > 0:
                     invoice_source = f" ({st.session_state.dynamo_invoice_count} from DynamoDB)"
                 loaded_items.append(f"Invoices ({len(st.session_state.invoice_data)} records{invoice_source})")
+            if st.session_state.budtender_data is not None:
+                loaded_items.append(f"Budtenders ({len(st.session_state.budtender_data)} records)")
             if st.session_state.brand_product_mapping:
                 loaded_items.append(f"Mappings ({len(st.session_state.brand_product_mapping)} brands)")
 
@@ -6695,6 +6725,8 @@ def render_data_center(s3_manager, processor):
                     st.session_state.customer_data = loaded_data['customer']
                 if loaded_data['invoice'] is not None:
                     st.session_state.invoice_data = loaded_data['invoice']
+                if loaded_data['budtender'] is not None:
+                    st.session_state.budtender_data = loaded_data['budtender']
 
                 # Also reload mappings
                 st.session_state.brand_product_mapping = s3_manager.load_brand_product_mapping()
@@ -6711,6 +6743,8 @@ def render_data_center(s3_manager, processor):
                     loaded_items.append(f"Customers ({len(st.session_state.customer_data)})")
                 if st.session_state.invoice_data is not None:
                     loaded_items.append(f"Invoices ({len(st.session_state.invoice_data)})")
+                if st.session_state.budtender_data is not None:
+                    loaded_items.append(f"Budtenders ({len(st.session_state.budtender_data)})")
 
                 if loaded_items:
                     st.success(f"✅ Reloaded: {', '.join(loaded_items)}")
