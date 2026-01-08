@@ -1561,10 +1561,6 @@ def main():
             "💡 Recommendations",
         ]
 
-        # Add QR Code page if available
-        if QR_AVAILABLE:
-            nav_options.append("📱 QR Code Portal")
-
         nav_options.append("🗄️ Data Center")
 
         # Handle navigation override from dashboard buttons
@@ -1604,12 +1600,6 @@ def main():
 
     elif page == "💡 Recommendations":
         render_recommendations(st.session_state, analytics)
-
-    elif page == "📱 QR Code Portal":
-        if QR_AVAILABLE:
-            render_qr_page()
-        else:
-            st.error("QR Code integration module not found. Make sure `qr_integration.py` is in the same directory.")
 
     elif page == "🗄️ Data Center":
         render_data_center(s3_manager, processor)
@@ -5208,6 +5198,8 @@ def render_data_center(s3_manager, processor):
         tab_names.append("🔬 Industry Research")
     if SEO_AVAILABLE:
         tab_names.append("🔍 SEO Analysis")
+    if QR_AVAILABLE:
+        tab_names.append("📱 QR Portal")
 
     tabs = st.tabs(tab_names)
 
@@ -5226,6 +5218,10 @@ def render_data_center(s3_manager, processor):
     seo_tab = None
     if SEO_AVAILABLE:
         seo_tab = tabs[tab_idx]; tab_idx += 1
+
+    qr_tab = None
+    if QR_AVAILABLE:
+        qr_tab = tabs[tab_idx]; tab_idx += 1
 
     # =========================================================================
     # SALES DATA TAB - Sales, Brand, and Product uploads
@@ -5699,6 +5695,16 @@ def render_data_center(s3_manager, processor):
                 render_seo_page()
             else:
                 st.error("SEO integration module not found.")
+
+    # =========================================================================
+    # QR PORTAL TAB (if available)
+    # =========================================================================
+    if qr_tab is not None:
+        with qr_tab:
+            if QR_AVAILABLE:
+                render_qr_page()
+            else:
+                st.error("QR Code integration module not found.")
 
     # Data management section
     st.markdown("---")
