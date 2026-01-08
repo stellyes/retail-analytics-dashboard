@@ -25,7 +25,7 @@ ENV/
 *.csv
 *.json
 *.pdf
-data/
+# Note: /data/ would ignore root data folder but dashboard/data/ is code, not data files
 
 # OS
 .DS_Store
