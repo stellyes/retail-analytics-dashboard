@@ -201,9 +201,9 @@ def render_research_page():
     # Initialize viewer
     viewer = ResearchFindingsViewer()
 
-    # Import manual research functionality
+    # Import manual research functionality (relative import within dashboard.services package)
     try:
-        from manual_research_integration import (
+        from .manual_research_integration import (
             render_upload_tab,
             render_analysis_tab,
             render_findings_tab,
@@ -212,8 +212,9 @@ def render_research_page():
             MonthlyResearchSummarizer
         )
         manual_research_available = True
-    except ImportError:
+    except ImportError as e:
         manual_research_available = False
+        st.warning(f"Manual research module not available: {e}")
 
     # Tabs for different views
     if manual_research_available:

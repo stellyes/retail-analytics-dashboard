@@ -252,6 +252,43 @@ def process_invoices(uploaded_files: List, parser: TreezInvoiceParser,
     # Results container
     results_container = st.container()
 
+    # PERFORMANCE OPTIMIZATION: Load existing invoice numbers once for duplicate checking
+    # This avoids doing a full table scan for each uploaded invoice
+    status_text.text("Loading existing invoices for duplicate check...")
+    existing_invoices = {}  # {invoice_number: [{'store_key': str, 'invoice_id': str}, ...]}
+    try:
+        invoices_table = invoice_service.dynamodb.Table(invoice_service.invoices_table_name)
+        response = invoices_table.scan(
+            ProjectionExpression='invoice_number, invoice_id, receiver, customer_name'
+        )
+        items = response.get('Items', [])
+        # Handle pagination
+        while 'LastEvaluatedKey' in response:
+            response = invoices_table.scan(
+                ProjectionExpression='invoice_number, invoice_id, receiver, customer_name',
+                ExclusiveStartKey=response['LastEvaluatedKey']
+            )
+            items.extend(response.get('Items', []))
+
+        # Build lookup dictionary
+        for item in items:
+            inv_num = item.get('invoice_number')
+            if inv_num:
+                store_name = item.get('receiver') or item.get('customer_name') or ''
+                if 'barbary' in store_name.lower():
+                    store_key = 'Barbary Coast'
+                elif 'grass' in store_name.lower():
+                    store_key = 'Grass Roots'
+                else:
+                    store_key = store_name
+
+                if inv_num not in existing_invoices:
+                    existing_invoices[inv_num] = []
+                existing_invoices[inv_num].append({'store_key': store_key, 'invoice_id': item.get('invoice_id')})
+    except Exception as e:
+        # If scan fails, continue without duplicate checking
+        st.warning(f"Could not load existing invoices for duplicate check: {e}")
+
     for idx, uploaded_file in enumerate(uploaded_files):
         filename = uploaded_file.name
         status_text.text(f"Processing {idx + 1}/{len(uploaded_files)}: {filename}")
@@ -283,8 +320,7 @@ def process_invoices(uploaded_files: List, parser: TreezInvoiceParser,
                         'stage': 'extraction'
                     })
                 else:
-                    # Check for duplicates before storing
-                    # Duplicates are defined as same invoice_number + same store
+                    # Check for duplicates using pre-loaded data (O(1) lookup instead of O(n) scan)
                     invoice_number = invoice_data.get('invoice_number')
                     store_name = invoice_data.get('receiver') or invoice_data.get('customer_name') or ''
                     is_duplicate = False
@@ -297,35 +333,21 @@ def process_invoices(uploaded_files: List, parser: TreezInvoiceParser,
                     else:
                         store_key = store_name
 
-                    if invoice_number:
-                        try:
-                            # Query DynamoDB to check if invoice already exists for THIS store
-                            invoices_table = invoice_service.dynamodb.Table(invoice_service.invoices_table_name)
-                            response = invoices_table.scan(
-                                FilterExpression='invoice_number = :inv_num',
-                                ExpressionAttributeValues={':inv_num': invoice_number}
-                            )
-                            # Check if any matching invoice is for the same store
-                            if response.get('Items'):
-                                for existing_inv in response['Items']:
-                                    existing_store = existing_inv.get('receiver') or existing_inv.get('customer_name') or ''
-                                    # Normalize existing store name
-                                    if 'barbary' in existing_store.lower():
-                                        existing_store_key = 'Barbary Coast'
-                                    elif 'grass' in existing_store.lower():
-                                        existing_store_key = 'Grass Roots'
-                                    else:
-                                        existing_store_key = existing_store
-
-                                    # Only mark as duplicate if same store
-                                    if existing_store_key == store_key:
-                                        is_duplicate = True
-                                        break
-                        except:
-                            pass  # If check fails, proceed with storing
+                    # Fast duplicate check using pre-loaded dictionary
+                    if invoice_number and invoice_number in existing_invoices:
+                        for existing in existing_invoices[invoice_number]:
+                            if existing['store_key'] == store_key:
+                                is_duplicate = True
+                                break
 
                     # Store in DynamoDB
                     success = invoice_service.store_invoice(invoice_data)
+
+                    # Add to existing_invoices dict so subsequent uploads in same batch are checked
+                    if success and invoice_number:
+                        if invoice_number not in existing_invoices:
+                            existing_invoices[invoice_number] = []
+                        existing_invoices[invoice_number].append({'store_key': store_key, 'invoice_id': invoice_data.get('invoice_id')})
 
                     if success:
                         result_item = {
