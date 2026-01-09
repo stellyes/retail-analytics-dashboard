@@ -6144,14 +6144,6 @@ def render_data_center(s3_manager, processor):
             else:
                 st.info("📤 No invoice data loaded yet. Upload invoices below to get started.")
 
-        st.markdown("""
-        **Features:**
-        - 🚀 **Auto-extraction** - Parses Treez invoices without Claude API costs
-        - 💾 **DynamoDB storage** - Fast, queryable invoice database
-        - 🤖 **Claude analytics** - AI-powered insights on your purchasing data
-        - 💰 **Cost-efficient** - Saves $50-200 per 100 invoices vs traditional extraction
-        """)
-
         # Use the integrated invoice upload UI with all tabs (Upload, View Data, Date Review)
         # render_full_invoice_section already imported from dashboard package
         if INVOICE_UPLOAD_AVAILABLE and render_full_invoice_section:
