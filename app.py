@@ -1530,17 +1530,17 @@ def main():
                 # Load all CSV data from S3 (cached by hash)
                 loaded_data = _get_cached_s3_data(current_s3_hash, s3_manager, processor)
 
-                if loaded_data['sales'] is not None:
+                if loaded_data.get('sales') is not None:
                     st.session_state.sales_data = loaded_data['sales']
-                if loaded_data['brand'] is not None:
+                if loaded_data.get('brand') is not None:
                     st.session_state.brand_data = loaded_data['brand']
-                if loaded_data['product'] is not None:
+                if loaded_data.get('product') is not None:
                     st.session_state.product_data = loaded_data['product']
-                if loaded_data['customer'] is not None:
+                if loaded_data.get('customer') is not None:
                     st.session_state.customer_data = loaded_data['customer']
-                if loaded_data['invoice'] is not None:
+                if loaded_data.get('invoice') is not None:
                     st.session_state.invoice_data = loaded_data['invoice']
-                if loaded_data['budtender'] is not None:
+                if loaded_data.get('budtender') is not None:
                     st.session_state.budtender_data = loaded_data['budtender']
 
                 st.session_state.last_s3_hash = current_s3_hash
@@ -6707,17 +6707,17 @@ def render_data_center(s3_manager, processor):
                 # Reload all data from S3
                 loaded_data = s3_manager.load_all_data_from_s3(processor)
 
-                if loaded_data['sales'] is not None:
+                if loaded_data.get('sales') is not None:
                     st.session_state.sales_data = loaded_data['sales']
-                if loaded_data['brand'] is not None:
+                if loaded_data.get('brand') is not None:
                     st.session_state.brand_data = loaded_data['brand']
-                if loaded_data['product'] is not None:
+                if loaded_data.get('product') is not None:
                     st.session_state.product_data = loaded_data['product']
-                if loaded_data['customer'] is not None:
+                if loaded_data.get('customer') is not None:
                     st.session_state.customer_data = loaded_data['customer']
-                if loaded_data['invoice'] is not None:
+                if loaded_data.get('invoice') is not None:
                     st.session_state.invoice_data = loaded_data['invoice']
-                if loaded_data['budtender'] is not None:
+                if loaded_data.get('budtender') is not None:
                     st.session_state.budtender_data = loaded_data['budtender']
 
                 # Also reload mappings
