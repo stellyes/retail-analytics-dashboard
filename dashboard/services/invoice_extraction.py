@@ -1429,8 +1429,15 @@ class InvoiceDataService:
         if not BOTO3_AVAILABLE:
             raise ImportError("boto3 required. Install with: pip install boto3")
 
-        # Initialize boto3 client
-        session_kwargs = {'region_name': region}
+        # Initialize boto3 client with timeout configuration
+        from botocore.config import Config
+        boto_config = Config(
+            connect_timeout=5,
+            read_timeout=10,
+            retries={'max_attempts': 2}
+        )
+
+        session_kwargs = {'region_name': region, 'config': boto_config}
         if aws_access_key and aws_secret_key:
             session_kwargs['aws_access_key_id'] = aws_access_key
             session_kwargs['aws_secret_access_key'] = aws_secret_key

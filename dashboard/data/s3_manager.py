@@ -64,11 +64,19 @@ class S3DataManager:
             self.bucket_name = bucket
 
             if access_key and secret_key:
+                from botocore.config import Config
+                # Configure timeouts to prevent hanging on network issues
+                boto_config = Config(
+                    connect_timeout=5,
+                    read_timeout=10,
+                    retries={'max_attempts': 2}
+                )
                 self.s3_client = boto3.client(
                     's3',
                     aws_access_key_id=access_key,
                     aws_secret_access_key=secret_key,
-                    region_name=region
+                    region_name=region,
+                    config=boto_config
                 )
             else:
                 self.connection_error = "Missing AWS credentials"

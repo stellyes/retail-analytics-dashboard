@@ -386,11 +386,19 @@ class S3DataManager:
             self.bucket_name = bucket_name
             
             if aws_access_key and aws_secret_key:
+                from botocore.config import Config
+                # Configure timeouts to prevent hanging on network issues
+                boto_config = Config(
+                    connect_timeout=5,
+                    read_timeout=10,
+                    retries={'max_attempts': 2}
+                )
                 self.s3_client = boto3.client(
                     's3',
                     aws_access_key_id=aws_access_key,
                     aws_secret_access_key=aws_secret_key,
-                    region_name=aws_region
+                    region_name=aws_region,
+                    config=boto_config
                 )
             else:
                 self.connection_error = "Missing AWS credentials (access_key_id or secret_access_key)"
@@ -4357,7 +4365,7 @@ def _get_reports_s3_client():
         return None
 
 
-def _save_ai_report(question: str, answer: str, model_type: str, data_sources: list) -> bool:
+def _save_ai_report(question: str, answer: str, model_type: str, data_sources: list, report_category: str = "General AI Reports") -> bool:
     """
     Save an AI analysis report to S3.
 
@@ -4366,6 +4374,7 @@ def _save_ai_report(question: str, answer: str, model_type: str, data_sources: l
         answer: The AI-generated answer
         model_type: 'fast' or 'deep'
         data_sources: List of data sources used
+        report_category: Category for organizing reports - "General AI Reports" or "Comprehensive Analyses"
 
     Returns:
         True if saved successfully, False otherwise
@@ -4393,7 +4402,8 @@ def _save_ai_report(question: str, answer: str, model_type: str, data_sources: l
             'answer': answer,
             'model_type': model_type,
             'model_name': 'Claude Opus (Deep Insights)' if model_type == 'deep' else 'Claude Sonnet (Fast Insights)',
-            'data_sources': data_sources
+            'data_sources': data_sources,
+            'report_category': report_category
         }
 
         # Save to S3 with date-based path
@@ -4872,6 +4882,14 @@ def render_recommendations(state, analytics):
                     analysis = claude.analyze_sales_trends(sales_summary)
                     st.session_state.ai_analysis_title = "📊 Sales Analysis"
                     st.session_state.ai_analysis_result = analysis
+                    # Save to Past Reports under General AI Reports
+                    _save_ai_report(
+                        question="📊 Sales Analysis",
+                        answer=analysis,
+                        model_type='fast',
+                        data_sources=["📊 Sales Data"],
+                        report_category="General AI Reports"
+                    )
                     st.rerun()
 
         with col2:
@@ -4883,6 +4901,14 @@ def render_recommendations(state, analytics):
                         analysis = claude.analyze_brand_performance(brand_summary, brand_by_category)
                         st.session_state.ai_analysis_title = "🏷️ Brand Analysis"
                         st.session_state.ai_analysis_result = analysis
+                        # Save to Past Reports under General AI Reports
+                        _save_ai_report(
+                            question="🏷️ Brand Analysis",
+                            answer=analysis,
+                            model_type='fast',
+                            data_sources=["🏷️ Brand Data"],
+                            report_category="General AI Reports"
+                        )
                         st.rerun()
 
         with col3:
@@ -4894,6 +4920,14 @@ def render_recommendations(state, analytics):
                         analysis = claude.analyze_category_performance(brand_by_category, brand_summary)
                         st.session_state.ai_analysis_title = "📦 Category Analysis"
                         st.session_state.ai_analysis_result = analysis
+                        # Save to Past Reports under General AI Reports
+                        _save_ai_report(
+                            question="📦 Category Analysis",
+                            answer=analysis,
+                            model_type='fast',
+                            data_sources=["📦 Category Data"],
+                            report_category="General AI Reports"
+                        )
                         st.rerun()
 
         with col4:
@@ -4914,6 +4948,14 @@ def render_recommendations(state, analytics):
                         analysis = claude.generate_deal_recommendations(slow_movers, high_margin)
                         st.session_state.ai_analysis_title = "🎯 Deal Recommendations"
                         st.session_state.ai_analysis_result = analysis
+                        # Save to Past Reports under General AI Reports
+                        _save_ai_report(
+                            question="🎯 Deal Recommendations",
+                            answer=analysis,
+                            model_type='fast',
+                            data_sources=["🏷️ Brand Data"],
+                            report_category="General AI Reports"
+                        )
                         st.rerun()
 
         # Row 2: Customer analytics (if customer data available)
@@ -4926,6 +4968,14 @@ def render_recommendations(state, analytics):
                         analysis = claude.analyze_customer_segments(customer_summary, sales_summary)
                         st.session_state.ai_analysis_title = "👥 Customer Analysis"
                         st.session_state.ai_analysis_result = analysis
+                        # Save to Past Reports under General AI Reports
+                        _save_ai_report(
+                            question="👥 Customer Analysis",
+                            answer=analysis,
+                            model_type='fast',
+                            data_sources=["👥 Customer Data"],
+                            report_category="General AI Reports"
+                        )
                         st.rerun()
 
             with col6:
@@ -4938,6 +4988,14 @@ def render_recommendations(state, analytics):
                         )
                         st.session_state.ai_analysis_title = "🔄 Integrated Business Insights"
                         st.session_state.ai_analysis_result = analysis
+                        # Save to Past Reports under General AI Reports
+                        _save_ai_report(
+                            question="🔄 Integrated Business Insights",
+                            answer=analysis,
+                            model_type='fast',
+                            data_sources=["📊 Sales", "👥 Customers", "🏷️ Brands"],
+                            report_category="General AI Reports"
+                        )
                         st.rerun()
         else:
             st.caption("💡 Upload customer data to unlock customer analytics and integrated insights")
@@ -4980,6 +5038,14 @@ Keep analysis concise and actionable."""
 
                         st.session_state.ai_analysis_title = "🏭 Vendor Spending Analysis"
                         st.session_state.ai_analysis_result = analysis
+                        # Save to Past Reports under General AI Reports
+                        _save_ai_report(
+                            question="🏭 Vendor Spending Analysis",
+                            answer=analysis,
+                            model_type='fast',
+                            data_sources=["📦 Invoice Data"],
+                            report_category="General AI Reports"
+                        )
                         st.rerun()
 
             with inv_col2:
@@ -5025,6 +5091,14 @@ Keep analysis practical and data-driven."""
 
                         st.session_state.ai_analysis_title = "📦 Purchase Pattern Analysis"
                         st.session_state.ai_analysis_result = analysis
+                        # Save to Past Reports under General AI Reports
+                        _save_ai_report(
+                            question="📦 Purchase Pattern Analysis",
+                            answer=analysis,
+                            model_type='fast',
+                            data_sources=["📦 Invoice Data", "🛒 Purchases"],
+                            report_category="General AI Reports"
+                        )
                         st.rerun()
 
             with inv_col3:
@@ -5074,6 +5148,14 @@ Focus on actionable pricing and margin insights."""
 
                         st.session_state.ai_analysis_title = "💰 Margin Optimization Analysis"
                         st.session_state.ai_analysis_result = analysis
+                        # Save to Past Reports under General AI Reports
+                        _save_ai_report(
+                            question="💰 Margin Optimization Analysis",
+                            answer=analysis,
+                            model_type='fast',
+                            data_sources=["📦 Invoice Data", "📊 Sales"],
+                            report_category="General AI Reports"
+                        )
                         st.rerun()
         else:
             st.caption("💡 Upload invoices to unlock purchasing analytics (vendor analysis, purchase patterns, margin optimization)")
@@ -5120,6 +5202,14 @@ Focus on actionable recommendations for Barbary Coast and Grass Roots dispensari
 
                             st.session_state.ai_analysis_title = "🔬 Industry Research Insights"
                             st.session_state.ai_analysis_result = analysis
+                            # Save to Past Reports under General AI Reports
+                            _save_ai_report(
+                                question="🔬 Industry Research Insights",
+                                answer=analysis,
+                                model_type='fast',
+                                data_sources=["🔬 Research"],
+                                report_category="General AI Reports"
+                            )
                             st.rerun()
                 else:
                     st.caption("💡 Upload research documents to unlock industry insights")
@@ -5165,6 +5255,14 @@ Focus on actionable improvements that will drive more organic traffic and local 
 
                             st.session_state.ai_analysis_title = "🔍 SEO Performance Analysis"
                             st.session_state.ai_analysis_result = analysis
+                            # Save to Past Reports under General AI Reports
+                            _save_ai_report(
+                                question="🔍 SEO Performance Analysis",
+                                answer=analysis,
+                                model_type='fast',
+                                data_sources=["🔍 SEO"],
+                                report_category="General AI Reports"
+                            )
                             st.rerun()
                 else:
                     st.caption("💡 Run SEO analysis to unlock website insights")
@@ -5362,12 +5460,14 @@ Focus on actionable improvements that will drive more organic traffic and local 
                 answer = claude.answer_business_question(question, context, use_deep_thinking=use_deep_thinking)
 
                 # Save the report to S3
+                # Custom queries go under "Comprehensive Analyses" section
                 model_type = 'deep' if use_deep_thinking else 'fast'
                 report_saved = _save_ai_report(
                     question=question,
                     answer=answer,
                     model_type=model_type,
-                    data_sources=data_sources
+                    data_sources=data_sources,
+                    report_category="Comprehensive Analyses"
                 )
 
                 # Store result in session state so it persists across tab switches
@@ -5417,14 +5517,20 @@ Focus on actionable improvements that will drive more organic traffic and local 
             st.success(f"Found {len(reports)} saved report(s)")
 
             # Filter options
-            col1, col2 = st.columns(2)
+            col1, col2, col3 = st.columns(3)
             with col1:
+                category_filter = st.selectbox(
+                    "Filter by category:",
+                    options=["All", "General AI Reports", "Comprehensive Analyses"],
+                    key="report_category_filter"
+                )
+            with col2:
                 model_filter = st.selectbox(
                     "Filter by type:",
                     options=["All", "Deep Insights", "Fast Insights"],
                     key="report_model_filter"
                 )
-            with col2:
+            with col3:
                 # Get unique dates for filtering
                 unique_dates = sorted(set(r.get('date', '') for r in reports), reverse=True)
                 date_filter = st.selectbox(
@@ -5435,6 +5541,8 @@ Focus on actionable improvements that will drive more organic traffic and local 
 
             # Apply filters
             filtered_reports = reports
+            if category_filter != "All":
+                filtered_reports = [r for r in filtered_reports if r.get('report_category', 'General AI Reports') == category_filter]
             if model_filter == "Deep Insights":
                 filtered_reports = [r for r in filtered_reports if r.get('model_type') == 'deep']
             elif model_filter == "Fast Insights":
@@ -5443,63 +5551,130 @@ Focus on actionable improvements that will drive more organic traffic and local 
             if date_filter != "All":
                 filtered_reports = [r for r in filtered_reports if r.get('date') == date_filter]
 
+            # Group reports by category
+            general_reports = [r for r in filtered_reports if r.get('report_category', 'General AI Reports') == 'General AI Reports']
+            comprehensive_reports = [r for r in filtered_reports if r.get('report_category') == 'Comprehensive Analyses']
+
             st.markdown(f"**Showing {len(filtered_reports)} report(s)**")
             st.markdown("---")
 
-            # Display reports
-            for i, report in enumerate(filtered_reports):
-                report_date = report.get('date', 'Unknown')
-                report_time = report.get('time', '')
-                model_name = report.get('model_name', 'Unknown')
-                model_type = report.get('model_type', 'fast')
-                question = report.get('question', 'No question recorded')
-                answer = report.get('answer', 'No answer recorded')
-                report_id = report.get('report_id', '')
-                timestamp = report.get('timestamp', '')
+            # Display reports grouped by category
+            # Comprehensive Analyses section (custom user queries)
+            if comprehensive_reports:
+                st.markdown("### 🧠 Comprehensive Analyses")
+                st.caption("Custom queries and deep thinking reports")
+                for report in comprehensive_reports:
+                    report_date = report.get('date', 'Unknown')
+                    report_time = report.get('time', '')
+                    model_name = report.get('model_name', 'Unknown')
+                    model_type = report.get('model_type', 'fast')
+                    question = report.get('question', 'No question recorded')
+                    answer = report.get('answer', 'No answer recorded')
+                    report_id = report.get('report_id', '')
+                    timestamp = report.get('timestamp', '')
 
-                # Model badge
-                model_badge = "🧠" if model_type == 'deep' else "⚡"
+                    # Model badge
+                    model_badge = "🧠" if model_type == 'deep' else "⚡"
 
-                with st.expander(f"{model_badge} {report_date} {report_time} - {question[:60]}{'...' if len(question) > 60 else ''}", expanded=False):
-                    # Report header
-                    st.markdown(f"**Date:** {report_date} at {report_time}")
-                    st.markdown(f"**Model:** {model_name}")
+                    with st.expander(f"{model_badge} {report_date} {report_time} - {question[:60]}{'...' if len(question) > 60 else ''}", expanded=False):
+                        # Report header
+                        st.markdown(f"**Date:** {report_date} at {report_time}")
+                        st.markdown(f"**Model:** {model_name}")
 
-                    # Data sources used
-                    data_sources = report.get('data_sources', [])
-                    if data_sources:
-                        st.markdown(f"**Data Sources:** {' | '.join(data_sources)}")
+                        # Data sources used
+                        data_sources = report.get('data_sources', [])
+                        if data_sources:
+                            st.markdown(f"**Data Sources:** {' | '.join(data_sources)}")
 
-                    st.markdown("---")
+                        st.markdown("---")
 
-                    # Question
-                    st.markdown("**Question:**")
-                    st.info(question)
+                        # Question
+                        st.markdown("**Question:**")
+                        st.info(question)
 
-                    # Answer (print-friendly format)
-                    st.markdown("**Analysis:**")
-                    st.markdown(answer)
+                        # Answer (print-friendly format)
+                        st.markdown("**Analysis:**")
+                        st.markdown(answer)
 
-                    # Action buttons
-                    col1, col2, col3 = st.columns([1, 1, 2])
-                    with col1:
-                        # Copy to clipboard button (using markdown workaround)
-                        if st.button("📋 Copy", key=f"copy_{report_id}"):
-                            st.code(f"Question: {question}\n\nAnalysis:\n{answer}", language=None)
-                            st.caption("Select and copy the text above")
+                        # Action buttons
+                        col1, col2, col3 = st.columns([1, 1, 2])
+                        with col1:
+                            # Copy to clipboard button (using markdown workaround)
+                            if st.button("📋 Copy", key=f"copy_comp_{report_id}"):
+                                st.code(f"Question: {question}\n\nAnalysis:\n{answer}", language=None)
+                                st.caption("Select and copy the text above")
 
-                    with col2:
-                        # Delete button
-                        if st.button("🗑️ Delete", key=f"delete_{report_id}"):
-                            if _delete_ai_report(report_id, timestamp):
-                                st.success("Report deleted")
-                                st.rerun()
-                            else:
-                                st.error("Failed to delete report")
+                        with col2:
+                            # Delete button
+                            if st.button("🗑️ Delete", key=f"delete_comp_{report_id}"):
+                                if _delete_ai_report(report_id, timestamp):
+                                    st.success("Report deleted")
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to delete report")
 
-                    with col3:
-                        # Print instructions
-                        st.caption("💡 To print: Expand report → Right-click → Print")
+                        with col3:
+                            # Print instructions
+                            st.caption("💡 To print: Expand report → Right-click → Print")
+                st.markdown("---")
+
+            # General AI Reports section (button-triggered analyses)
+            if general_reports:
+                st.markdown("### ⚡ General AI Reports")
+                st.caption("Pre-defined analysis reports from dashboard buttons")
+                for report in general_reports:
+                    report_date = report.get('date', 'Unknown')
+                    report_time = report.get('time', '')
+                    model_name = report.get('model_name', 'Unknown')
+                    model_type = report.get('model_type', 'fast')
+                    question = report.get('question', 'No question recorded')
+                    answer = report.get('answer', 'No answer recorded')
+                    report_id = report.get('report_id', '')
+                    timestamp = report.get('timestamp', '')
+
+                    # Model badge
+                    model_badge = "🧠" if model_type == 'deep' else "⚡"
+
+                    with st.expander(f"{model_badge} {report_date} {report_time} - {question[:60]}{'...' if len(question) > 60 else ''}", expanded=False):
+                        # Report header
+                        st.markdown(f"**Date:** {report_date} at {report_time}")
+                        st.markdown(f"**Model:** {model_name}")
+
+                        # Data sources used
+                        data_sources = report.get('data_sources', [])
+                        if data_sources:
+                            st.markdown(f"**Data Sources:** {' | '.join(data_sources)}")
+
+                        st.markdown("---")
+
+                        # Question/Title
+                        st.markdown("**Report Type:**")
+                        st.info(question)
+
+                        # Answer (print-friendly format)
+                        st.markdown("**Analysis:**")
+                        st.markdown(answer)
+
+                        # Action buttons
+                        col1, col2, col3 = st.columns([1, 1, 2])
+                        with col1:
+                            # Copy to clipboard button (using markdown workaround)
+                            if st.button("📋 Copy", key=f"copy_gen_{report_id}"):
+                                st.code(f"Report: {question}\n\nAnalysis:\n{answer}", language=None)
+                                st.caption("Select and copy the text above")
+
+                        with col2:
+                            # Delete button
+                            if st.button("🗑️ Delete", key=f"delete_gen_{report_id}"):
+                                if _delete_ai_report(report_id, timestamp):
+                                    st.success("Report deleted")
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to delete report")
+
+                        with col3:
+                            # Print instructions
+                            st.caption("💡 To print: Expand report → Right-click → Print")
 
 
 def render_brand_product_mapping(state, s3_manager):
