@@ -560,6 +560,16 @@ class S3DataManager:
             except ClientError:
                 hash_parts.append("mapping:none")
 
+            # Also include budtender data file hash (stored at data/budtender_performance.csv)
+            try:
+                budtender_response = self.s3_client.head_object(
+                    Bucket=self.bucket_name,
+                    Key="data/budtender_performance.csv"
+                )
+                hash_parts.append(f"budtender:{budtender_response['ETag']}")
+            except ClientError:
+                hash_parts.append("budtender:none")
+
             # Create combined hash
             combined = "|".join(hash_parts)
             return hashlib.md5(combined.encode()).hexdigest()
@@ -745,8 +755,10 @@ class S3DataManager:
                         )
 
             # Load and merge budtender data
+            budtender_dfs = []
+
+            # First check for budtender files in raw-uploads
             if budtender_files:
-                budtender_dfs = []
                 for f in budtender_files:
                     try:
                         df = self.download_file(f)
@@ -758,14 +770,26 @@ class S3DataManager:
                         print(f"Error loading {f}: {e}")
                         continue
 
-                if budtender_dfs:
-                    result['budtender'] = pd.concat(budtender_dfs, ignore_index=True)
-                    # Remove duplicates based on Employee and Product
-                    if 'Employee' in result['budtender'].columns and 'Product' in result['budtender'].columns:
-                        result['budtender'] = result['budtender'].drop_duplicates(
-                            subset=['Employee', 'Product', 'Store_ID'],
-                            keep='last'
-                        )
+            # Also check for budtender data at data/budtender_performance.csv (legacy/upload location)
+            try:
+                legacy_budtender = self.download_file("data/budtender_performance.csv")
+                if legacy_budtender is not None and not legacy_budtender.empty:
+                    # Add Store_ID if not present
+                    if 'Store_ID' not in legacy_budtender.columns:
+                        legacy_budtender['Store_ID'] = 'combined'
+                    budtender_dfs.append(legacy_budtender)
+            except Exception as e:
+                # File may not exist, that's OK
+                pass
+
+            if budtender_dfs:
+                result['budtender'] = pd.concat(budtender_dfs, ignore_index=True)
+                # Remove duplicates based on Employee and Product
+                if 'Employee' in result['budtender'].columns and 'Product' in result['budtender'].columns:
+                    result['budtender'] = result['budtender'].drop_duplicates(
+                        subset=['Employee', 'Product', 'Store_ID'],
+                        keep='last'
+                    )
 
         except Exception as e:
             print(f"Error loading data from S3: {e}")
