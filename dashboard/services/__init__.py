@@ -11,6 +11,34 @@ except ImportError:
     CLAUDE_AVAILABLE = False
     ClaudeAnalytics = None
 
+# Prompt optimization for Claude API
+try:
+    from .prompt_optimizer import (
+        PromptOptimizer,
+        PromptConfig,
+        PromptTemplates,
+        TokenEstimator,
+        ContextCompressor,
+        ModelSelector,
+        ResponseCache,
+        ClaudeModel,
+        optimize_prompt,
+        get_cached_or_call,
+    )
+    PROMPT_OPTIMIZER_AVAILABLE = True
+except ImportError:
+    PROMPT_OPTIMIZER_AVAILABLE = False
+    PromptOptimizer = None
+    PromptConfig = None
+    PromptTemplates = None
+    TokenEstimator = None
+    ContextCompressor = None
+    ModelSelector = None
+    ResponseCache = None
+    ClaudeModel = None
+    optimize_prompt = None
+    get_cached_or_call = None
+
 # Invoice extraction
 try:
     from .invoice_extraction import TreezInvoiceParser, InvoiceDataService
@@ -77,6 +105,7 @@ except ImportError:
 __all__ = [
     # Availability flags
     'CLAUDE_AVAILABLE',
+    'PROMPT_OPTIMIZER_AVAILABLE',
     'INVOICE_AVAILABLE',
     'INVOICE_UPLOAD_AVAILABLE',
     'RESEARCH_AVAILABLE',
@@ -86,6 +115,17 @@ __all__ = [
     'BUSINESS_CONTEXT_AVAILABLE',
     # Claude
     'ClaudeAnalytics',
+    # Prompt Optimization
+    'PromptOptimizer',
+    'PromptConfig',
+    'PromptTemplates',
+    'TokenEstimator',
+    'ContextCompressor',
+    'ModelSelector',
+    'ResponseCache',
+    'ClaudeModel',
+    'optimize_prompt',
+    'get_cached_or_call',
     # Invoice
     'TreezInvoiceParser',
     'InvoiceDataService',

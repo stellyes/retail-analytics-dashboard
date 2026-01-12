@@ -1,6 +1,7 @@
 """
 Claude AI Integration Module
 Optional module for AI-powered analytics and recommendations using Anthropic's Claude API.
+Includes prompt optimization and response caching for cost efficiency.
 """
 
 import os
@@ -13,6 +14,28 @@ try:
     ANTHROPIC_AVAILABLE = True
 except ImportError:
     ANTHROPIC_AVAILABLE = False
+
+# Import prompt optimization utilities
+try:
+    from .prompt_optimizer import (
+        PromptOptimizer,
+        ResponseCache,
+        TokenEstimator,
+        ContextCompressor,
+        ModelSelector,
+        ClaudeModel,
+        get_cached_or_call,
+    )
+    PROMPT_OPTIMIZER_AVAILABLE = True
+except ImportError:
+    PROMPT_OPTIMIZER_AVAILABLE = False
+    PromptOptimizer = None
+    ResponseCache = None
+    TokenEstimator = None
+    ContextCompressor = None
+    ModelSelector = None
+    ClaudeModel = None
+    get_cached_or_call = None
 
 # Try to import numpy/pandas for type checking
 try:
@@ -105,23 +128,37 @@ def safe_json_dumps(obj: Any, indent: int = 2) -> str:
 class ClaudeAnalytics:
     """
     Integrates Claude AI for advanced retail analytics and recommendations.
-    
+    Includes prompt optimization and response caching for cost efficiency.
+
     Usage:
         analyzer = ClaudeAnalytics()
         if analyzer.is_available():
             insights = analyzer.analyze_sales_trends(sales_data)
     """
-    
-    def __init__(self, api_key: Optional[str] = None):
-        """Initialize Claude client."""
+
+    def __init__(self, api_key: Optional[str] = None, enable_caching: bool = True):
+        """Initialize Claude client with optional caching."""
         self.client = None
         self.model = "claude-sonnet-4-20250514"  # Default to Sonnet 4
         self.init_error = None
-        
+        self.enable_caching = enable_caching
+
+        # Initialize optimization components
+        self._prompt_optimizer = None
+        self._token_estimator = None
+        self._context_compressor = None
+        self._model_selector = None
+
+        if PROMPT_OPTIMIZER_AVAILABLE:
+            self._prompt_optimizer = PromptOptimizer()
+            self._token_estimator = TokenEstimator()
+            self._context_compressor = ContextCompressor()
+            self._model_selector = ModelSelector()
+
         if not ANTHROPIC_AVAILABLE:
             self.init_error = "anthropic package not installed"
             return
-            
+
         key = api_key or os.environ.get("ANTHROPIC_API_KEY")
         if key:
             try:
@@ -130,6 +167,32 @@ class ClaudeAnalytics:
                 self.init_error = f"Failed to initialize Anthropic client: {e}"
         else:
             self.init_error = "No API key provided"
+
+    def _get_cached_response(self, prompt: str, model: str) -> Optional[str]:
+        """Check cache for existing response."""
+        if not self.enable_caching or not PROMPT_OPTIMIZER_AVAILABLE:
+            return None
+        try:
+            model_enum = ClaudeModel.SONNET if 'sonnet' in model.lower() else ClaudeModel.HAIKU
+            return ResponseCache.get(prompt, model_enum, ttl_hours=24)
+        except Exception:
+            return None
+
+    def _cache_response(self, prompt: str, model: str, response: str):
+        """Cache a response for future use."""
+        if not self.enable_caching or not PROMPT_OPTIMIZER_AVAILABLE:
+            return
+        try:
+            model_enum = ClaudeModel.SONNET if 'sonnet' in model.lower() else ClaudeModel.HAIKU
+            ResponseCache.set(prompt, model_enum, response)
+        except Exception:
+            pass
+
+    def _compress_context(self, data: dict, max_findings: int = 5) -> str:
+        """Compress context data to reduce token usage."""
+        if not PROMPT_OPTIMIZER_AVAILABLE or not self._context_compressor:
+            return safe_json_dumps(data)
+        return self._context_compressor.create_summary_context(data)
     
     def is_available(self) -> bool:
         """Check if Claude API is available and configured."""
@@ -141,22 +204,25 @@ class ClaudeAnalytics:
     
     def analyze_sales_trends(self, sales_summary: dict) -> str:
         """
-        Analyze sales data and provide insights.
-        
+        Analyze sales data and provide insights with caching.
+
         Args:
             sales_summary: Dictionary containing aggregated sales metrics
-        
+
         Returns:
             AI-generated analysis and recommendations
         """
         if not self.is_available():
             return f"Claude AI not configured: {self.init_error}"
-        
-        # Safely serialize the data
-        data_str = safe_json_dumps(sales_summary)
-        
+
+        # Compress context if optimizer available
+        if PROMPT_OPTIMIZER_AVAILABLE and self._context_compressor:
+            data_str = self._compress_context(sales_summary)
+        else:
+            data_str = safe_json_dumps(sales_summary)
+
         prompt = f"""You are a retail analytics expert for a cannabis dispensary operation.
-        
+
 Analyze the following sales data and provide actionable insights:
 
 {data_str}
@@ -170,19 +236,29 @@ Please provide:
 
 Keep your response concise and actionable. Use bullet points for clarity."""
 
+        # Check cache first
+        cached = self._get_cached_response(prompt, self.model)
+        if cached:
+            return cached
+
         try:
             message = self.client.messages.create(
                 model=self.model,
                 max_tokens=1024,
                 messages=[{"role": "user", "content": prompt}]
             )
-            return message.content[0].text
+            response = message.content[0].text
+
+            # Cache the response
+            self._cache_response(prompt, self.model, response)
+
+            return response
         except Exception as e:
             return f"Error analyzing data: {str(e)}"
     
     def analyze_brand_performance(self, brand_data: list, brand_by_category: dict = None) -> str:
         """
-        Analyze brand performance and suggest inventory decisions.
+        Analyze brand performance and suggest inventory decisions with caching.
 
         Args:
             brand_data: List of brand performance dictionaries
@@ -219,19 +295,29 @@ Please provide:
 
 Focus on actionable buying recommendations. Use specific brand names from the data."""
 
+        # Check cache first
+        cached = self._get_cached_response(prompt, self.model)
+        if cached:
+            return cached
+
         try:
             message = self.client.messages.create(
                 model=self.model,
                 max_tokens=1024,
                 messages=[{"role": "user", "content": prompt}]
             )
-            return message.content[0].text
+            response = message.content[0].text
+
+            # Cache the response
+            self._cache_response(prompt, self.model, response)
+
+            return response
         except Exception as e:
             return f"Error analyzing brands: {str(e)}"
 
     def analyze_category_performance(self, brand_by_category: dict, brand_summary: list = None) -> str:
         """
-        Analyze category performance and provide insights.
+        Analyze category performance and provide insights with caching.
 
         Args:
             brand_by_category: Dict mapping categories to brand performance data
@@ -268,40 +354,50 @@ Please provide:
 
 Focus on actionable category management recommendations with specific insights."""
 
+        # Check cache first
+        cached = self._get_cached_response(prompt, self.model)
+        if cached:
+            return cached
+
         try:
             message = self.client.messages.create(
                 model=self.model,
                 max_tokens=1024,
                 messages=[{"role": "user", "content": prompt}]
             )
-            return message.content[0].text
+            response = message.content[0].text
+
+            # Cache the response
+            self._cache_response(prompt, self.model, response)
+
+            return response
         except Exception as e:
             return f"Error analyzing categories: {str(e)}"
     
-    def generate_deal_recommendations(self, 
+    def generate_deal_recommendations(self,
                                        slow_movers: list,
                                        high_margin_items: list,
                                        seasonal_context: str = None) -> str:
         """
-        Generate promotional and deal recommendations.
-        
+        Generate promotional and deal recommendations with caching.
+
         Args:
             slow_movers: List of slow-moving inventory items
             high_margin_items: List of high-margin products for bundling
             seasonal_context: Optional context about upcoming seasons/holidays
-        
+
         Returns:
             AI-generated promotion recommendations
         """
         if not self.is_available():
             return f"Claude AI not configured: {self.init_error}"
-        
+
         context = seasonal_context or "Consider current market conditions"
-        
+
         # Safely serialize the data
         slow_movers_str = safe_json_dumps(slow_movers[:20] if len(slow_movers) > 20 else slow_movers)
         high_margin_str = safe_json_dumps(high_margin_items[:20] if len(high_margin_items) > 20 else high_margin_items)
-        
+
         prompt = f"""You are a retail promotions strategist for cannabis dispensaries.
 
 Context: {context}
@@ -321,19 +417,29 @@ Please recommend:
 
 Be specific with numbers and product names from the data provided."""
 
+        # Check cache first
+        cached = self._get_cached_response(prompt, self.model)
+        if cached:
+            return cached
+
         try:
             message = self.client.messages.create(
                 model=self.model,
                 max_tokens=1500,
                 messages=[{"role": "user", "content": prompt}]
             )
-            return message.content[0].text
+            response = message.content[0].text
+
+            # Cache the response
+            self._cache_response(prompt, self.model, response)
+
+            return response
         except Exception as e:
             return f"Error generating recommendations: {str(e)}"
     
     def analyze_customer_segments(self, customer_summary: dict, sales_data: dict = None) -> str:
         """
-        Analyze customer segmentation and demographics data.
+        Analyze customer segmentation and demographics data with caching.
 
         Args:
             customer_summary: Dictionary containing customer segment data
@@ -373,19 +479,29 @@ Please provide:
 Focus on actionable recommendations that can improve customer lifetime value and retention.
 Use specific numbers from the data when possible."""
 
+        # Check cache first
+        cached = self._get_cached_response(prompt, self.model)
+        if cached:
+            return cached
+
         try:
             message = self.client.messages.create(
                 model=self.model,
                 max_tokens=1500,
                 messages=[{"role": "user", "content": prompt}]
             )
-            return message.content[0].text
+            response = message.content[0].text
+
+            # Cache the response
+            self._cache_response(prompt, self.model, response)
+
+            return response
         except Exception as e:
             return f"Error analyzing customer data: {str(e)}"
 
     def generate_integrated_insights(self, sales_data: dict, customer_data: dict, brand_data: list = None) -> str:
         """
-        Generate integrated insights combining sales, customer, and brand data.
+        Generate integrated insights combining sales, customer, and brand data with caching.
 
         Args:
             sales_data: Sales performance summary
@@ -429,13 +545,23 @@ Please provide:
 Focus on insights that emerge from analyzing these data sources together, not separately.
 Be specific and data-driven with your recommendations."""
 
+        # Check cache first
+        cached = self._get_cached_response(prompt, self.model)
+        if cached:
+            return cached
+
         try:
             message = self.client.messages.create(
                 model=self.model,
                 max_tokens=2000,
                 messages=[{"role": "user", "content": prompt}]
             )
-            return message.content[0].text
+            response = message.content[0].text
+
+            # Cache the response
+            self._cache_response(prompt, self.model, response)
+
+            return response
         except Exception as e:
             return f"Error generating integrated insights: {str(e)}"
 

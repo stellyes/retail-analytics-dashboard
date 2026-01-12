@@ -28,6 +28,7 @@ from dashboard import (
     QR_AVAILABLE,
     BUSINESS_CONTEXT_AVAILABLE,
     INVOICE_UPLOAD_AVAILABLE,
+    PROMPT_OPTIMIZER_AVAILABLE,
     # Claude AI
     ClaudeAnalytics,
     # Invoice
@@ -49,6 +50,15 @@ from dashboard import (
     get_business_context_service,
     # Invoice Upload UI
     render_full_invoice_section,
+    # Optimized data loading
+    OptimizedDataLoader,
+    HashTracker,
+    get_s3_client,
+    get_data_loader,
+    # Unified cache management
+    get_cache_manager,
+    render_cache_stats,
+    CacheLevel,
 )
 
 # =============================================================================
@@ -350,14 +360,16 @@ def check_password():
 # =============================================================================
 
 class S3DataManager:
-    """Manages data persistence with AWS S3."""
-    
+    """Manages data persistence with AWS S3 with optimized caching."""
+
     def __init__(self):
         self.bucket_name = None
         self.s3_client = None
         self.connection_error = None
+        self._optimized_loader = None
+        self._cache_manager = None
         self._initialize_client()
-    
+
     def _initialize_client(self):
         """Initialize S3 client with credentials from environment or Streamlit secrets."""
         try:
@@ -366,7 +378,7 @@ class S3DataManager:
             aws_secret_key = os.environ.get("AWS_SECRET_ACCESS_KEY")
             aws_region = os.environ.get("AWS_DEFAULT_REGION", "us-west-2")
             bucket_name = os.environ.get("S3_BUCKET_NAME")
-            
+
             # Fall back to Streamlit secrets
             if not aws_access_key:
                 try:
@@ -378,13 +390,13 @@ class S3DataManager:
                 except Exception as e:
                     # Secrets not configured, will use IAM role or fail gracefully
                     pass
-            
+
             if not bucket_name:
                 self.connection_error = "No bucket_name configured in secrets.toml [aws] section"
                 return
-            
+
             self.bucket_name = bucket_name
-            
+
             if aws_access_key and aws_secret_key:
                 from botocore.config import Config
                 # Configure timeouts to prevent hanging on network issues
@@ -400,10 +412,13 @@ class S3DataManager:
                     region_name=aws_region,
                     config=boto_config
                 )
+                # Initialize optimized data loader with caching
+                self._optimized_loader = get_data_loader(bucket_name, ttl=3600)
+                self._cache_manager = get_cache_manager()
             else:
                 self.connection_error = "Missing AWS credentials (access_key_id or secret_access_key)"
                 return
-                
+
         except Exception as e:
             self.connection_error = f"S3 initialization error: {e}"
             self.s3_client = None
@@ -443,13 +458,40 @@ class S3DataManager:
         except Exception as e:
             return False, f"Upload failed: {e}"
     
-    def download_file(self, s3_key: str) -> pd.DataFrame:
-        """Download a CSV file from S3 and return as DataFrame."""
+    def download_file(self, s3_key: str, use_cache: bool = True) -> pd.DataFrame:
+        """Download a CSV file from S3 and return as DataFrame with caching."""
         if not self.is_configured():
             return None
+
+        cache_key = f"s3_csv_{self.bucket_name}_{s3_key}"
+        current_etag = None
+
+        # Try to use cache if available
+        if use_cache and self._cache_manager:
+            cached_df = self._cache_manager.get(cache_key)
+            if cached_df is not None:
+                return cached_df
+
         try:
+            # Check ETag for change detection before downloading
+            if use_cache and self._optimized_loader:
+                current_etag = HashTracker.get_s3_etag(self.bucket_name, s3_key)
+                if current_etag and not HashTracker.has_changed(cache_key, current_etag):
+                    cached_df = self._cache_manager.get(cache_key) if self._cache_manager else None
+                    if cached_df is not None:
+                        return cached_df
+
             response = self.s3_client.get_object(Bucket=self.bucket_name, Key=s3_key)
-            return pd.read_csv(io.BytesIO(response['Body'].read()), low_memory=False)
+            df = pd.read_csv(io.BytesIO(response['Body'].read()), low_memory=False)
+
+            # Cache the result
+            if use_cache and self._cache_manager:
+                self._cache_manager.set(cache_key, df, ttl_seconds=3600, levels=[CacheLevel.SESSION])
+                # Update hash tracking
+                if self._optimized_loader and current_etag:
+                    HashTracker.update_hash(cache_key, current_etag)
+
+            return df
         except ClientError as e:
             if e.response['Error']['Code'] == 'NoSuchKey':
                 return None

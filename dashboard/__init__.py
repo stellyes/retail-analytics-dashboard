@@ -60,6 +60,32 @@ from .core.utils import (
     safe_json_dumps,
 )
 
+# Optimized data loading
+from .core.data_loader import (
+    OptimizedDataLoader,
+    HashTracker,
+    get_s3_client,
+    get_s3_resource,
+    get_data_loader,
+    load_and_cache_dataframe,
+    quick_load_json,
+    cached_s3_load,
+)
+
+# Unified cache management
+from .core.cache_manager import (
+    CacheManager as UnifiedCacheManager,
+    SessionCache,
+    FileCache,
+    CacheLevel,
+    CacheConfig,
+    CacheStats,
+    get_cache_manager,
+    clear_all_caches as clear_unified_caches,
+    cached,
+    render_cache_stats,
+)
+
 # =============================================================================
 # Data Management
 # =============================================================================
@@ -95,6 +121,7 @@ from .ui.loading import (
 from .services import (
     # Availability flags
     CLAUDE_AVAILABLE,
+    PROMPT_OPTIMIZER_AVAILABLE,
     INVOICE_AVAILABLE,
     INVOICE_UPLOAD_AVAILABLE,
     RESEARCH_AVAILABLE,
@@ -104,6 +131,17 @@ from .services import (
     BUSINESS_CONTEXT_AVAILABLE,
     # Claude
     ClaudeAnalytics,
+    # Prompt Optimization
+    PromptOptimizer,
+    PromptConfig,
+    PromptTemplates,
+    TokenEstimator,
+    ContextCompressor,
+    ModelSelector,
+    ResponseCache,
+    ClaudeModel,
+    optimize_prompt,
+    get_cached_or_call,
     # Invoice
     TreezInvoiceParser,
     InvoiceDataService,
@@ -129,7 +167,7 @@ from .services import (
 # =============================================================================
 # Package Metadata
 # =============================================================================
-__version__ = "2.0.0"
+__version__ = "0.0.6"
 __author__ = "Retail Analytics Team"
 
 __all__ = [
@@ -152,6 +190,28 @@ __all__ = [
     # Serialization utilities
     'make_json_serializable',
     'safe_json_dumps',
+
+    # Optimized data loading
+    'OptimizedDataLoader',
+    'HashTracker',
+    'get_s3_client',
+    'get_s3_resource',
+    'get_data_loader',
+    'load_and_cache_dataframe',
+    'quick_load_json',
+    'cached_s3_load',
+
+    # Unified cache management
+    'UnifiedCacheManager',
+    'SessionCache',
+    'FileCache',
+    'CacheLevel',
+    'CacheConfig',
+    'CacheStats',
+    'get_cache_manager',
+    'clear_unified_caches',
+    'cached',
+    'render_cache_stats',
 
     # Data management
     'S3DataManager',
@@ -178,6 +238,7 @@ __all__ = [
 
     # Service availability flags
     'CLAUDE_AVAILABLE',
+    'PROMPT_OPTIMIZER_AVAILABLE',
     'INVOICE_AVAILABLE',
     'INVOICE_UPLOAD_AVAILABLE',
     'RESEARCH_AVAILABLE',
@@ -188,6 +249,18 @@ __all__ = [
 
     # Services (conditionally available)
     'ClaudeAnalytics',
+    # Prompt Optimization
+    'PromptOptimizer',
+    'PromptConfig',
+    'PromptTemplates',
+    'TokenEstimator',
+    'ContextCompressor',
+    'ModelSelector',
+    'ResponseCache',
+    'ClaudeModel',
+    'optimize_prompt',
+    'get_cached_or_call',
+    # Other services
     'TreezInvoiceParser',
     'InvoiceDataService',
     'render_full_invoice_section',
