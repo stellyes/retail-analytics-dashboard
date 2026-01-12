@@ -73,6 +73,775 @@ st.set_page_config(
 )
 
 # =============================================================================
+# CHAPTERS DESIGN SYSTEM - Custom CSS Styling
+# =============================================================================
+# Design system based on Chapters theme with professional analytics aesthetic
+# Colors: ink (#050805), paper (#f8f6f3), accent (#1e391f), accentLight (#3d6b3e)
+
+CHAPTERS_CSS = """
+<style>
+/* ============================================
+   GOOGLE FONTS - Chapters Typography
+   ============================================ */
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600;700&family=DM+Sans:wght@400;500;600&display=swap');
+
+/* ============================================
+   CSS VARIABLES - Chapters Color Palette
+   ============================================ */
+:root {
+    --ink: #050805;
+    --paper: #f8f6f3;
+    --accent: #1e391f;
+    --accent-light: #3d6b3e;
+    --accent-lighter: #5a8f5c;
+    --muted: #6b6b6b;
+    --border: #e0ddd8;
+    --white: #ffffff;
+    --success: #1e391f;
+    --warning: #8b6914;
+    --error: #8b1414;
+    --shadow-sm: 0 2px 8px rgba(5, 8, 5, 0.04);
+    --shadow-md: 0 4px 20px rgba(5, 8, 5, 0.08);
+    --shadow-lg: 0 8px 30px rgba(5, 8, 5, 0.12);
+    --radius-sm: 4px;
+    --radius-md: 8px;
+    --radius-lg: 16px;
+    --transition: all 0.3s ease;
+}
+
+/* ============================================
+   MAIN APP CONTAINER
+   ============================================ */
+.stApp {
+    background-color: var(--paper) !important;
+    font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif !important;
+}
+
+/* Subtle noise texture overlay for premium feel */
+.stApp::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
+    opacity: 0.02;
+    pointer-events: none;
+    z-index: 0;
+}
+
+/* ============================================
+   SIDEBAR STYLING
+   ============================================ */
+[data-testid="stSidebar"] {
+    background-color: var(--paper) !important;
+    border-right: 1px solid var(--border) !important;
+}
+
+[data-testid="stSidebar"] > div:first-child {
+    background-color: var(--paper) !important;
+    padding-top: 1.5rem !important;
+}
+
+/* Sidebar navigation items */
+[data-testid="stSidebar"] .stRadio > label {
+    font-family: 'DM Sans', sans-serif !important;
+    font-size: 0.9rem !important;
+    font-weight: 500 !important;
+    color: var(--muted) !important;
+}
+
+[data-testid="stSidebar"] .stRadio > div {
+    gap: 0.25rem !important;
+}
+
+[data-testid="stSidebar"] .stRadio > div > label {
+    padding: 0.75rem 1rem !important;
+    border-radius: var(--radius-sm) !important;
+    transition: var(--transition) !important;
+    background: transparent !important;
+}
+
+[data-testid="stSidebar"] .stRadio > div > label:hover {
+    background: rgba(30, 57, 31, 0.08) !important;
+}
+
+[data-testid="stSidebar"] .stRadio > div > label[data-checked="true"] {
+    background: rgba(30, 57, 31, 0.15) !important;
+    color: var(--accent) !important;
+}
+
+/* Sidebar text */
+[data-testid="stSidebar"] .stMarkdown {
+    color: var(--ink) !important;
+}
+
+[data-testid="stSidebar"] hr {
+    border-color: var(--border) !important;
+    margin: 1rem 0 !important;
+}
+
+/* ============================================
+   TYPOGRAPHY
+   ============================================ */
+/* Main headings - Cormorant Garamond serif */
+h1, .stTitle, [data-testid="stTitle"] {
+    font-family: 'Cormorant Garamond', Georgia, serif !important;
+    font-weight: 500 !important;
+    color: var(--ink) !important;
+    letter-spacing: -0.02em !important;
+}
+
+h2, h3, .stHeader {
+    font-family: 'Cormorant Garamond', Georgia, serif !important;
+    font-weight: 500 !important;
+    color: var(--ink) !important;
+    letter-spacing: -0.02em !important;
+}
+
+/* Section labels - uppercase accent */
+.stSubheader, [data-testid="stSubheader"] {
+    font-family: 'DM Sans', sans-serif !important;
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.15em !important;
+    text-transform: uppercase !important;
+    color: var(--accent) !important;
+    margin-bottom: 0.5rem !important;
+}
+
+/* Body text */
+p, span, div, label {
+    font-family: 'DM Sans', sans-serif !important;
+    color: var(--ink) !important;
+}
+
+/* Muted text */
+.stCaption, small, .muted {
+    color: var(--muted) !important;
+    font-size: 0.875rem !important;
+}
+
+/* ============================================
+   METRIC CARDS
+   ============================================ */
+[data-testid="stMetric"] {
+    background: var(--white) !important;
+    border-radius: var(--radius-md) !important;
+    padding: 1.5rem !important;
+    box-shadow: var(--shadow-sm) !important;
+    border: 1px solid rgba(224, 221, 216, 0.6) !important;
+    transition: var(--transition) !important;
+}
+
+[data-testid="stMetric"]:hover {
+    box-shadow: var(--shadow-md) !important;
+    transform: translateY(-2px) !important;
+}
+
+/* Metric label */
+[data-testid="stMetric"] label {
+    color: var(--muted) !important;
+    font-size: 0.875rem !important;
+    font-weight: 500 !important;
+    text-transform: none !important;
+}
+
+/* Metric value */
+[data-testid="stMetric"] [data-testid="stMetricValue"] {
+    font-family: 'Cormorant Garamond', Georgia, serif !important;
+    font-size: 1.875rem !important;
+    font-weight: 600 !important;
+    color: var(--ink) !important;
+    letter-spacing: -0.02em !important;
+}
+
+/* Metric delta (change indicator) */
+[data-testid="stMetric"] [data-testid="stMetricDelta"] {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 500 !important;
+}
+
+[data-testid="stMetric"] [data-testid="stMetricDelta"] svg {
+    width: 16px !important;
+    height: 16px !important;
+}
+
+/* Positive delta */
+[data-testid="stMetric"] [data-testid="stMetricDelta"][data-testid-delta-type="positive"] {
+    color: var(--success) !important;
+}
+
+/* Negative delta */
+[data-testid="stMetric"] [data-testid="stMetricDelta"][data-testid-delta-type="negative"] {
+    color: var(--error) !important;
+}
+
+/* ============================================
+   CARDS & CONTAINERS
+   ============================================ */
+/* Expanders */
+[data-testid="stExpander"] {
+    background: var(--white) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-md) !important;
+    box-shadow: var(--shadow-sm) !important;
+}
+
+[data-testid="stExpander"] summary {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 500 !important;
+    color: var(--ink) !important;
+}
+
+/* Info/Warning/Error boxes */
+.stAlert {
+    border-radius: var(--radius-md) !important;
+    border: none !important;
+}
+
+[data-testid="stAlert"][data-baseweb="notification"] {
+    background: rgba(30, 57, 31, 0.08) !important;
+    color: var(--ink) !important;
+}
+
+/* Tabs */
+.stTabs [data-baseweb="tab-list"] {
+    gap: 0.5rem !important;
+    border-bottom: 1px solid var(--border) !important;
+    padding-bottom: 0 !important;
+}
+
+.stTabs [data-baseweb="tab"] {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 500 !important;
+    color: var(--muted) !important;
+    padding: 0.75rem 1.25rem !important;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0 !important;
+    background: transparent !important;
+    border: none !important;
+    transition: var(--transition) !important;
+}
+
+.stTabs [data-baseweb="tab"]:hover {
+    color: var(--accent) !important;
+    background: rgba(30, 57, 31, 0.05) !important;
+}
+
+.stTabs [aria-selected="true"] {
+    color: var(--accent) !important;
+    background: var(--white) !important;
+    border-bottom: 2px solid var(--accent) !important;
+}
+
+/* ============================================
+   BUTTONS
+   ============================================ */
+/* Primary button */
+.stButton > button {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 500 !important;
+    font-size: 0.9rem !important;
+    padding: 0.75rem 1.5rem !important;
+    border-radius: var(--radius-sm) !important;
+    border: none !important;
+    background: var(--ink) !important;
+    color: var(--paper) !important;
+    transition: var(--transition) !important;
+    cursor: pointer !important;
+}
+
+.stButton > button:hover {
+    background: var(--accent) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: var(--shadow-md) !important;
+}
+
+.stButton > button:active {
+    transform: translateY(0) !important;
+}
+
+/* Secondary/outlined button */
+.stButton > button[kind="secondary"] {
+    background: var(--white) !important;
+    color: var(--muted) !important;
+    border: 1px solid var(--border) !important;
+}
+
+.stButton > button[kind="secondary"]:hover {
+    background: var(--paper) !important;
+    color: var(--ink) !important;
+    border-color: var(--ink) !important;
+}
+
+/* Download button */
+.stDownloadButton > button {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 500 !important;
+    background: var(--ink) !important;
+    color: var(--paper) !important;
+    border-radius: var(--radius-sm) !important;
+    border: none !important;
+    transition: var(--transition) !important;
+}
+
+.stDownloadButton > button:hover {
+    background: var(--accent) !important;
+}
+
+/* ============================================
+   FORM ELEMENTS
+   ============================================ */
+/* Text inputs */
+.stTextInput > div > div > input {
+    font-family: 'DM Sans', sans-serif !important;
+    background: var(--white) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-sm) !important;
+    color: var(--ink) !important;
+    padding: 0.75rem 1rem !important;
+    transition: var(--transition) !important;
+}
+
+.stTextInput > div > div > input:focus {
+    border-color: var(--accent) !important;
+    box-shadow: 0 0 0 2px rgba(30, 57, 31, 0.1) !important;
+}
+
+.stTextInput > div > div > input::placeholder {
+    color: var(--muted) !important;
+}
+
+/* Select boxes */
+.stSelectbox > div > div {
+    background: var(--white) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-sm) !important;
+}
+
+.stSelectbox [data-baseweb="select"] > div {
+    background: var(--white) !important;
+    border-color: var(--border) !important;
+}
+
+.stSelectbox [data-baseweb="select"] > div:hover {
+    border-color: var(--accent) !important;
+}
+
+/* Multiselect */
+.stMultiSelect > div > div {
+    background: var(--white) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-sm) !important;
+}
+
+/* Date input */
+.stDateInput > div > div > input {
+    font-family: 'DM Sans', sans-serif !important;
+    background: var(--white) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-sm) !important;
+}
+
+/* Slider */
+.stSlider > div > div > div > div {
+    background: var(--accent) !important;
+}
+
+.stSlider [data-baseweb="slider"] [data-testid="stThumbValue"] {
+    font-family: 'DM Sans', sans-serif !important;
+    color: var(--ink) !important;
+}
+
+/* Radio buttons */
+.stRadio > label {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 500 !important;
+    color: var(--ink) !important;
+}
+
+/* Checkboxes */
+.stCheckbox > label {
+    font-family: 'DM Sans', sans-serif !important;
+}
+
+.stCheckbox > label > span[data-testid="stCheckbox"] {
+    background: var(--white) !important;
+    border-color: var(--border) !important;
+}
+
+/* ============================================
+   DATA DISPLAY
+   ============================================ */
+/* DataFrames */
+[data-testid="stDataFrame"] {
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-md) !important;
+    overflow: hidden !important;
+}
+
+[data-testid="stDataFrame"] th {
+    font-family: 'DM Sans', sans-serif !important;
+    font-weight: 600 !important;
+    font-size: 0.75rem !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.05em !important;
+    color: var(--muted) !important;
+    background: var(--paper) !important;
+    border-bottom: 1px solid var(--border) !important;
+    padding: 0.75rem !important;
+}
+
+[data-testid="stDataFrame"] td {
+    font-family: 'DM Sans', sans-serif !important;
+    color: var(--ink) !important;
+    padding: 0.75rem !important;
+    border-bottom: 1px solid var(--border) !important;
+}
+
+[data-testid="stDataFrame"] tr:hover td {
+    background: rgba(30, 57, 31, 0.03) !important;
+}
+
+/* Tables */
+.stTable {
+    border-radius: var(--radius-md) !important;
+    overflow: hidden !important;
+}
+
+/* ============================================
+   CHARTS & VISUALIZATIONS
+   ============================================ */
+/* Plotly charts container */
+[data-testid="stPlotlyChart"] {
+    background: var(--white) !important;
+    border-radius: var(--radius-md) !important;
+    padding: 1rem !important;
+    box-shadow: var(--shadow-sm) !important;
+    border: 1px solid rgba(224, 221, 216, 0.6) !important;
+}
+
+/* ============================================
+   UPLOAD AREA
+   ============================================ */
+[data-testid="stFileUploader"] {
+    background: var(--white) !important;
+    border: 2px dashed var(--border) !important;
+    border-radius: var(--radius-md) !important;
+    padding: 2rem !important;
+    transition: var(--transition) !important;
+}
+
+[data-testid="stFileUploader"]:hover {
+    border-color: var(--accent) !important;
+    background: rgba(30, 57, 31, 0.02) !important;
+}
+
+[data-testid="stFileUploader"] section {
+    padding: 0 !important;
+}
+
+/* ============================================
+   SPINNERS & LOADING
+   ============================================ */
+.stSpinner > div {
+    border-top-color: var(--accent) !important;
+}
+
+/* Progress bar */
+.stProgress > div > div > div {
+    background: linear-gradient(90deg, var(--accent), var(--accent-light)) !important;
+}
+
+/* ============================================
+   TOAST NOTIFICATIONS
+   ============================================ */
+[data-testid="stToast"] {
+    font-family: 'DM Sans', sans-serif !important;
+    background: var(--ink) !important;
+    color: var(--paper) !important;
+    border-radius: var(--radius-md) !important;
+    box-shadow: var(--shadow-lg) !important;
+}
+
+/* ============================================
+   DIVIDERS
+   ============================================ */
+hr, [data-testid="stMarkdownContainer"] hr {
+    border: none !important;
+    height: 1px !important;
+    background: var(--border) !important;
+    margin: 1.5rem 0 !important;
+}
+
+/* ============================================
+   SCROLLBAR STYLING
+   ============================================ */
+::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+::-webkit-scrollbar-track {
+    background: var(--paper);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--border);
+    border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--muted);
+}
+
+/* ============================================
+   RESPONSIVE ADJUSTMENTS
+   ============================================ */
+@media (max-width: 768px) {
+    [data-testid="stMetric"] {
+        padding: 1rem !important;
+    }
+
+    [data-testid="stMetric"] [data-testid="stMetricValue"] {
+        font-size: 1.5rem !important;
+    }
+
+    .stTabs [data-baseweb="tab"] {
+        padding: 0.5rem 0.75rem !important;
+        font-size: 0.875rem !important;
+    }
+}
+
+/* ============================================
+   SPECIAL ELEMENTS
+   ============================================ */
+/* Login page styling */
+.stMarkdown h2 {
+    font-family: 'Cormorant Garamond', Georgia, serif !important;
+    color: var(--ink) !important;
+}
+
+/* Hide Streamlit branding (optional) */
+#MainMenu {visibility: hidden;}
+footer {visibility: hidden;}
+header {visibility: hidden;}
+
+/* Status badges */
+.status-success {
+    background: rgba(30, 57, 31, 0.15) !important;
+    color: var(--success) !important;
+    padding: 0.25rem 0.75rem !important;
+    border-radius: var(--radius-sm) !important;
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+}
+
+.status-warning {
+    background: rgba(139, 105, 20, 0.15) !important;
+    color: var(--warning) !important;
+    padding: 0.25rem 0.75rem !important;
+    border-radius: var(--radius-sm) !important;
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+}
+
+.status-error {
+    background: rgba(139, 20, 20, 0.15) !important;
+    color: var(--error) !important;
+    padding: 0.25rem 0.75rem !important;
+    border-radius: var(--radius-sm) !important;
+    font-size: 0.75rem !important;
+    font-weight: 500 !important;
+}
+
+/* ============================================
+   ICON CONTAINERS
+   ============================================ */
+.icon-container {
+    width: 48px;
+    height: 48px;
+    border-radius: var(--radius-md);
+    background: rgba(30, 57, 31, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* ============================================
+   ANIMATION UTILITIES
+   ============================================ */
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+    animation: fadeIn 0.3s ease-out forwards;
+}
+</style>
+"""
+
+# Apply Chapters CSS styling
+st.markdown(CHAPTERS_CSS, unsafe_allow_html=True)
+
+# =============================================================================
+# CHAPTERS PLOTLY THEME - Consistent chart styling
+# =============================================================================
+
+# Chapters color palette for charts
+CHAPTERS_COLORS = {
+    'ink': '#050805',
+    'paper': '#f8f6f3',
+    'accent': '#1e391f',
+    'accent_light': '#3d6b3e',
+    'accent_lighter': '#5a8f5c',
+    'muted': '#6b6b6b',
+    'border': '#e0ddd8',
+    'white': '#ffffff',
+    'success': '#1e391f',
+    'warning': '#8b6914',
+    'error': '#8b1414',
+}
+
+# Color sequence for multi-series charts (Chapters-inspired greens and neutrals)
+CHAPTERS_COLOR_SEQUENCE = [
+    '#1e391f',  # Dark green (accent)
+    '#3d6b3e',  # Medium green (accent-light)
+    '#5a8f5c',  # Light green
+    '#7eb37f',  # Lighter green
+    '#a3cca4',  # Pale green
+    '#050805',  # Ink (dark)
+    '#6b6b6b',  # Muted gray
+]
+
+def apply_chapters_theme(fig, title: str = None):
+    """
+    Apply Chapters design system styling to a Plotly figure.
+
+    Args:
+        fig: Plotly figure object
+        title: Optional title override
+
+    Returns:
+        Styled Plotly figure
+    """
+    # Base layout updates
+    fig.update_layout(
+        # Background colors
+        plot_bgcolor=CHAPTERS_COLORS['white'],
+        paper_bgcolor=CHAPTERS_COLORS['white'],
+
+        # Font styling
+        font=dict(
+            family="DM Sans, -apple-system, BlinkMacSystemFont, sans-serif",
+            color=CHAPTERS_COLORS['ink'],
+            size=12
+        ),
+
+        # Title styling (Cormorant Garamond for headings)
+        title=dict(
+            text=title if title else fig.layout.title.text if fig.layout.title else None,
+            font=dict(
+                family="Cormorant Garamond, Georgia, serif",
+                size=20,
+                color=CHAPTERS_COLORS['ink']
+            ),
+            x=0,
+            xanchor='left'
+        ),
+
+        # Legend styling
+        legend=dict(
+            bgcolor='rgba(255,255,255,0)',
+            bordercolor=CHAPTERS_COLORS['border'],
+            borderwidth=0,
+            font=dict(
+                family="DM Sans, sans-serif",
+                size=11,
+                color=CHAPTERS_COLORS['muted']
+            )
+        ),
+
+        # Margins
+        margin=dict(l=40, r=40, t=60, b=40),
+
+        # Hover label styling
+        hoverlabel=dict(
+            bgcolor=CHAPTERS_COLORS['ink'],
+            bordercolor=CHAPTERS_COLORS['ink'],
+            font=dict(
+                family="DM Sans, sans-serif",
+                size=12,
+                color=CHAPTERS_COLORS['paper']
+            )
+        ),
+
+        # Color scheme
+        colorway=CHAPTERS_COLOR_SEQUENCE,
+    )
+
+    # X-axis styling
+    fig.update_xaxes(
+        showgrid=False,
+        showline=True,
+        linecolor=CHAPTERS_COLORS['border'],
+        linewidth=1,
+        tickfont=dict(
+            family="DM Sans, sans-serif",
+            size=11,
+            color=CHAPTERS_COLORS['muted']
+        ),
+        title_font=dict(
+            family="DM Sans, sans-serif",
+            size=12,
+            color=CHAPTERS_COLORS['muted']
+        )
+    )
+
+    # Y-axis styling
+    fig.update_yaxes(
+        showgrid=True,
+        gridcolor=CHAPTERS_COLORS['border'],
+        gridwidth=1,
+        griddash='dot',
+        showline=False,
+        tickfont=dict(
+            family="DM Sans, sans-serif",
+            size=11,
+            color=CHAPTERS_COLORS['muted']
+        ),
+        title_font=dict(
+            family="DM Sans, sans-serif",
+            size=12,
+            color=CHAPTERS_COLORS['muted']
+        )
+    )
+
+    return fig
+
+def get_chapters_bar_colors(n: int = 1, alternate: bool = False):
+    """
+    Get bar chart colors from Chapters palette.
+
+    Args:
+        n: Number of colors needed
+        alternate: If True, alternate between accent and accent-light
+
+    Returns:
+        List of color hex codes
+    """
+    if alternate:
+        return [CHAPTERS_COLOR_SEQUENCE[i % 2] for i in range(n)]
+    return CHAPTERS_COLOR_SEQUENCE[:n]
+
+def get_chapters_line_colors(n: int = 1):
+    """Get line chart colors from Chapters palette."""
+    return CHAPTERS_COLOR_SEQUENCE[:n]
+
+# =============================================================================
 # SMART CACHING - Hash-based cache invalidation with localStorage persistence
 # =============================================================================
 
@@ -201,7 +970,7 @@ def _show_loading_overlay(message: str = "Syncing data...", submessage: str = "N
                 width: 60px;
                 height: 60px;
                 border: 4px solid rgba(255, 255, 255, 0.1);
-                border-top: 4px solid #4CAF50;
+                border-top: 4px solid #1e391f;
                 border-radius: 50%;
                 animation: retail-spin 1s linear infinite;
                 margin-bottom: 24px;
@@ -227,7 +996,7 @@ def _show_loading_overlay(message: str = "Syncing data...", submessage: str = "N
             ">
                 <div style="
                     height: 100%;
-                    background: linear-gradient(90deg, #4CAF50, #8BC34A);
+                    background: linear-gradient(90deg, #1e391f, #3d6b3e);
                     border-radius: 3px;
                     animation: retail-progress 3s ease-in-out infinite;
                 "></div>
@@ -1151,7 +1920,7 @@ class AnalyticsEngine:
 # =============================================================================
 
 def plot_sales_trend(df: pd.DataFrame, store_filter: str = "All Stores"):
-    """Create sales trend visualization."""
+    """Create sales trend visualization with Chapters theme."""
     if store_filter != "All Stores":
         store_id = [k for k, v in STORE_DISPLAY_NAMES.items() if v == store_filter]
         if store_id:
@@ -1169,37 +1938,64 @@ def plot_sales_trend(df: pd.DataFrame, store_filter: str = "All Stores"):
                         subplot_titles=('Net Sales by Day', 'Transaction Count'),
                         vertical_spacing=0.1)
 
+    colors = get_chapters_line_colors(len(df['Store_ID'].unique()) * 2)
+    color_idx = 0
+
     for store_id in df['Store_ID'].unique():
         store_df = df[df['Store_ID'] == store_id]
         store_name = STORE_DISPLAY_NAMES.get(store_id, store_id)
 
         fig.add_trace(
-            go.Scatter(x=store_df['Date'], y=store_df['Net Sales'],
-                      name=f'{store_name} Sales', mode='lines+markers'),
+            go.Scatter(
+                x=store_df['Date'],
+                y=store_df['Net Sales'],
+                name=f'{store_name} Sales',
+                mode='lines+markers',
+                line=dict(color=colors[color_idx % len(colors)], width=2),
+                marker=dict(size=6)
+            ),
             row=1, col=1
         )
+        color_idx += 1
 
         fig.add_trace(
-            go.Scatter(x=store_df['Date'], y=store_df['Tickets Count'],
-                      name=f'{store_name} Transactions', mode='lines+markers'),
+            go.Scatter(
+                x=store_df['Date'],
+                y=store_df['Tickets Count'],
+                name=f'{store_name} Transactions',
+                mode='lines+markers',
+                line=dict(color=colors[color_idx % len(colors)], width=2),
+                marker=dict(size=6)
+            ),
             row=2, col=1
         )
+        color_idx += 1
 
     fig.update_layout(height=500, showlegend=True)
-    return fig
+    return apply_chapters_theme(fig)
 
 
 def plot_category_breakdown(df: pd.DataFrame):
-    """Create product category breakdown chart."""
-    fig = px.pie(df, values='Net Sales', names='Product Type',
-                 title='Sales by Product Category',
-                 hole=0.4)
-    fig.update_traces(textposition='inside', textinfo='percent+label')
-    return fig
+    """Create product category breakdown chart with Chapters theme."""
+    fig = px.pie(
+        df,
+        values='Net Sales',
+        names='Product Type',
+        title='Sales by Product Category',
+        hole=0.4,
+        color_discrete_sequence=CHAPTERS_COLOR_SEQUENCE
+    )
+    fig.update_traces(
+        textposition='inside',
+        textinfo='percent+label',
+        textfont=dict(family="DM Sans, sans-serif", size=11, color=CHAPTERS_COLORS['white']),
+        marker=dict(line=dict(color=CHAPTERS_COLORS['white'], width=2))
+    )
+    return apply_chapters_theme(fig)
 
 
 def plot_brand_performance(df: pd.DataFrame, top_n: int = 15):
-    """Create brand performance visualization."""
+    """Create brand performance visualization with Chapters theme."""
     # Filter out invalid data
     df = df[
         (df['Net Sales'].notna()) &
@@ -1216,49 +2012,52 @@ def plot_brand_performance(df: pd.DataFrame, top_n: int = 15):
     else:
         # Already percentage form (55)
         top_brands['Margin_Pct'] = top_brands['Gross Margin %']
-    
+
     fig = make_subplots(specs=[[{"secondary_y": True}]])
-    
-    # Bar chart for Net Sales
+
+    # Bar chart for Net Sales - using Chapters accent color
     fig.add_trace(
         go.Bar(
-            x=top_brands['Brand'], 
+            x=top_brands['Brand'],
             y=top_brands['Net Sales'],
-            name='Net Sales', 
-            marker_color='steelblue',
+            name='Net Sales',
+            marker_color=CHAPTERS_COLORS['accent'],
+            marker_line_color=CHAPTERS_COLORS['accent'],
+            marker_line_width=0,
             hovertemplate='<b>%{x}</b><br>Net Sales: $%{y:,.0f}<extra></extra>'
         ),
         secondary_y=False
     )
-    
-    # Scatter plot for Gross Margin (markers only, no line)
+
+    # Scatter plot for Gross Margin - using accent-light color
     fig.add_trace(
         go.Scatter(
-            x=top_brands['Brand'], 
+            x=top_brands['Brand'],
             y=top_brands['Margin_Pct'],
-            name='Gross Margin %', 
-            mode='markers',  # Markers only - no connecting line
+            name='Gross Margin %',
+            mode='markers',
             marker=dict(
-                color='coral',
+                color=CHAPTERS_COLORS['accent_light'],
                 size=12,
                 symbol='diamond',
-                line=dict(width=1, color='white')
+                line=dict(width=2, color=CHAPTERS_COLORS['white'])
             ),
             hovertemplate='<b>%{x}</b><br>Margin: %{y:.1f}%<extra></extra>'
         ),
         secondary_y=True
     )
-    
+
     # Add a reference line for target margin (e.g., 55%)
     fig.add_hline(
-        y=55, 
-        line_dash="dash", 
-        line_color="rgba(255,255,255,0.3)",
+        y=55,
+        line_dash="dash",
+        line_color=CHAPTERS_COLORS['border'],
         secondary_y=True,
         annotation_text="55% Target",
-        annotation_position="right"
+        annotation_position="right",
+        annotation_font=dict(color=CHAPTERS_COLORS['muted'], size=10)
     )
-    
+
     fig.update_layout(
         title=f'Top {top_n} Brands by Net Sales with Margin Overlay',
         xaxis_tickangle=-45,
@@ -1274,18 +2073,18 @@ def plot_brand_performance(df: pd.DataFrame, top_n: int = 15):
     )
     fig.update_yaxes(title_text="Net Sales ($)", secondary_y=False)
     fig.update_yaxes(title_text="Gross Margin (%)", range=[40, 90], secondary_y=True)
-    
-    return fig
+
+    return apply_chapters_theme(fig)
 
 
 def plot_store_comparison(metrics: dict):
-    """Create store comparison dashboard."""
+    """Create store comparison dashboard with Chapters theme."""
     stores = list(metrics.keys())
-    
+
     comparison_data = {
         'Metric': ['Net Sales', 'Transactions', 'Avg Order Value', 'Gross Margin %', 'Units Sold'],
     }
-    
+
     for store in stores:
         comparison_data[store] = [
             metrics[store]['total_net_sales'],
@@ -1294,33 +2093,50 @@ def plot_store_comparison(metrics: dict):
             metrics[store]['avg_margin'],
             metrics[store]['units_sold']
         ]
-    
+
     fig = go.Figure()
-    
+
+    # Get Chapters colors for each store
+    colors = get_chapters_line_colors(len(stores))
+
     # Normalized comparison
-    for store in stores:
+    for idx, store in enumerate(stores):
         # Normalize for radar chart
         values = comparison_data[store]
         max_vals = [max(comparison_data[s][i] for s in stores) for i in range(len(values))]
         normalized = [v / m * 100 if m > 0 else 0 for v, m in zip(values, max_vals)]
         normalized.append(normalized[0])  # Close the polygon
-        
+
         categories = comparison_data['Metric'] + [comparison_data['Metric'][0]]
-        
+
         fig.add_trace(go.Scatterpolar(
             r=normalized,
             theta=categories,
             fill='toself',
-            name=store
+            name=store,
+            fillcolor=f'rgba({int(colors[idx][1:3], 16)}, {int(colors[idx][3:5], 16)}, {int(colors[idx][5:7], 16)}, 0.25)',
+            line=dict(color=colors[idx], width=2)
         ))
-    
+
     fig.update_layout(
-        polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
+        polar=dict(
+            radialaxis=dict(
+                visible=True,
+                range=[0, 100],
+                tickfont=dict(size=10, color=CHAPTERS_COLORS['muted']),
+                gridcolor=CHAPTERS_COLORS['border']
+            ),
+            angularaxis=dict(
+                tickfont=dict(size=11, color=CHAPTERS_COLORS['ink']),
+                gridcolor=CHAPTERS_COLORS['border']
+            ),
+            bgcolor=CHAPTERS_COLORS['white']
+        ),
         showlegend=True,
         title='Store Performance Comparison (Normalized)'
     )
-    
-    return fig
+
+    return apply_chapters_theme(fig)
 
 
 # =============================================================================
