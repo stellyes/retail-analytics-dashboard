@@ -67,7 +67,7 @@ from dashboard import (
 
 st.set_page_config(
     page_title="Retail Analytics Dashboard",
-    page_icon="📊",
+    page_icon="C",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -132,24 +132,50 @@ CHAPTERS_CSS = """
 }
 
 /* ============================================
-   SIDEBAR STYLING
+   SIDEBAR STYLING - Dark Green High Contrast
    ============================================ */
 [data-testid="stSidebar"] {
-    background-color: var(--paper) !important;
-    border-right: 1px solid var(--border) !important;
+    background: linear-gradient(180deg, var(--ink) 0%, #0a150a 100%) !important;
+    border-right: 1px solid rgba(61, 107, 62, 0.3) !important;
 }
 
 [data-testid="stSidebar"] > div:first-child {
-    background-color: var(--paper) !important;
+    background: transparent !important;
     padding-top: 1.5rem !important;
+}
+
+/* Sidebar branding area */
+.sidebar-branding {
+    text-align: center;
+    padding: 1rem 1.5rem 1.5rem;
+    border-bottom: 1px solid rgba(61, 107, 62, 0.2);
+    margin-bottom: 1rem;
+}
+
+.sidebar-branding img {
+    max-width: 120px;
+    height: auto;
+    margin-bottom: 0.75rem;
+    filter: brightness(0) invert(1);
+}
+
+.sidebar-branding .company-name {
+    font-family: 'Cormorant Garamond', Georgia, serif !important;
+    font-size: 0.95rem !important;
+    font-weight: 500 !important;
+    color: var(--paper) !important;
+    letter-spacing: 0.02em;
+    line-height: 1.3;
 }
 
 /* Sidebar navigation items */
 [data-testid="stSidebar"] .stRadio > label {
     font-family: 'DM Sans', sans-serif !important;
-    font-size: 0.9rem !important;
+    font-size: 0.85rem !important;
     font-weight: 500 !important;
-    color: var(--muted) !important;
+    color: rgba(248, 246, 243, 0.6) !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 [data-testid="stSidebar"] .stRadio > div {
@@ -161,25 +187,98 @@ CHAPTERS_CSS = """
     border-radius: var(--radius-sm) !important;
     transition: var(--transition) !important;
     background: transparent !important;
+    color: rgba(248, 246, 243, 0.85) !important;
 }
 
 [data-testid="stSidebar"] .stRadio > div > label:hover {
-    background: rgba(30, 57, 31, 0.08) !important;
+    background: rgba(61, 107, 62, 0.25) !important;
+    color: var(--paper) !important;
 }
 
 [data-testid="stSidebar"] .stRadio > div > label[data-checked="true"] {
-    background: rgba(30, 57, 31, 0.15) !important;
-    color: var(--accent) !important;
+    background: var(--accent-light) !important;
+    color: var(--paper) !important;
+    font-weight: 600 !important;
 }
 
-/* Sidebar text */
+/* Sidebar text - light colors for contrast */
 [data-testid="stSidebar"] .stMarkdown {
-    color: var(--ink) !important;
+    color: rgba(248, 246, 243, 0.9) !important;
+}
+
+[data-testid="stSidebar"] .stMarkdown p {
+    color: rgba(248, 246, 243, 0.9) !important;
+}
+
+[data-testid="stSidebar"] .stMarkdown strong {
+    color: var(--paper) !important;
 }
 
 [data-testid="stSidebar"] hr {
-    border-color: var(--border) !important;
+    border-color: rgba(61, 107, 62, 0.3) !important;
     margin: 1rem 0 !important;
+}
+
+/* Sidebar selectbox styling */
+[data-testid="stSidebar"] .stSelectbox > label {
+    color: rgba(248, 246, 243, 0.7) !important;
+    font-size: 0.85rem !important;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+[data-testid="stSidebar"] .stSelectbox > div > div {
+    background: rgba(61, 107, 62, 0.2) !important;
+    border: 1px solid rgba(61, 107, 62, 0.3) !important;
+    color: var(--paper) !important;
+}
+
+[data-testid="stSidebar"] .stSelectbox > div > div:hover {
+    border-color: var(--accent-light) !important;
+}
+
+/* Sidebar date input styling */
+[data-testid="stSidebar"] .stDateInput > label {
+    color: rgba(248, 246, 243, 0.7) !important;
+    font-size: 0.85rem !important;
+}
+
+[data-testid="stSidebar"] .stDateInput input {
+    background: rgba(61, 107, 62, 0.2) !important;
+    border: 1px solid rgba(61, 107, 62, 0.3) !important;
+    color: var(--paper) !important;
+}
+
+/* Sidebar button styling */
+[data-testid="stSidebar"] .stButton > button {
+    background: transparent !important;
+    border: 1px solid rgba(248, 246, 243, 0.3) !important;
+    color: var(--paper) !important;
+    width: 100%;
+    transition: var(--transition) !important;
+}
+
+[data-testid="stSidebar"] .stButton > button:hover {
+    background: rgba(248, 246, 243, 0.1) !important;
+    border-color: var(--paper) !important;
+}
+
+/* Dark mode toggle styling */
+[data-testid="stSidebar"] .stToggle {
+    padding: 0.5rem 0;
+}
+
+[data-testid="stSidebar"] .stToggle > label {
+    color: rgba(248, 246, 243, 0.7) !important;
+    font-size: 0.85rem !important;
+}
+
+[data-testid="stSidebar"] .stToggle > label > span:first-child {
+    background: rgba(61, 107, 62, 0.3) !important;
+}
+
+[data-testid="stSidebar"] .stToggle > label > span:first-child[data-checked="true"] {
+    background: var(--accent-light) !important;
 }
 
 /* ============================================
@@ -671,6 +770,124 @@ header {visibility: hidden;}
 }
 
 /* ============================================
+   ENHANCED CARD STYLES (Service Card Pattern)
+   ============================================ */
+/* Card with accent top border on hover */
+[data-testid="stMetric"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 3px;
+    background: linear-gradient(90deg, var(--accent-light), transparent);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    border-radius: var(--radius-md) var(--radius-md) 0 0;
+}
+
+[data-testid="stMetric"]:hover::before {
+    opacity: 1;
+}
+
+[data-testid="stMetric"] {
+    position: relative;
+    overflow: hidden;
+}
+
+/* ============================================
+   CTA BUTTON STYLES
+   ============================================ */
+.cta-button {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+    background: var(--ink) !important;
+    color: var(--paper) !important;
+    padding: 1rem 2rem !important;
+    text-decoration: none !important;
+    font-weight: 500 !important;
+    border-radius: 2px !important;
+    transition: all 0.3s ease !important;
+}
+
+.cta-button:hover {
+    background: var(--accent) !important;
+    transform: translateX(4px) !important;
+}
+
+/* ============================================
+   SECTION LABELS & DIVIDERS
+   ============================================ */
+.section-label {
+    font-size: 0.75rem !important;
+    font-weight: 600 !important;
+    letter-spacing: 0.15em !important;
+    text-transform: uppercase !important;
+    color: var(--accent) !important;
+    margin-bottom: 1rem !important;
+    display: block !important;
+}
+
+.section-divider {
+    position: relative;
+    margin: 2rem 0;
+}
+
+.section-divider::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 80px;
+    height: 1px;
+    background: var(--border);
+}
+
+/* ============================================
+   FEATURE LIST STYLING
+   ============================================ */
+.features-list {
+    list-style: none !important;
+    padding: 0 !important;
+}
+
+.features-list li {
+    padding: 0.6rem 0 !important;
+    color: var(--ink) !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 0.75rem !important;
+}
+
+.features-list li::before {
+    content: '✓' !important;
+    color: var(--accent) !important;
+    font-weight: bold !important;
+}
+
+/* ============================================
+   PROCESS STEPS STYLING
+   ============================================ */
+.step-number {
+    font-family: 'Cormorant Garamond', Georgia, serif !important;
+    font-size: 3rem !important;
+    font-weight: 600 !important;
+    color: var(--accent) !important;
+    line-height: 1 !important;
+}
+
+/* ============================================
+   UTILITY CLASSES
+   ============================================ */
+.text-accent { color: var(--accent) !important; }
+.text-accent-light { color: var(--accent-light) !important; }
+.text-muted { color: var(--muted) !important; }
+.bg-accent { background: var(--accent) !important; }
+.bg-accent-light { background: var(--accent-light) !important; }
+
+/* ============================================
    ANIMATION UTILITIES
    ============================================ */
 @keyframes fadeIn {
@@ -681,11 +898,278 @@ header {visibility: hidden;}
 .animate-fade-in {
     animation: fadeIn 0.3s ease-out forwards;
 }
+
+/* ============================================
+   DARK MODE STYLES
+   ============================================ */
+.dark-mode .stApp {
+    background-color: var(--ink) !important;
+}
+
+.dark-mode .stApp::before {
+    opacity: 0.04;
+}
+
+/* Dark mode main content text */
+.dark-mode h1, .dark-mode h2, .dark-mode h3,
+.dark-mode .stTitle, .dark-mode .stHeader,
+.dark-mode p, .dark-mode span, .dark-mode div, .dark-mode label {
+    color: var(--paper) !important;
+}
+
+.dark-mode .stSubheader, .dark-mode [data-testid="stSubheader"] {
+    color: var(--accent-light) !important;
+}
+
+/* Dark mode metric cards */
+.dark-mode [data-testid="stMetric"] {
+    background: rgba(30, 57, 31, 0.15) !important;
+    border: 1px solid rgba(61, 107, 62, 0.3) !important;
+}
+
+.dark-mode [data-testid="stMetric"] label {
+    color: rgba(248, 246, 243, 0.7) !important;
+}
+
+.dark-mode [data-testid="stMetric"] [data-testid="stMetricValue"] {
+    color: var(--paper) !important;
+}
+
+/* Dark mode tabs */
+.dark-mode .stTabs [data-baseweb="tab-list"] {
+    background: rgba(30, 57, 31, 0.1) !important;
+    border-color: rgba(61, 107, 62, 0.3) !important;
+}
+
+.dark-mode .stTabs [data-baseweb="tab"] {
+    color: rgba(248, 246, 243, 0.7) !important;
+}
+
+.dark-mode .stTabs [aria-selected="true"] {
+    background: var(--accent) !important;
+    color: var(--paper) !important;
+}
+
+/* Dark mode buttons */
+.dark-mode .stButton > button {
+    background: var(--accent) !important;
+    border-color: var(--accent) !important;
+    color: var(--paper) !important;
+}
+
+.dark-mode .stButton > button:hover {
+    background: var(--accent-light) !important;
+    border-color: var(--accent-light) !important;
+}
+
+/* Dark mode inputs */
+.dark-mode .stTextInput input,
+.dark-mode .stSelectbox > div > div,
+.dark-mode .stDateInput input,
+.dark-mode .stTextArea textarea {
+    background: rgba(30, 57, 31, 0.2) !important;
+    border-color: rgba(61, 107, 62, 0.3) !important;
+    color: var(--paper) !important;
+}
+
+/* Dark mode expander */
+.dark-mode .streamlit-expanderHeader {
+    background: rgba(30, 57, 31, 0.1) !important;
+    color: var(--paper) !important;
+}
+
+/* Dark mode info/warning/error boxes */
+.dark-mode .stAlert {
+    background: rgba(30, 57, 31, 0.15) !important;
+    border-color: rgba(61, 107, 62, 0.3) !important;
+}
+
+.dark-mode .stAlert p {
+    color: var(--paper) !important;
+}
+
+/* Dark mode dataframes */
+.dark-mode [data-testid="stDataFrame"] {
+    background: rgba(30, 57, 31, 0.1) !important;
+}
+
+.dark-mode [data-testid="stDataFrame"] th {
+    background: var(--accent) !important;
+    color: var(--paper) !important;
+}
+
+.dark-mode [data-testid="stDataFrame"] td {
+    color: var(--paper) !important;
+    border-color: rgba(61, 107, 62, 0.2) !important;
+}
+
+/* Dark mode dividers */
+.dark-mode hr {
+    border-color: rgba(61, 107, 62, 0.3) !important;
+}
 </style>
 """
 
 # Apply Chapters CSS styling
 st.markdown(CHAPTERS_CSS, unsafe_allow_html=True)
+
+# =============================================================================
+# MONOCHROMATIC SVG ICON SYSTEM
+# =============================================================================
+# Clean, minimal icons using the Chapters color palette
+
+ICONS = {
+    # Navigation icons
+    'dashboard': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>',
+    'chart': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
+    'lightbulb': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7V17h8v-2.3A7 7 0 0 0 12 2z"/></svg>',
+    'database': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>',
+
+    # Status icons
+    'check': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>',
+    'check-circle': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+    'alert': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
+    'x-circle': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+    'info': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>',
+
+    # Action icons
+    'upload': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>',
+    'download': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>',
+    'trash': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>',
+    'x': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>',
+    'logout': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>',
+    'refresh': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>',
+    'settings': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+
+    # Data/content icons
+    'tag': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>',
+    'users': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+    'package': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>',
+    'file': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>',
+    'folder': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>',
+    'calendar': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+    'dollar': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',
+    'trending-up': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>',
+    'bar-chart': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>',
+    'pie-chart': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg>',
+    'cloud': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/></svg>',
+    'search': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>',
+    'filter': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/></svg>',
+    'edit': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>',
+    'list': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>',
+    'arrow-up': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>',
+    'arrow-right': '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>',
+}
+
+def icon(name: str, color: str = "currentColor", size: int = 16) -> str:
+    """Return an inline SVG icon HTML string."""
+    svg = ICONS.get(name, ICONS['info'])
+    # Replace size and color
+    svg = svg.replace('width="16"', f'width="{size}"')
+    svg = svg.replace('height="16"', f'height="{size}"')
+    svg = svg.replace('stroke="currentColor"', f'stroke="{color}"')
+    return f'<span style="display: inline-flex; align-items: center; vertical-align: middle;">{svg}</span>'
+
+def icon_text(icon_name: str, text: str, color: str = "#1e391f", size: int = 16) -> str:
+    """Return icon followed by text as HTML."""
+    return f'{icon(icon_name, color, size)} <span style="margin-left: 6px;">{text}</span>'
+
+# =============================================================================
+# DISMISSIBLE NOTICE BOX SYSTEM
+# =============================================================================
+# Consolidates all alerts into a single dismissible notice box
+
+def init_notifications():
+    """Initialize notification system in session state."""
+    if 'notifications' not in st.session_state:
+        st.session_state.notifications = []
+    if 'notifications_dismissed' not in st.session_state:
+        st.session_state.notifications_dismissed = False
+
+def add_notification(message: str, level: str = "info"):
+    """Add a notification to the queue. Level: info, success, warning, error"""
+    init_notifications()
+    st.session_state.notifications.append({"message": message, "level": level})
+
+def clear_notifications():
+    """Clear all notifications."""
+    st.session_state.notifications = []
+    st.session_state.notifications_dismissed = True
+
+def render_notice_box():
+    """Render the consolidated dismissible notice box."""
+    init_notifications()
+
+    # Don't show if dismissed or no notifications
+    if st.session_state.notifications_dismissed or not st.session_state.notifications:
+        return
+
+    notifications = st.session_state.notifications
+
+    # Group by level
+    errors = [n for n in notifications if n['level'] == 'error']
+    warnings = [n for n in notifications if n['level'] == 'warning']
+    successes = [n for n in notifications if n['level'] == 'success']
+    infos = [n for n in notifications if n['level'] == 'info']
+
+    # Determine overall box style based on most severe notification
+    if errors:
+        box_color = "#8b1414"
+        box_bg = "rgba(139, 20, 20, 0.08)"
+        box_icon = "x-circle"
+    elif warnings:
+        box_color = "#8b6914"
+        box_bg = "rgba(139, 105, 20, 0.08)"
+        box_icon = "alert"
+    elif successes:
+        box_color = "#1e391f"
+        box_bg = "rgba(30, 57, 31, 0.08)"
+        box_icon = "check-circle"
+    else:
+        box_color = "#1e391f"
+        box_bg = "rgba(30, 57, 31, 0.05)"
+        box_icon = "info"
+
+    # Build notification content
+    content_items = []
+    for n in errors:
+        content_items.append(f'<div style="color: #8b1414; margin: 4px 0;">{icon("x-circle", "#8b1414", 14)} {n["message"]}</div>')
+    for n in warnings:
+        content_items.append(f'<div style="color: #8b6914; margin: 4px 0;">{icon("alert", "#8b6914", 14)} {n["message"]}</div>')
+    for n in successes:
+        content_items.append(f'<div style="color: #1e391f; margin: 4px 0;">{icon("check-circle", "#1e391f", 14)} {n["message"]}</div>')
+    for n in infos:
+        content_items.append(f'<div style="color: #6b6b6b; margin: 4px 0;">{icon("info", "#6b6b6b", 14)} {n["message"]}</div>')
+
+    content_html = "".join(content_items)
+
+    # Create the notice box container
+    col1, col2 = st.columns([20, 1])
+    with col1:
+        st.markdown(f'''
+        <div style="
+            background: {box_bg};
+            border-left: 3px solid {box_color};
+            border-radius: 4px;
+            padding: 12px 16px;
+            margin-bottom: 16px;
+            font-size: 0.9rem;
+        ">
+            <div style="display: flex; align-items: flex-start; gap: 10px;">
+                <div style="flex-shrink: 0; margin-top: 2px;">{icon(box_icon, box_color, 18)}</div>
+                <div style="flex-grow: 1;">
+                    <div style="font-weight: 600; color: {box_color}; margin-bottom: 6px;">
+                        {len(notifications)} Notice{"s" if len(notifications) > 1 else ""}
+                    </div>
+                    {content_html}
+                </div>
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
+    with col2:
+        if st.button("×", key="dismiss_notices", help="Dismiss"):
+            clear_notifications()
+            st.rerun()
 
 # =============================================================================
 # CHAPTERS PLOTLY THEME - Consistent chart styling
@@ -1114,12 +1598,12 @@ def check_password():
         return True
 
     # First run or incorrect password
-    st.markdown("## 🔐 Login Required")
+    st.markdown("## Login Required")
     st.text_input("Username", key="username")
     st.text_input("Password", type="password", key="password", on_change=password_entered)
     
     if "password_correct" in st.session_state and not st.session_state["password_correct"]:
-        st.error("😕 Incorrect username or password")
+        st.error("Incorrect username or password")
     
     return False
 
@@ -2453,7 +2937,7 @@ def main():
         if dynamo_needs_refresh and current_dynamo_hash:
             refresh_type.append("DynamoDB")
 
-        spinner_msg = "🔄 Loading data..." if not st.session_state.last_s3_hash else f"🔄 Refreshing data ({', '.join(refresh_type)} changed)..."
+        spinner_msg = "Loading data..." if not st.session_state.last_s3_hash else f"Refreshing data ({', '.join(refresh_type)} changed)..."
 
         with st.spinner(spinner_msg):
             # Load S3 data if hash changed
@@ -2531,39 +3015,86 @@ def main():
 
             if loaded_items:
                 cache_status = "cached" if st.session_state.last_s3_hash else "loaded"
-                st.toast(f"✅ Data {cache_status}: {', '.join(loaded_items)}", icon="📊")
+                add_notification(f"Data {cache_status}: {', '.join(loaded_items)}", "success")
 
             if st.session_state.dynamo_load_error:
-                st.toast(f"⚠️ DynamoDB Error: {st.session_state.dynamo_load_error[:100]}", icon="⚠️")
+                add_notification(f"DynamoDB Error: {st.session_state.dynamo_load_error[:100]}", "warning")
     
     # Sidebar
     with st.sidebar:
-        st.image("https://barbarycoastsf.com/wp-content/uploads/2025/12/icon-1.png", width=150)
+        # Branding section with logo and company name (centered)
+        col1, col2, col3 = st.columns([1, 3, 1])
+        with col2:
+            # Use the local chapters logo SVG file
+            import os
+            logo_path = os.path.join(os.path.dirname(__file__), 'chapters-logo.svg')
+            if os.path.exists(logo_path):
+                st.image(logo_path, width=100)
+            else:
+                # Fallback: simple text logo
+                st.markdown('<div style="font-size: 2rem; text-align: center; color: #3d6b3e;">C</div>', unsafe_allow_html=True)
+
+        # Company name centered
+        st.markdown('''
+        <div style="text-align: center; padding: 0.5rem 0 1rem 0; border-bottom: 1px solid rgba(61, 107, 62, 0.2); margin-bottom: 1rem;">
+            <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 0.95rem; font-weight: 500; color: #f8f6f3; letter-spacing: 0.02em; line-height: 1.3;">
+                Chapters Data & Marketing, LLC
+            </div>
+        </div>
+        ''', unsafe_allow_html=True)
+
         st.markdown(f"**Logged in as:** {st.session_state.get('logged_in_user', 'Unknown')}")
         st.markdown("---")
-        
-        # Navigation
-        nav_options = [
-            "📊 Dashboard",
-            "📈 Sales Analytics",
-            "💡 Recommendations",
-        ]
 
-        nav_options.append("🗄️ Data Center")
+        # Dark mode toggle
+        dark_mode = st.toggle("Dark Mode", key="dark_mode_toggle", value=st.session_state.get('dark_mode', False))
+        if dark_mode != st.session_state.get('dark_mode', False):
+            st.session_state.dark_mode = dark_mode
+            st.rerun()
+
+        st.markdown("---")
+
+        # Navigation with icons
+        nav_items = [
+            {"key": "Dashboard", "icon": "dashboard", "label": "Dashboard"},
+            {"key": "Sales Analytics", "icon": "chart", "label": "Sales Analytics"},
+            {"key": "Recommendations", "icon": "lightbulb", "label": "Recommendations"},
+            {"key": "Data Center", "icon": "database", "label": "Data Center"},
+        ]
 
         # Handle navigation override from dashboard buttons
         if 'nav_override' in st.session_state:
             page = st.session_state['nav_override']
             del st.session_state['nav_override']
         else:
-            page = st.radio("Navigation", nav_options)
+            # Initialize page in session state if not set
+            if 'current_page' not in st.session_state:
+                st.session_state.current_page = "Dashboard"
+
+            # Create icon-based navigation buttons
+            st.markdown('<p style="font-size: 0.75rem; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: rgba(248,246,243,0.6); margin-bottom: 0.5rem;">Navigation</p>', unsafe_allow_html=True)
+
+            for item in nav_items:
+                is_active = st.session_state.current_page == item["key"]
+                btn_style = "primary" if is_active else "secondary"
+
+                if st.button(
+                    item["label"],
+                    key=f"nav_{item['key']}",
+                    type=btn_style,
+                    use_container_width=True
+                ):
+                    st.session_state.current_page = item["key"]
+                    st.rerun()
+
+            page = st.session_state.current_page
 
         st.markdown("---")
-        
+
         # Store filter (global)
         store_options = ["All Stores", "Barbary Coast", "Grass Roots"]
         selected_store = st.selectbox("Filter by Store", store_options)
-        
+
         # Date range filter
         st.markdown("**Date Range**")
         date_range = st.date_input(
@@ -2571,34 +3102,49 @@ def main():
             value=(datetime.now() - timedelta(days=30), datetime.now()),
             key="date_filter"
         )
-        
-        if st.button("🚪 Logout"):
+
+        if st.button("Logout"):
             st.session_state.clear()
             st.rerun()
+
+    # Apply dark mode class if enabled
+    if st.session_state.get('dark_mode', False):
+        st.markdown('''
+        <script>
+            document.querySelector('.stApp').classList.add('dark-mode');
+        </script>
+        <style>
+            .stApp { background-color: #050805 !important; }
+            .stApp h1, .stApp h2, .stApp h3, .stApp p, .stApp span, .stApp div, .stApp label { color: #f8f6f3 !important; }
+        </style>
+        ''', unsafe_allow_html=True)
     
     # Main content area
-    st.title("🌿 Retail Analytics Dashboard")
-    
+    st.markdown(f'<h1 style="display: flex; align-items: center; gap: 12px;">{icon("bar-chart", "#1e391f", 32)} Retail Analytics Dashboard</h1>', unsafe_allow_html=True)
+
+    # Render consolidated notice box (dismissible alerts)
+    render_notice_box()
+
     # Page routing
-    if page == "📊 Dashboard":
+    if page == "Dashboard":
         render_dashboard(st.session_state, analytics, selected_store)
 
-    elif page == "📈 Sales Analytics":
+    elif page == "Sales Analytics":
         render_sales_analysis(st.session_state, analytics, selected_store, date_range)
 
-    elif page == "💡 Recommendations":
+    elif page == "Recommendations":
         render_recommendations(st.session_state, analytics)
 
-    elif page == "🗄️ Data Center":
+    elif page == "Data Center":
         render_data_center(s3_manager, processor)
 
 
 def render_dashboard(state, analytics, store_filter):
     """Render main dashboard overview."""
-    st.header("Overview Dashboard")
+    st.markdown(f'<h2 style="display: flex; align-items: center; gap: 10px;">{icon("dashboard", "#1e391f", 24)} Overview Dashboard</h2>', unsafe_allow_html=True)
     
     if state.sales_data is None:
-        st.info("👆 Upload your data files using the 'Data Center' page to get started.")
+        st.info("Upload your data files using the 'Data Center' page to get started.")
         
         # Show demo data option
         if st.button("Load Demo Data"):
@@ -2649,13 +3195,13 @@ def render_dashboard(state, analytics, store_filter):
     st.markdown("---")
 
     # SEO & Industry Research Preview
-    st.subheader("📈 Business Intelligence Preview")
+    st.subheader("Business Intelligence Preview")
 
     col1, col2 = st.columns(2)
 
     # SEO Preview
     with col1:
-        st.markdown("### 🔍 SEO Status")
+        st.markdown("### SEO Status")
         if SEO_AVAILABLE:
             try:
                 # SEOFindingsViewer already imported from dashboard package
@@ -2669,11 +3215,11 @@ def render_dashboard(state, analytics, store_filter):
 
                     # Display score with color
                     if score >= 70:
-                        st.success(f"**Overall Score: {score}/100** ✅")
+                        st.success(f"**Overall Score: {score}/100** (Good)")
                     elif score >= 50:
-                        st.warning(f"**Overall Score: {score}/100** ⚠️")
+                        st.warning(f"**Overall Score: {score}/100** (Caution)")
                     else:
-                        st.error(f"**Overall Score: {score}/100** ❌")
+                        st.error(f"**Overall Score: {score}/100** (Poor)")
 
                     # Top priority
                     priorities = summary.get("top_priorities", [])
@@ -2686,12 +3232,12 @@ def render_dashboard(state, analytics, store_filter):
                     if wins:
                         st.markdown("**Quick Win:**")
                         win_text = wins[0] if isinstance(wins[0], str) else wins[0].get('action', 'N/A')
-                        st.markdown(f"⚡ {win_text[:80]}...")
+                        st.markdown(f"{win_text[:80]}...")
 
                     st.markdown(f"*Last analyzed: {summary.get('analyzed_at', 'Unknown')[:10]}*")
 
                     if st.button("View Full SEO Analysis →", key="seo_button"):
-                        st.session_state['nav_override'] = "🔍 SEO Analysis"
+                        st.session_state['nav_override'] = "SEO Analysis"
                         st.rerun()
                 else:
                     st.info("No SEO data available yet. Run an SEO analysis to get started.")
@@ -2702,7 +3248,7 @@ def render_dashboard(state, analytics, store_filter):
 
     # Industry Research Preview
     with col2:
-        st.markdown("### 🔬 Industry Insights")
+        st.markdown("### Industry Insights")
         if RESEARCH_AVAILABLE:
             try:
                 # MonthlyResearchSummarizer already imported from dashboard package
@@ -2733,12 +3279,12 @@ def render_dashboard(state, analytics, store_filter):
                         if insights:
                             top_insight = insights[0]
                             importance = top_insight.get('importance', 'medium')
-                            emoji = {"high": "🔴", "medium": "🟡", "low": "🟢"}.get(importance, "⚪")
+                            emoji = {"high": "High", "medium": "Med", "low": "Low"}.get(importance, "-")
                             st.markdown(f"{emoji} **Top Insight:**")
                             st.markdown(f"{top_insight.get('insight', 'N/A')[:100]}...")
 
                         if st.button("View Full Research →", key="research_button"):
-                            st.session_state['nav_override'] = "🔬 Industry Research"
+                            st.session_state['nav_override'] = "Industry Research"
                             st.rerun()
                     else:
                         st.info("No industry research available yet. Upload documents to get started.")
@@ -2752,7 +3298,7 @@ def render_dashboard(state, analytics, store_filter):
 
 def render_sales_analysis(state, analytics, store_filter, date_filter=None):
     """Render comprehensive sales analysis page with all sales-related insights."""
-    st.header("Sales Analytics")
+    st.markdown(f'<h2 style="display: flex; align-items: center; gap: 10px;">{icon("chart", "#1e391f", 24)} Sales Analytics</h2>', unsafe_allow_html=True)
 
     if state.sales_data is None:
         st.warning("Please upload sales data first.")
@@ -2760,13 +3306,13 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
 
     # Tabs for different sales views (including Customer Analytics and Budtender Analytics)
     tab1, tab2, tab3, tab4, tab5, tab_customers, tab_budtenders = st.tabs([
-        "📈 Sales Trends",
-        "🏷️ Brand Performance",
-        "📦 Product Categories",
-        "📊 Daily Breakdown",
-        "🔍 Raw Data",
-        "👥 Customer Analytics",
-        "🎯 Budtender Analytics"
+        "Sales Trends",
+        "Brand Performance",
+        "Product Categories",
+        "Daily Breakdown",
+        "Raw Data",
+        "Customer Analytics",
+        "Budtender Analytics"
     ])
     
     # ===== TAB 1: Sales Trends =====
@@ -2817,7 +3363,7 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
             if 'Upload_Start_Date' in df_brand.columns and 'Upload_End_Date' in df_brand.columns:
                 date_ranges = df_brand.groupby(['Upload_Start_Date', 'Upload_End_Date', 'Upload_Store']).size().reset_index(name='records')
 
-                with st.expander("📅 Available Data Periods", expanded=False):
+                with st.expander("Available Data Periods", expanded=False):
                     for _, row in date_ranges.iterrows():
                         start = row['Upload_Start_Date'].strftime('%m/%d/%Y') if pd.notna(row['Upload_Start_Date']) else 'Unknown'
                         end = row['Upload_End_Date'].strftime('%m/%d/%Y') if pd.notna(row['Upload_End_Date']) else 'Unknown'
@@ -2839,7 +3385,7 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
                     if len(df_brand) == 0:
                         st.warning(f"No brand data available for the selected date range ({filter_start.strftime('%m/%d/%Y')} - {filter_end.strftime('%m/%d/%Y')})")
                     else:
-                        st.info(f"📅 Showing data for: {filter_start.strftime('%m/%d/%Y')} - {filter_end.strftime('%m/%d/%Y')}")
+                        st.info(f"Showing data for: {filter_start.strftime('%m/%d/%Y')} - {filter_end.strftime('%m/%d/%Y')}")
 
             # Filter by store if specified
             if store_filter and store_filter != 'All Stores':
@@ -2859,12 +3405,12 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
                 col1, col2 = st.columns(2)
 
                 with col1:
-                    st.subheader("🏆 Top Brands by Revenue")
+                    st.subheader("Top Brands by Revenue")
                     top_brands = analytics.identify_top_brands(df_brand, 10, store_filter)
                     st.dataframe(top_brands, width='stretch')
 
                 with col2:
-                    st.subheader("⚠️ Low Margin Brands")
+                    st.subheader("Low Margin Brands")
                     underperformers = analytics.identify_underperformers(df_brand)
                     st.dataframe(underperformers, width='stretch')
 
@@ -2923,7 +3469,7 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
                     st.info("No brand data with sufficient sales volume to display.")
 
                 # Add interpretation help
-                with st.expander("📖 How to read this chart"):
+                with st.expander("How to read this chart"):
                     st.markdown("""
                     - **X-axis (horizontal)**: Net Sales in dollars (log scale)
                     - **Y-axis (vertical)**: Gross Margin percentage
@@ -2931,10 +3477,10 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
                     - **Color**: Green = high margin, Red = low margin
 
                     **Quadrants:**
-                    - **Top-right**: Stars (high sales + high margin) ✅
+                    - **Top-right**: Stars (high sales + high margin) (Good)
                     - **Top-left**: Niche winners (low sales but high margin)
                     - **Bottom-right**: Volume drivers (high sales but low margin) - watch closely
-                    - **Bottom-left**: Consider discontinuing ⚠️
+                    - **Bottom-left**: Consider discontinuing (Caution)
                     """)
 
     # ===== TAB 3: Product Categories =====
@@ -2948,7 +3494,7 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
             if 'Upload_Start_Date' in df_product.columns and 'Upload_End_Date' in df_product.columns:
                 date_ranges = df_product.groupby(['Upload_Start_Date', 'Upload_End_Date', 'Upload_Store']).size().reset_index(name='records')
 
-                with st.expander("📅 Available Data Periods", expanded=False):
+                with st.expander("Available Data Periods", expanded=False):
                     for _, row in date_ranges.iterrows():
                         start = row['Upload_Start_Date'].strftime('%m/%d/%Y') if pd.notna(row['Upload_Start_Date']) else 'Unknown'
                         end = row['Upload_End_Date'].strftime('%m/%d/%Y') if pd.notna(row['Upload_End_Date']) else 'Unknown'
@@ -2970,7 +3516,7 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
                     if len(df_product) == 0:
                         st.warning(f"No product data available for the selected date range ({filter_start.strftime('%m/%d/%Y')} - {filter_end.strftime('%m/%d/%Y')})")
                     else:
-                        st.info(f"📅 Showing data for: {filter_start.strftime('%m/%d/%Y')} - {filter_end.strftime('%m/%d/%Y')}")
+                        st.info(f"Showing data for: {filter_start.strftime('%m/%d/%Y')} - {filter_end.strftime('%m/%d/%Y')}")
 
             # Filter by store if specified
             if store_filter and store_filter != 'All Stores':
@@ -3033,7 +3579,7 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
 
         # Download button
         csv = df.to_csv(index=False)
-        st.download_button("📥 Download Data", csv, "sales_data.csv", "text/csv")
+        st.download_button("Download Data", csv, "sales_data.csv", "text/csv")
 
     # ===== TAB 6: Customer Analytics =====
     with tab_customers:
@@ -3099,7 +3645,7 @@ def _render_budtender_analytics(state, analytics, store_filter):
     # BUDTENDER FILTER - Allow user to select/deselect specific budtenders
     # =========================================================================
 
-    with st.expander("🎯 **Filter by Budtender** (click to expand)", expanded=False):
+    with st.expander("**Filter by Budtender** (click to expand)", expanded=False):
         # Initialize session state for selected budtenders if not exists
         if 'selected_budtenders_filter' not in st.session_state:
             st.session_state.selected_budtenders_filter = all_budtenders.copy()
@@ -3133,7 +3679,7 @@ def _render_budtender_analytics(state, analytics, store_filter):
 
         # Search input with immediate filtering
         budtender_search = st.text_input(
-            "🔍 Search and add budtenders",
+            "Search and add budtenders",
             placeholder="Type a name to search...",
             key="budtender_search_input"
         )
@@ -3180,7 +3726,7 @@ def _render_budtender_analytics(state, analytics, store_filter):
         # Display selected budtenders efficiently using multiselect (native Streamlit widget)
         selected_budtenders = st.session_state.selected_budtenders_filter
         if selected_budtenders:
-            st.markdown(f"**Selected ({len(selected_budtenders)}/{len(all_budtenders)}):** Click ✕ to remove")
+            st.markdown(f"**Selected ({len(selected_budtenders)}/{len(all_budtenders)}):** Click x to remove")
 
             # Use multiselect for efficient display and removal
             display_options = [f"{b} (${budtender_sales.get(b, 0):,.0f})" for b in selected_budtenders]
@@ -4223,7 +4769,7 @@ def _render_customer_recency(df):
         ]
 
         if len(at_risk_vip) > 0:
-            st.warning(f"⚠️ {len(at_risk_vip)} high-value customers are at risk of churning!")
+            st.warning(f"{len(at_risk_vip)} high-value customers are at risk of churning!")
 
             cols = ['Customer Name', 'Customer Segment', 'Recency Segment',
                    'Lifetime Net Sales', 'Days Since Last Visit']
@@ -4359,11 +4905,11 @@ def _render_customer_analytics_content(state, analytics, store_filter, date_filt
 
 def render_customer_analytics(state, analytics, store_filter, date_filter=None):
     """Render comprehensive customer analytics dashboard."""
-    st.header("Customer Analytics")
+    st.markdown(f'<h2 style="display: flex; align-items: center; gap: 10px;">{icon("users", "#1e391f", 24)} Customer Analytics</h2>', unsafe_allow_html=True)
 
     if state.customer_data is None:
         st.warning("Please upload customer data first using the 'Data Center' page.")
-        st.info("💡 Upload a CSV file containing customer demographics, transaction history, and loyalty information.")
+        st.info("Upload a CSV file containing customer demographics, transaction history, and loyalty information.")
         return
 
     df = state.customer_data.copy()
@@ -4374,16 +4920,16 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
         if 'Store_ID' in df.columns:
             df = df[df['Store_ID'] == store_id]
 
-    st.info(f"📊 Analyzing {len(df)} customers")
+    st.info(f"Analyzing {len(df)} customers")
 
     # Create tabs for different analytics views
     tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
-        "📊 Overview",
-        "💎 Customer Segments",
-        "📍 Demographics",
-        "💰 Lifetime Value",
-        "🔄 Recency & Retention",
-        "🔍 Customer Search"
+        "Overview",
+        "Customer Segments",
+        "Demographics",
+        "Lifetime Value",
+        "Recency & Retention",
+        "Customer Search"
     ])
 
     # ===== TAB 1: Overview =====
@@ -4593,7 +5139,7 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
 
         # Demographics by Segment Analysis
         st.markdown("---")
-        st.subheader("📊 Demographics by Customer Segment")
+        st.subheader("Demographics by Customer Segment")
 
         if 'Age' in df.columns and 'Gender' in df.columns:
             col1, col2 = st.columns(2)
@@ -4909,7 +5455,7 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
             ]
 
             if len(at_risk_vip) > 0:
-                st.warning(f"⚠️ {len(at_risk_vip)} high-value customers are at risk of churning!")
+                st.warning(f"{len(at_risk_vip)} high-value customers are at risk of churning!")
 
                 cols = ['Customer Name', 'Customer Segment', 'Recency Segment',
                        'Lifetime Net Sales', 'Days Since Last Visit']
@@ -4980,7 +5526,7 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
         # Download filtered data
         csv = filtered_df.to_csv(index=False)
         st.download_button(
-            "📥 Download Filtered Customer Data",
+            "Download Filtered Customer Data",
             csv,
             "filtered_customers.csv",
             "text/csv"
@@ -4989,7 +5535,7 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
 
 def render_brand_analysis(state, analytics, store_filter, date_filter=None):
     """Render brand performance analysis page."""
-    st.header("Brand Performance Analysis")
+    st.markdown(f'<h2 style="display: flex; align-items: center; gap: 10px;">{icon("tag", "#1e391f", 24)} Brand Performance Analysis</h2>', unsafe_allow_html=True)
     
     if state.brand_data is None:
         st.warning("Please upload brand data first.")
@@ -5001,7 +5547,7 @@ def render_brand_analysis(state, analytics, store_filter, date_filter=None):
     if 'Upload_Start_Date' in df.columns and 'Upload_End_Date' in df.columns:
         date_ranges = df.groupby(['Upload_Start_Date', 'Upload_End_Date', 'Upload_Store']).size().reset_index(name='records')
         
-        with st.expander("📅 Available Data Periods", expanded=False):
+        with st.expander("Available Data Periods", expanded=False):
             for _, row in date_ranges.iterrows():
                 start = row['Upload_Start_Date'].strftime('%m/%d/%Y') if pd.notna(row['Upload_Start_Date']) else 'Unknown'
                 end = row['Upload_End_Date'].strftime('%m/%d/%Y') if pd.notna(row['Upload_End_Date']) else 'Unknown'
@@ -5024,7 +5570,7 @@ def render_brand_analysis(state, analytics, store_filter, date_filter=None):
                 st.warning(f"No brand data available for the selected date range ({filter_start.strftime('%m/%d/%Y')} - {filter_end.strftime('%m/%d/%Y')})")
                 return
             
-            st.info(f"📅 Showing data for: {filter_start.strftime('%m/%d/%Y')} - {filter_end.strftime('%m/%d/%Y')}")
+            st.info(f"Showing data for: {filter_start.strftime('%m/%d/%Y')} - {filter_end.strftime('%m/%d/%Y')}")
     
     # Filter by store if specified
     if store_filter and store_filter != 'All Stores':
@@ -5043,12 +5589,12 @@ def render_brand_analysis(state, analytics, store_filter, date_filter=None):
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("🏆 Top Brands by Revenue")
+        st.subheader("Top Brands by Revenue")
         top_brands = analytics.identify_top_brands(df, 10, store_filter)
         st.dataframe(top_brands, width='stretch')
     
     with col2:
-        st.subheader("⚠️ Low Margin Brands")
+        st.subheader("Low Margin Brands")
         underperformers = analytics.identify_underperformers(df)
         st.dataframe(underperformers, width='stretch')
     
@@ -5106,7 +5652,7 @@ def render_brand_analysis(state, analytics, store_filter, date_filter=None):
         st.info("No brand data with sufficient sales volume to display.")
     
     # Add interpretation help
-    with st.expander("📖 How to read this chart"):
+    with st.expander("How to read this chart"):
         st.markdown("""
         - **X-axis (horizontal)**: Net Sales in dollars (log scale)
         - **Y-axis (vertical)**: Gross Margin percentage
@@ -5114,16 +5660,16 @@ def render_brand_analysis(state, analytics, store_filter, date_filter=None):
         - **Color**: Green = high margin, Red = low margin
         
         **Quadrants:**
-        - **Top-right**: Stars (high sales + high margin) ✅
+        - **Top-right**: Stars (high sales + high margin) (Good)
         - **Top-left**: Niche winners (low sales but high margin)
         - **Bottom-right**: Volume drivers (high sales but low margin) - watch closely
-        - **Bottom-left**: Consider discontinuing ⚠️
+        - **Bottom-left**: Consider discontinuing (Caution)
         """)
 
 
 def render_product_analysis(state, store_filter=None, date_filter=None):
     """Render product category analysis page."""
-    st.header("Product Category Analysis")
+    st.markdown(f'<h2 style="display: flex; align-items: center; gap: 10px;">{icon("package", "#1e391f", 24)} Product Category Analysis</h2>', unsafe_allow_html=True)
     
     if state.product_data is None:
         st.warning("Please upload product data first.")
@@ -5135,7 +5681,7 @@ def render_product_analysis(state, store_filter=None, date_filter=None):
     if 'Upload_Start_Date' in df.columns and 'Upload_End_Date' in df.columns:
         date_ranges = df.groupby(['Upload_Start_Date', 'Upload_End_Date', 'Upload_Store']).size().reset_index(name='records')
         
-        with st.expander("📅 Available Data Periods", expanded=False):
+        with st.expander("Available Data Periods", expanded=False):
             for _, row in date_ranges.iterrows():
                 start = row['Upload_Start_Date'].strftime('%m/%d/%Y') if pd.notna(row['Upload_Start_Date']) else 'Unknown'
                 end = row['Upload_End_Date'].strftime('%m/%d/%Y') if pd.notna(row['Upload_End_Date']) else 'Unknown'
@@ -5158,7 +5704,7 @@ def render_product_analysis(state, store_filter=None, date_filter=None):
                 st.warning(f"No product data available for the selected date range ({filter_start.strftime('%m/%d/%Y')} - {filter_end.strftime('%m/%d/%Y')})")
                 return
             
-            st.info(f"📅 Showing data for: {filter_start.strftime('%m/%d/%Y')} - {filter_end.strftime('%m/%d/%Y')}")
+            st.info(f"Showing data for: {filter_start.strftime('%m/%d/%Y')} - {filter_end.strftime('%m/%d/%Y')}")
     
     # Filter by store if specified
     if store_filter and store_filter != 'All Stores':
@@ -5407,14 +5953,14 @@ def _delete_ai_report(report_id: str, timestamp: str) -> bool:
 
 def render_recommendations(state, analytics):
     """Render AI-powered recommendations page."""
-    st.header("💡 Business Recommendations")
+    st.markdown(f'<h2 style="display: flex; align-items: center; gap: 10px;">{icon("lightbulb", "#1e391f", 24)} Business Recommendations</h2>', unsafe_allow_html=True)
 
     if state.sales_data is None:
         st.warning("Please upload data to generate recommendations.")
         return
 
     # Create tabs for different recommendation types
-    tab1, tab2 = st.tabs(["🤖 AI Analysis", "📁 Past Reports"])
+    tab1, tab2 = st.tabs(["AI Analysis", "Past Reports"])
 
     with tab1:
         # Claude AI Integration (imported from dashboard package)
@@ -5442,7 +5988,7 @@ def render_recommendations(state, analytics):
 
         if not api_key:
             st.info("""
-            **🔑 Enable AI Analysis**
+            **Enable AI Analysis**
 
             Add your Anthropic API key to unlock AI-powered insights:
 
@@ -5466,7 +6012,7 @@ def render_recommendations(state, analytics):
             st.error("Could not initialize Claude API. Please check your API key.")
             return
         
-        st.success("✅ Claude AI connected")
+        st.success("Claude AI connected")
 
         # =============================================================================
         # SMART CACHED DATA LOADING - Hash-based cache invalidation
@@ -5652,7 +6198,7 @@ def render_recommendations(state, analytics):
 
         # Add refresh button in sidebar for manual data refresh
         with st.sidebar:
-            if st.button("🔄 Refresh Data", key="refresh_recommendations_data", help="Reload all data from sources"):
+            if st.button("Refresh Data", key="refresh_recommendations_data", help="Reload all data from sources"):
                 # Show loading overlay for manual refresh
                 _show_loading_overlay("Refreshing data...", "Fetching latest data from cloud")
                 # Clear all global caches for data consistency
@@ -5700,29 +6246,29 @@ def render_recommendations(state, analytics):
 
         # Display connection status (using cached values)
         if invoice_summary and invoice_summary.get('total_invoices', 0) > 0:
-            st.success(f"✅ Invoice data ({invoice_summary.get('total_invoices', 0)} invoices, {product_purchase_summary.get('total_items', 0) if product_purchase_summary else 0} line items)")
+            st.success(f"Invoice data ({invoice_summary.get('total_invoices', 0)} invoices, {product_purchase_summary.get('total_items', 0) if product_purchase_summary else 0} line items)")
         else:
-            st.caption("💡 Invoice data not available")
+            st.caption("Invoice data not available")
 
         if research_summary:
             findings_count = len(research_summary.get('key_findings', []))
-            st.success(f"✅ Research data ({findings_count} key findings)")
+            st.success(f"Research data ({findings_count} key findings)")
         else:
-            st.caption("💡 Research data not available")
+            st.caption("Research data not available")
 
         if seo_summaries:
-            st.success(f"✅ SEO data ({len(seo_summaries)} sites)")
+            st.success(f"SEO data ({len(seo_summaries)} sites)")
         else:
-            st.caption("💡 SEO data not available")
+            st.caption("SEO data not available")
 
         # Get brand-product mapping
         brand_product_mapping = state.brand_product_mapping or {}
         mapping_count = len(brand_product_mapping)
 
         if mapping_count > 0:
-            st.info(f"🔗 Using {mapping_count} brand-product mappings for enhanced analysis")
+            st.info(f"Using {mapping_count} brand-product mappings for enhanced analysis")
         else:
-            st.caption("💡 Tip: Set up Brand-Product Mappings for more detailed category insights")
+            st.caption("Tip: Set up Brand-Product Mappings for more detailed category insights")
 
         # Calculate store metrics for Claude context
         metrics = analytics.calculate_store_metrics(state.sales_data)
@@ -5795,61 +6341,61 @@ def render_recommendations(state, analytics):
             st.session_state.ai_analysis_title = None
 
         with col1:
-            if st.button("📊 Analyze Sales Trends", width='stretch'):
+            if st.button("Analyze Sales Trends", width='stretch'):
                 with st.spinner("Claude is analyzing your sales data..."):
                     analysis = claude.analyze_sales_trends(sales_summary)
-                    st.session_state.ai_analysis_title = "📊 Sales Analysis"
+                    st.session_state.ai_analysis_title = "Sales Analysis"
                     st.session_state.ai_analysis_result = analysis
                     # Save to Past Reports under General AI Reports
                     _save_ai_report(
-                        question="📊 Sales Analysis",
+                        question="Sales Analysis",
                         answer=analysis,
                         model_type='fast',
-                        data_sources=["📊 Sales Data"],
+                        data_sources=["Sales Data"],
                         report_category="General AI Reports"
                     )
                     st.rerun()
 
         with col2:
-            if st.button("🏷️ Brand Recommendations", width='stretch'):
+            if st.button("Brand Recommendations", width='stretch'):
                 if not brand_summary:
                     st.warning("Upload brand data first.")
                 else:
                     with st.spinner("Claude is analyzing brand performance..."):
                         analysis = claude.analyze_brand_performance(brand_summary, brand_by_category)
-                        st.session_state.ai_analysis_title = "🏷️ Brand Analysis"
+                        st.session_state.ai_analysis_title = "Brand Analysis"
                         st.session_state.ai_analysis_result = analysis
                         # Save to Past Reports under General AI Reports
                         _save_ai_report(
-                            question="🏷️ Brand Analysis",
+                            question="Brand Analysis",
                             answer=analysis,
                             model_type='fast',
-                            data_sources=["🏷️ Brand Data"],
+                            data_sources=["Brand Data"],
                             report_category="General AI Reports"
                         )
                         st.rerun()
 
         with col3:
-            if st.button("📦 Category Insights", width='stretch'):
+            if st.button("Category Insights", width='stretch'):
                 if not brand_by_category:
                     st.warning("Set up brand-product mappings first to get category insights.")
                 else:
                     with st.spinner("Claude is analyzing category performance..."):
                         analysis = claude.analyze_category_performance(brand_by_category, brand_summary)
-                        st.session_state.ai_analysis_title = "📦 Category Analysis"
+                        st.session_state.ai_analysis_title = "Category Analysis"
                         st.session_state.ai_analysis_result = analysis
                         # Save to Past Reports under General AI Reports
                         _save_ai_report(
-                            question="📦 Category Analysis",
+                            question="Category Analysis",
                             answer=analysis,
                             model_type='fast',
-                            data_sources=["📦 Category Data"],
+                            data_sources=["Category Data"],
                             report_category="General AI Reports"
                         )
                         st.rerun()
 
         with col4:
-            if st.button("🎯 Deal Suggestions", width='stretch'):
+            if st.button("Deal Suggestions", width='stretch'):
                 if state.brand_data is None:
                     st.warning("Upload brand data first.")
                 else:
@@ -5864,14 +6410,14 @@ def render_recommendations(state, analytics):
                         high_margin = high_df.to_dict('records')
 
                         analysis = claude.generate_deal_recommendations(slow_movers, high_margin)
-                        st.session_state.ai_analysis_title = "🎯 Deal Recommendations"
+                        st.session_state.ai_analysis_title = "Deal Recommendations"
                         st.session_state.ai_analysis_result = analysis
                         # Save to Past Reports under General AI Reports
                         _save_ai_report(
-                            question="🎯 Deal Recommendations",
+                            question="Deal Recommendations",
                             answer=analysis,
                             model_type='fast',
-                            data_sources=["🏷️ Brand Data"],
+                            data_sources=["Brand Data"],
                             report_category="General AI Reports"
                         )
                         st.rerun()
@@ -5881,42 +6427,42 @@ def render_recommendations(state, analytics):
             col5, col6, col7 = st.columns([1, 1, 1])
 
             with col5:
-                if st.button("👥 Customer Insights", width='stretch'):
+                if st.button("Customer Insights", width='stretch'):
                     with st.spinner("Claude is analyzing customer segments..."):
                         analysis = claude.analyze_customer_segments(customer_summary, sales_summary)
-                        st.session_state.ai_analysis_title = "👥 Customer Analysis"
+                        st.session_state.ai_analysis_title = "Customer Analysis"
                         st.session_state.ai_analysis_result = analysis
                         # Save to Past Reports under General AI Reports
                         _save_ai_report(
-                            question="👥 Customer Analysis",
+                            question="Customer Analysis",
                             answer=analysis,
                             model_type='fast',
-                            data_sources=["👥 Customer Data"],
+                            data_sources=["Customer Data"],
                             report_category="General AI Reports"
                         )
                         st.rerun()
 
             with col6:
-                if st.button("🔄 Integrated Analysis", width='stretch'):
+                if st.button("Integrated Analysis", width='stretch'):
                     with st.spinner("Claude is generating integrated insights..."):
                         analysis = claude.generate_integrated_insights(
                             sales_summary,
                             customer_summary,
                             brand_summary if brand_summary else None
                         )
-                        st.session_state.ai_analysis_title = "🔄 Integrated Business Insights"
+                        st.session_state.ai_analysis_title = "Integrated Business Insights"
                         st.session_state.ai_analysis_result = analysis
                         # Save to Past Reports under General AI Reports
                         _save_ai_report(
-                            question="🔄 Integrated Business Insights",
+                            question="Integrated Business Insights",
                             answer=analysis,
                             model_type='fast',
-                            data_sources=["📊 Sales", "👥 Customers", "🏷️ Brands"],
+                            data_sources=["Sales", "Customers", "Brands"],
                             report_category="General AI Reports"
                         )
                         st.rerun()
         else:
-            st.caption("💡 Upload customer data to unlock customer analytics and integrated insights")
+            st.caption("Upload customer data to unlock customer analytics and integrated insights")
 
         # Row 3: Invoice/Purchasing analytics (if invoice data available)
         if invoice_summary and invoice_summary.get('total_invoices', 0) > 0:
@@ -5924,7 +6470,7 @@ def render_recommendations(state, analytics):
             inv_col1, inv_col2, inv_col3 = st.columns([1, 1, 1])
 
             with inv_col1:
-                if st.button("🏭 Vendor Analysis", width='stretch'):
+                if st.button("Vendor Analysis", width='stretch'):
                     with st.spinner("Claude is analyzing vendor spending..."):
                         vendor_context = {
                             'total_invoices': invoice_summary.get('total_invoices', 0),
@@ -5954,20 +6500,20 @@ Keep analysis concise and actionable."""
                         except Exception as e:
                             analysis = f"Error analyzing vendor spending: {str(e)}"
 
-                        st.session_state.ai_analysis_title = "🏭 Vendor Spending Analysis"
+                        st.session_state.ai_analysis_title = "Vendor Spending Analysis"
                         st.session_state.ai_analysis_result = analysis
                         # Save to Past Reports under General AI Reports
                         _save_ai_report(
-                            question="🏭 Vendor Spending Analysis",
+                            question="Vendor Spending Analysis",
                             answer=analysis,
                             model_type='fast',
-                            data_sources=["📦 Invoice Data"],
+                            data_sources=["Invoice Data"],
                             report_category="General AI Reports"
                         )
                         st.rerun()
 
             with inv_col2:
-                if st.button("📦 Purchase Patterns", width='stretch'):
+                if st.button("Purchase Patterns", width='stretch'):
                     with st.spinner("Claude is analyzing purchase patterns..."):
                         # Get top purchased brands and product types
                         purchase_brands = product_purchase_summary.get('brands', {})
@@ -6007,20 +6553,20 @@ Keep analysis practical and data-driven."""
                         except Exception as e:
                             analysis = f"Error analyzing purchase patterns: {str(e)}"
 
-                        st.session_state.ai_analysis_title = "📦 Purchase Pattern Analysis"
+                        st.session_state.ai_analysis_title = "Purchase Pattern Analysis"
                         st.session_state.ai_analysis_result = analysis
                         # Save to Past Reports under General AI Reports
                         _save_ai_report(
-                            question="📦 Purchase Pattern Analysis",
+                            question="Purchase Pattern Analysis",
                             answer=analysis,
                             model_type='fast',
-                            data_sources=["📦 Invoice Data", "🛒 Purchases"],
+                            data_sources=["Invoice Data", "Purchases"],
                             report_category="General AI Reports"
                         )
                         st.rerun()
 
             with inv_col3:
-                if st.button("💰 Margin Optimization", width='stretch'):
+                if st.button("Margin Optimization", width='stretch'):
                     with st.spinner("Claude is analyzing pricing and margins..."):
                         # Combine sales data with purchase data for margin analysis
                         purchase_types = product_purchase_summary.get('product_types', {})
@@ -6064,19 +6610,19 @@ Focus on actionable pricing and margin insights."""
                         except Exception as e:
                             analysis = f"Error analyzing margins: {str(e)}"
 
-                        st.session_state.ai_analysis_title = "💰 Margin Optimization Analysis"
+                        st.session_state.ai_analysis_title = "Margin Optimization Analysis"
                         st.session_state.ai_analysis_result = analysis
                         # Save to Past Reports under General AI Reports
                         _save_ai_report(
-                            question="💰 Margin Optimization Analysis",
+                            question="Margin Optimization Analysis",
                             answer=analysis,
                             model_type='fast',
-                            data_sources=["📦 Invoice Data", "📊 Sales"],
+                            data_sources=["Invoice Data", "Sales"],
                             report_category="General AI Reports"
                         )
                         st.rerun()
         else:
-            st.caption("💡 Upload invoices to unlock purchasing analytics (vendor analysis, purchase patterns, margin optimization)")
+            st.caption("Upload invoices to unlock purchasing analytics (vendor analysis, purchase patterns, margin optimization)")
 
         # Row 4: Research & SEO analytics (if data available)
         if research_summary or seo_summaries:
@@ -6085,7 +6631,7 @@ Focus on actionable pricing and margin insights."""
 
             with strat_col1:
                 if research_summary:
-                    if st.button("🔬 Industry Insights", width='stretch'):
+                    if st.button("Industry Insights", width='stretch'):
                         with st.spinner("Claude is analyzing industry research..."):
                             research_context = {
                                 'executive_summary': research_summary.get('executive_summary', ''),
@@ -6118,23 +6664,23 @@ Focus on actionable recommendations for Barbary Coast and Grass Roots dispensari
                             except Exception as e:
                                 analysis = f"Error analyzing research: {str(e)}"
 
-                            st.session_state.ai_analysis_title = "🔬 Industry Research Insights"
+                            st.session_state.ai_analysis_title = "Industry Research Insights"
                             st.session_state.ai_analysis_result = analysis
                             # Save to Past Reports under General AI Reports
                             _save_ai_report(
-                                question="🔬 Industry Research Insights",
+                                question="Industry Research Insights",
                                 answer=analysis,
                                 model_type='fast',
-                                data_sources=["🔬 Research"],
+                                data_sources=["Research"],
                                 report_category="General AI Reports"
                             )
                             st.rerun()
                 else:
-                    st.caption("💡 Upload research documents to unlock industry insights")
+                    st.caption("Upload research documents to unlock industry insights")
 
             with strat_col2:
                 if seo_summaries:
-                    if st.button("🔍 SEO Analysis", width='stretch'):
+                    if st.button("SEO Analysis", width='stretch'):
                         with st.spinner("Claude is analyzing SEO performance..."):
                             seo_context = {}
                             for site_name, seo_data in seo_summaries.items():
@@ -6171,19 +6717,19 @@ Focus on actionable improvements that will drive more organic traffic and local 
                             except Exception as e:
                                 analysis = f"Error analyzing SEO: {str(e)}"
 
-                            st.session_state.ai_analysis_title = "🔍 SEO Performance Analysis"
+                            st.session_state.ai_analysis_title = "SEO Performance Analysis"
                             st.session_state.ai_analysis_result = analysis
                             # Save to Past Reports under General AI Reports
                             _save_ai_report(
-                                question="🔍 SEO Performance Analysis",
+                                question="SEO Performance Analysis",
                                 answer=analysis,
                                 model_type='fast',
-                                data_sources=["🔍 SEO"],
+                                data_sources=["SEO"],
                                 report_category="General AI Reports"
                             )
                             st.rerun()
                 else:
-                    st.caption("💡 Run SEO analysis to unlock website insights")
+                    st.caption("Run SEO analysis to unlock website insights")
 
         # Display AI analysis result at full width
         if st.session_state.ai_analysis_result:
@@ -6194,7 +6740,7 @@ Focus on actionable improvements that will drive more organic traffic and local 
             with header_col1:
                 st.subheader(st.session_state.ai_analysis_title)
             with header_col2:
-                if st.button("✖️ Clear", key="clear_analysis"):
+                if st.button("Clear", key="clear_analysis"):
                     st.session_state.ai_analysis_result = None
                     st.session_state.ai_analysis_title = None
                     st.rerun()
@@ -6204,25 +6750,25 @@ Focus on actionable improvements that will drive more organic traffic and local 
         
         # Free-form Q&A
         st.markdown("---")
-        st.subheader("💬 Ask Claude About Your Business")
+        st.subheader("Ask Claude About Your Business")
 
         # Show data availability summary
         data_sources = []
         if state.sales_data is not None:
-            data_sources.append(f"📊 Sales ({len(state.sales_data):,} records)")
+            data_sources.append(f"Sales ({len(state.sales_data):,} records)")
         if state.brand_data is not None:
-            data_sources.append(f"🏷️ Brands ({len(state.brand_data):,} brands)")
+            data_sources.append(f"Brands ({len(state.brand_data):,} brands)")
         if state.customer_data is not None:
-            data_sources.append(f"👥 Customers ({len(state.customer_data):,} customers)")
+            data_sources.append(f"Customers ({len(state.customer_data):,} customers)")
         if invoice_summary and invoice_summary.get('total_invoices', 0) > 0:
-            data_sources.append(f"📦 Invoices ({invoice_summary['total_invoices']:,} invoices)")
+            data_sources.append(f"Invoices ({invoice_summary['total_invoices']:,} invoices)")
         if product_purchase_summary and product_purchase_summary.get('total_items', 0) > 0:
-            data_sources.append(f"🛒 Purchases ({product_purchase_summary['total_items']:,} line items)")
+            data_sources.append(f"Purchases ({product_purchase_summary['total_items']:,} line items)")
         if research_summary:
             findings_count = len(research_summary.get('key_findings', []))
-            data_sources.append(f"🔬 Research ({findings_count} findings)")
+            data_sources.append(f"Research ({findings_count} findings)")
         if seo_summaries:
-            data_sources.append(f"🔍 SEO ({len(seo_summaries)} sites)")
+            data_sources.append(f"SEO ({len(seo_summaries)} sites)")
 
         if data_sources:
             st.caption(f"**Available data:** {' | '.join(data_sources)}")
@@ -6238,7 +6784,7 @@ Focus on actionable improvements that will drive more organic traffic and local 
                 research_documents = _fetch_research_documents_cached(aws_access_key, aws_secret_key, aws_region)
 
                 if research_documents:
-                    with st.expander(f"📄 Reference Specific Documents ({len(research_documents)} available)", expanded=False):
+                    with st.expander(f"Reference Specific Documents ({len(research_documents)} available)", expanded=False):
                         st.caption("Select documents to include in your query for targeted analysis")
 
                         # Group documents by category
@@ -6268,7 +6814,7 @@ Focus on actionable improvements that will drive more organic traffic and local 
                         )
 
                         if selected_docs:
-                            st.info(f"📎 {len(selected_docs)} document(s) will be included in your query")
+                            st.info(f"{len(selected_docs)} document(s) will be included in your query")
                             # Load content for selected documents
                             for display_name in selected_docs:
                                 doc = doc_map[display_name]
@@ -6282,7 +6828,7 @@ Focus on actionable improvements that will drive more organic traffic and local 
                                         'uploaded_at': doc.get('uploaded_at', '')
                                     }
             except Exception as e:
-                st.caption(f"💡 Document selection not available: {str(e)[:50]}")
+                st.caption(f"Document selection not available: {str(e)[:50]}")
 
         # Model selection toggle
         col_q, col_toggle = st.columns([4, 1])
@@ -6302,7 +6848,7 @@ Focus on actionable improvements that will drive more organic traffic and local 
         submit_col1, submit_col2 = st.columns([1, 4])
         with submit_col1:
             submit_button = st.button(
-                "🚀 Analyze" if not use_deep_thinking else "🧠 Deep Analyze",
+                "Analyze" if not use_deep_thinking else "Deep Analyze",
                 type="primary",
                 disabled=not question,
                 key="ai_analysis_submit"
@@ -6373,7 +6919,7 @@ Focus on actionable improvements that will drive more organic traffic and local 
                 context['selected_research_documents'] = selected_doc_contents
 
             # Show appropriate spinner based on model
-            spinner_text = "🧠 Generating Deep Insights..." if use_deep_thinking else "⚡ Generating Fast Insights..."
+            spinner_text = "Generating Deep Insights..." if use_deep_thinking else "Generating Fast Insights..."
             with st.spinner(spinner_text):
                 answer = claude.answer_business_question(question, context, use_deep_thinking=use_deep_thinking)
 
@@ -6401,28 +6947,28 @@ Focus on actionable improvements that will drive more organic traffic and local 
             result = st.session_state.ai_analysis_last_result
             st.markdown("### Answer")
             if result['model_type'] == 'deep':
-                st.caption("🧠 *Deep Insights - Analyzed with Claude Opus + Extended Thinking*")
+                st.caption("*Deep Insights - Analyzed with Claude Opus + Extended Thinking*")
             else:
-                st.caption("⚡ *Fast Insights - Analyzed with Claude Sonnet*")
+                st.caption("*Fast Insights - Analyzed with Claude Sonnet*")
             st.markdown(result['answer'])
 
             if result.get('report_saved'):
-                st.success("📁 Report saved to Past Reports")
+                st.success("Report saved to Past Reports")
 
             # Add clear button to start fresh
-            if st.button("🗑️ Clear Result", key="clear_ai_result"):
+            if st.button("Clear Result", key="clear_ai_result"):
                 st.session_state.ai_analysis_last_result = None
                 st.rerun()
 
     with tab2:
         # Past Reports Tab
-        st.subheader("📁 Past AI Analysis Reports")
+        st.subheader("Past AI Analysis Reports")
         st.caption("View and print previous AI-generated insights")
 
         # Refresh button
         col1, col2 = st.columns([3, 1])
         with col2:
-            if st.button("🔄 Refresh", key="refresh_reports"):
+            if st.button("Refresh", key="refresh_reports"):
                 st.rerun()
 
         # Load reports
@@ -6479,7 +7025,7 @@ Focus on actionable improvements that will drive more organic traffic and local 
             # Display reports grouped by category
             # Comprehensive Analyses section (custom user queries)
             if comprehensive_reports:
-                st.markdown("### 🧠 Comprehensive Analyses")
+                st.markdown("### Comprehensive Analyses")
                 st.caption("Custom queries and deep thinking reports")
                 for report in comprehensive_reports:
                     report_date = report.get('date', 'Unknown')
@@ -6492,7 +7038,7 @@ Focus on actionable improvements that will drive more organic traffic and local 
                     timestamp = report.get('timestamp', '')
 
                     # Model badge
-                    model_badge = "🧠" if model_type == 'deep' else "⚡"
+                    model_badge = "Deep" if model_type == 'deep' else "Fast"
 
                     with st.expander(f"{model_badge} {report_date} {report_time} - {question[:60]}{'...' if len(question) > 60 else ''}", expanded=False):
                         # Report header
@@ -6518,13 +7064,13 @@ Focus on actionable improvements that will drive more organic traffic and local 
                         col1, col2, col3 = st.columns([1, 1, 2])
                         with col1:
                             # Copy to clipboard button (using markdown workaround)
-                            if st.button("📋 Copy", key=f"copy_comp_{report_id}"):
+                            if st.button("Copy", key=f"copy_comp_{report_id}"):
                                 st.code(f"Question: {question}\n\nAnalysis:\n{answer}", language=None)
                                 st.caption("Select and copy the text above")
 
                         with col2:
                             # Delete button
-                            if st.button("🗑️ Delete", key=f"delete_comp_{report_id}"):
+                            if st.button("Delete", key=f"delete_comp_{report_id}"):
                                 if _delete_ai_report(report_id, timestamp):
                                     st.success("Report deleted")
                                     st.rerun()
@@ -6533,12 +7079,12 @@ Focus on actionable improvements that will drive more organic traffic and local 
 
                         with col3:
                             # Print instructions
-                            st.caption("💡 To print: Expand report → Right-click → Print")
+                            st.caption("To print: Expand report → Right-click → Print")
                 st.markdown("---")
 
             # General AI Reports section (button-triggered analyses)
             if general_reports:
-                st.markdown("### ⚡ General AI Reports")
+                st.markdown("### General AI Reports")
                 st.caption("Pre-defined analysis reports from dashboard buttons")
                 for report in general_reports:
                     report_date = report.get('date', 'Unknown')
@@ -6551,7 +7097,7 @@ Focus on actionable improvements that will drive more organic traffic and local 
                     timestamp = report.get('timestamp', '')
 
                     # Model badge
-                    model_badge = "🧠" if model_type == 'deep' else "⚡"
+                    model_badge = "Deep" if model_type == 'deep' else "Fast"
 
                     with st.expander(f"{model_badge} {report_date} {report_time} - {question[:60]}{'...' if len(question) > 60 else ''}", expanded=False):
                         # Report header
@@ -6577,13 +7123,13 @@ Focus on actionable improvements that will drive more organic traffic and local 
                         col1, col2, col3 = st.columns([1, 1, 2])
                         with col1:
                             # Copy to clipboard button (using markdown workaround)
-                            if st.button("📋 Copy", key=f"copy_gen_{report_id}"):
+                            if st.button("Copy", key=f"copy_gen_{report_id}"):
                                 st.code(f"Report: {question}\n\nAnalysis:\n{answer}", language=None)
                                 st.caption("Select and copy the text above")
 
                         with col2:
                             # Delete button
-                            if st.button("🗑️ Delete", key=f"delete_gen_{report_id}"):
+                            if st.button("Delete", key=f"delete_gen_{report_id}"):
                                 if _delete_ai_report(report_id, timestamp):
                                     st.success("Report deleted")
                                     st.rerun()
@@ -6592,7 +7138,7 @@ Focus on actionable improvements that will drive more organic traffic and local 
 
                         with col3:
                             # Print instructions
-                            st.caption("💡 To print: Expand report → Right-click → Print")
+                            st.caption("To print: Expand report → Right-click → Print")
 
 
 def render_brand_product_mapping(state, s3_manager):
@@ -6631,10 +7177,10 @@ def render_brand_product_mapping(state, s3_manager):
     
     # Stats
     mapped_count = len([b for b in brands if b in current_mapping])
-    st.info(f"📊 **{mapped_count}** of **{len(brands)}** brands mapped ({100*mapped_count/len(brands):.1f}%)")
+    st.info(f"**{mapped_count}** of **{len(brands)}** brands mapped ({100*mapped_count/len(brands):.1f}%)")
     
     # Tabs for different views
-    tab1, tab2, tab3 = st.tabs(["🔧 Quick Mapping", "📋 Bulk Edit", "📊 View Mappings"])
+    tab1, tab2, tab3 = st.tabs(["Quick Mapping", "Bulk Edit", "View Mappings"])
     
     with tab1:
         st.subheader("Quick Mapping")
@@ -6652,7 +7198,7 @@ def render_brand_product_mapping(state, s3_manager):
                 available_brands = brands
             
             if not available_brands:
-                st.success("✅ All brands are mapped!")
+                st.success("All brands are mapped!")
                 selected_brand = None
             else:
                 selected_brand = st.selectbox(
@@ -6677,14 +7223,14 @@ def render_brand_product_mapping(state, s3_manager):
         with col3:
             if selected_brand:
                 st.markdown("<br>", unsafe_allow_html=True)
-                if st.button("💾 Save", key="quick_save", width='stretch'):
+                if st.button("Save", key="quick_save", width='stretch'):
                     current_mapping[selected_brand] = selected_category
                     state.brand_product_mapping = current_mapping
                     
                     # Save to S3
                     success, message = s3_manager.save_brand_product_mapping(current_mapping)
                     if success:
-                        st.success(f"✅ Mapped '{selected_brand}' → {selected_category}")
+                        st.success(f"Mapped '{selected_brand}' → {selected_category}")
                     else:
                         st.warning(f"Saved locally. S3: {message}")
                     st.rerun()
@@ -6773,7 +7319,7 @@ def render_brand_product_mapping(state, s3_manager):
             
             st.markdown("---")
             
-            if st.button("💾 Save All Changes", key="bulk_save", type="primary"):
+            if st.button("Save All Changes", key="bulk_save", type="primary"):
                 # Apply all changes
                 for brand, category in st.session_state.bulk_changes.items():
                     current_mapping[brand] = category
@@ -6783,7 +7329,7 @@ def render_brand_product_mapping(state, s3_manager):
                 # Save to S3
                 success, message = s3_manager.save_brand_product_mapping(current_mapping)
                 if success:
-                    st.success(f"✅ Saved {len(st.session_state.bulk_changes)} mappings")
+                    st.success(f"Saved {len(st.session_state.bulk_changes)} mappings")
                 else:
                     st.warning(f"Saved locally. S3: {message}")
                 
@@ -6827,7 +7373,7 @@ def render_brand_product_mapping(state, s3_manager):
                 # Export
                 mapping_json = json.dumps(current_mapping, indent=2)
                 st.download_button(
-                    "📥 Export Mappings (JSON)",
+                    "Export Mappings (JSON)",
                     mapping_json,
                     "brand_product_mapping.json",
                     "application/json"
@@ -6836,7 +7382,7 @@ def render_brand_product_mapping(state, s3_manager):
             with col2:
                 # Import
                 uploaded_mapping = st.file_uploader(
-                    "📤 Import Mappings (JSON)",
+                    "Import Mappings (JSON)",
                     type=['json'],
                     key="import_mapping"
                 )
@@ -6849,7 +7395,7 @@ def render_brand_product_mapping(state, s3_manager):
                                 state.brand_product_mapping = imported
                                 success, message = s3_manager.save_brand_product_mapping(imported)
                                 if success:
-                                    st.success(f"✅ Imported {len(imported)} mappings")
+                                    st.success(f"Imported {len(imported)} mappings")
                                 else:
                                     st.warning(f"Saved locally. S3: {message}")
                                 st.rerun()
@@ -6860,7 +7406,7 @@ def render_brand_product_mapping(state, s3_manager):
             
             # Clear all option
             st.markdown("---")
-            if st.button("🗑️ Clear All Mappings", type="secondary"):
+            if st.button("Clear All Mappings", type="secondary"):
                 state.brand_product_mapping = {}
                 s3_manager.save_brand_product_mapping({})
                 st.success("All mappings cleared")
@@ -6869,7 +7415,7 @@ def render_brand_product_mapping(state, s3_manager):
 
 def render_data_center(s3_manager, processor):
     """Render Data Center page with tabbed interface for all data management features."""
-    st.header("🗄️ Data Center")
+    st.markdown(f'<h2 style="display: flex; align-items: center; gap: 10px;">{icon("database", "#1e391f", 24)} Data Center</h2>', unsafe_allow_html=True)
 
     # S3 Connection Status with consolidated record counts
     s3_connected, s3_message = s3_manager.test_connection()
@@ -6916,12 +7462,12 @@ def render_data_center(s3_manager, processor):
     # Display consolidated status
     if s3_connected:
         if record_counts:
-            status_text = f"✅ {s3_message} | Records: {' | '.join(record_counts)}"
+            status_text = f"{s3_message} | Records: {' | '.join(record_counts)}"
         else:
-            status_text = f"✅ {s3_message} | No data loaded"
+            status_text = f"{s3_message} | No data loaded"
         st.success(status_text)
     else:
-        st.error(f"❌ S3 Not Connected: {s3_message}")
+        st.error(f"S3 Not Connected: {s3_message}")
         st.markdown("""
         **To fix this, check your `.streamlit/secrets.toml`:**
         ```toml
@@ -6940,7 +7486,7 @@ def render_data_center(s3_manager, processor):
     
     # Global upload settings
     st.markdown("---")
-    st.subheader("📋 Upload Settings")
+    st.subheader("Upload Settings")
     
     settings_col1, settings_col2 = st.columns(2)
     
@@ -6988,35 +7534,35 @@ def render_data_center(s3_manager, processor):
                 end_date = start_date
         except ValueError:
             date_error = True
-            st.error("⚠️ Invalid date format. Please use MM/DD/YYYY - MM/DD/YYYY")
+            st.error("Invalid date format. Please use MM/DD/YYYY - MM/DD/YYYY")
             # Fallback to defaults
             start_date = (datetime.now() - timedelta(days=30)).date()
             end_date = datetime.now().date()
     
     # Display selected settings
     if not date_error:
-        st.info(f"📍 **Store:** {selected_store} | 📅 **Period:** {start_date.strftime('%b %d, %Y')} to {end_date.strftime('%b %d, %Y')}")
+        st.info(f"**Store:** {selected_store} | **Period:** {start_date.strftime('%b %d, %Y')} to {end_date.strftime('%b %d, %Y')}")
     
     st.markdown("---")
 
     # Create main tabs for Data Center
     # Build tab list dynamically based on available modules
     tab_names = [
-        "📊 Sales Data",
-        "📋 Invoice Data",
-        "👥 Customer Data",
-        "🎯 Budtender Performance",
-        "💡 Define Context",
-        "🔗 Brand Mapping",
+        "Sales Data",
+        "Invoice Data",
+        "Customer Data",
+        "Budtender Performance",
+        "Define Context",
+        "Brand Mapping",
     ]
 
     # Add optional tabs based on available modules
     if RESEARCH_AVAILABLE:
-        tab_names.append("🔬 Industry Research")
+        tab_names.append("Industry Research")
     if SEO_AVAILABLE:
-        tab_names.append("🔍 SEO Analysis")
+        tab_names.append("SEO Analysis")
     if QR_AVAILABLE:
-        tab_names.append("📱 QR Portal")
+        tab_names.append("QR Portal")
 
     tabs = st.tabs(tab_names)
 
@@ -7092,12 +7638,12 @@ def render_data_center(s3_manager, processor):
 
                     success, message = s3_manager.upload_file(sales_file, s3_key)
                     if success:
-                        st.success(f"✅ {message}")
+                        st.success(f"{message}")
                     else:
-                        st.warning(f"⚠️ S3 upload failed: {message}")
+                        st.warning(f"S3 upload failed: {message}")
                         st.info("Data processed locally but NOT saved to S3")
 
-                    st.success("✅ Data processed and ready!")
+                    st.success("Data processed and ready!")
                     st.rerun()
 
         with col2:
@@ -7111,17 +7657,17 @@ def render_data_center(s3_manager, processor):
                 # Handle column name change: Treez renamed 'Brand' to 'Product Brand' after 12/01/2025
                 if 'Product Brand' in df.columns and 'Brand' not in df.columns:
                     df = df.rename(columns={'Product Brand': 'Brand'})
-                    st.info("ℹ️ Detected new Treez format - 'Product Brand' column renamed to 'Brand'")
+                    st.info("Detected new Treez format - 'Product Brand' column renamed to 'Brand'")
 
                 # Validate that this is brand data (must have 'Brand' column)
                 if 'Brand' not in df.columns:
-                    st.error(f"⚠️ This doesn't appear to be Brand data. Expected 'Brand' or 'Product Brand' column but found: {', '.join(df.columns[:5])}...")
+                    st.error(f"This doesn't appear to be Brand data. Expected 'Brand' or 'Product Brand' column but found: {', '.join(df.columns[:5])}...")
                     st.info("Please upload a 'Net Sales by Brand' report from Treez.")
                 else:
                     # Show sample record count that will be filtered
                     sample_count = df['Brand'].str.startswith(('[DS]', '[SS]'), na=False).sum()
                     if sample_count > 0:
-                        st.info(f"ℹ️ {sample_count} sample records ([DS]/[SS]) will be filtered out")
+                        st.info(f"{sample_count} sample records ([DS]/[SS]) will be filtered out")
 
                     # Preview
                     with st.expander("Preview Data"):
@@ -7160,12 +7706,12 @@ def render_data_center(s3_manager, processor):
 
                     success, message = s3_manager.upload_file(brand_file, s3_key)
                     if success:
-                        st.success(f"✅ {message}")
+                        st.success(f"{message}")
                     else:
-                        st.warning(f"⚠️ S3 upload failed: {message}")
+                        st.warning(f"S3 upload failed: {message}")
                         st.info("Data processed locally but NOT saved to S3")
 
-                    st.success("✅ Data processed!")
+                    st.success("Data processed!")
                     st.rerun()
 
         with col3:
@@ -7204,12 +7750,12 @@ def render_data_center(s3_manager, processor):
 
                     success, message = s3_manager.upload_file(product_file, s3_key)
                     if success:
-                        st.success(f"✅ {message}")
+                        st.success(f"{message}")
                     else:
-                        st.warning(f"⚠️ S3 upload failed: {message}")
+                        st.warning(f"S3 upload failed: {message}")
                         st.info("Data processed locally but NOT saved to S3")
 
-                    st.success("✅ Data processed!")
+                    st.success("Data processed!")
                     st.rerun()
 
     # =========================================================================
@@ -7223,19 +7769,19 @@ def render_data_center(s3_manager, processor):
                 total_count = len(st.session_state.invoice_data)
                 dynamo_count = st.session_state.get('dynamo_invoice_count', 0)
                 if dynamo_count > 0:
-                    st.success(f"✅ **{total_count} invoice line items loaded** ({dynamo_count} from DynamoDB)")
+                    st.success(f"**{total_count} invoice line items loaded** ({dynamo_count} from DynamoDB)")
                 else:
-                    st.info(f"📊 {total_count} invoice line items loaded (from S3)")
+                    st.info(f"{total_count} invoice line items loaded (from S3)")
             with inv_col2:
                 if st.session_state.get('dynamo_load_error'):
-                    st.error("⚠️ DynamoDB Error")
+                    st.error("DynamoDB Error")
                     with st.expander("View Error"):
                         st.code(st.session_state.dynamo_load_error)
         else:
             if st.session_state.get('dynamo_load_error'):
-                st.warning(f"⚠️ No invoice data loaded. DynamoDB error: {st.session_state.dynamo_load_error[:100]}")
+                st.warning(f"No invoice data loaded. DynamoDB error: {st.session_state.dynamo_load_error[:100]}")
             else:
-                st.info("📤 No invoice data loaded yet. Upload invoices below to get started.")
+                st.info("No invoice data loaded yet. Upload invoices below to get started.")
 
         # Use the integrated invoice upload UI with all tabs (Upload, View Data, Date Review)
         # render_full_invoice_section already imported from dashboard package
@@ -7248,7 +7794,7 @@ def render_data_center(s3_manager, processor):
                 st.code(traceback.format_exc())
         else:
             st.warning("Invoice upload module not available.")
-            st.info("📦 The invoice upload module is not installed or failed to load.")
+            st.info("The invoice upload module is not installed or failed to load.")
 
     # =========================================================================
     # CUSTOMER DATA TAB
@@ -7268,7 +7814,7 @@ def render_data_center(s3_manager, processor):
 
         if customer_file:
             df = pd.read_csv(customer_file)
-            st.success(f"✅ Loaded {len(df)} customer records")
+            st.success(f"Loaded {len(df)} customer records")
 
             # Preview
             with st.expander("Preview Customer Data"):
@@ -7302,13 +7848,13 @@ def render_data_center(s3_manager, processor):
 
                     success, message = s3_manager.upload_file(customer_file, s3_key)
                     if success:
-                        st.success(f"✅ {message}")
+                        st.success(f"{message}")
                     else:
-                        st.warning(f"⚠️ S3 upload failed: {message}")
+                        st.warning(f"S3 upload failed: {message}")
                         st.info("Data processed locally but NOT saved to S3")
 
                     # Show processing summary
-                    st.success("✅ Customer data processed!")
+                    st.success("Customer data processed!")
 
                     # Show segments summary
                     if 'Customer Segment' in processed.columns:
@@ -7331,9 +7877,9 @@ def render_data_center(s3_manager, processor):
 
         # Customer data status
         if st.session_state.customer_data is not None:
-            with st.expander("📊 Customer Data Status"):
+            with st.expander("Customer Data Status"):
                 df = st.session_state.customer_data
-                st.success(f"✅ {len(df)} customer records loaded")
+                st.success(f"{len(df)} customer records loaded")
 
                 cols = st.columns(4)
                 with cols[0]:
@@ -7367,12 +7913,12 @@ def render_data_center(s3_manager, processor):
                         st.text(f"Avg: ${avg_ltv:,.0f}")
 
         # View uploaded customer files from S3
-        with st.expander("📋 View Uploaded Customer Files"):
+        with st.expander("View Uploaded Customer Files"):
             if s3_connected:
                 customer_files = [f for f in s3_manager.list_files(prefix="raw-uploads/") if '/customers_' in f and f.endswith('.csv')]
 
                 if customer_files:
-                    st.success(f"✅ {len(customer_files)} customer data file(s) in S3")
+                    st.success(f"{len(customer_files)} customer data file(s) in S3")
 
                     # Group by store
                     from collections import defaultdict
@@ -7526,14 +8072,14 @@ def render_data_center(s3_manager, processor):
             col1, col2, col3 = st.columns(3)
 
             with col1:
-                if st.button("💾 Save to Session", type="primary", key="save_budtender_session"):
+                if st.button("Save to Session", type="primary", key="save_budtender_session"):
                     st.session_state.budtender_data = combined_df
                     st.success(f"Saved {len(combined_df):,} budtender records to session!")
                     st.rerun()
 
             with col2:
                 if s3_manager.is_configured():
-                    if st.button("☁️ Upload to S3", key="upload_budtender_s3"):
+                    if st.button("Upload to S3", key="upload_budtender_s3"):
                         with st.spinner("Uploading to S3..."):
                             try:
                                 # Convert to CSV and upload
@@ -7561,7 +8107,7 @@ def render_data_center(s3_manager, processor):
                 # Download combined data
                 csv = combined_df.to_csv(index=False)
                 st.download_button(
-                    "📥 Download Combined",
+                    "Download Combined",
                     csv,
                     "budtender_performance_combined.csv",
                     "text/csv",
@@ -7654,7 +8200,7 @@ def render_data_center(s3_manager, processor):
 
             # Load from S3 button
             if s3_manager.is_configured():
-                if st.button("📥 Load from S3", key="load_budtender_s3"):
+                if st.button("Load from S3", key="load_budtender_s3"):
                     with st.spinner("Loading from S3..."):
                         try:
                             response = s3_manager.s3_client.get_object(
@@ -7706,14 +8252,14 @@ def render_data_center(s3_manager, processor):
                     context_service = get_business_context_service()
                     if context_service:
                         result = context_service.add_context(context_text, author_name)
-                        st.success(f"✅ Context saved successfully! (ID: {result['context_id'][:8]}...)")
+                        st.success(f"Context saved successfully! (ID: {result['context_id'][:8]}...)")
                         st.rerun()
                     else:
-                        st.error("❌ Could not connect to context service. Check AWS configuration.")
+                        st.error("Could not connect to context service. Check AWS configuration.")
                 except Exception as e:
-                    st.error(f"❌ Failed to save context: {str(e)}")
+                    st.error(f"Failed to save context: {str(e)}")
             else:
-                st.error("❌ Business context service not available. Check that business_context.py is installed.")
+                st.error("Business context service not available. Check that business_context.py is installed.")
 
         st.markdown("---")
 
@@ -7728,12 +8274,12 @@ def render_data_center(s3_manager, processor):
 
                     if contexts:
                         for ctx in contexts:
-                            with st.expander(f"📝 {ctx.get('created_date', 'Unknown date')} - {ctx.get('author_name', 'Unknown')}"):
+                            with st.expander(f"{ctx.get('created_date', 'Unknown date')} - {ctx.get('author_name', 'Unknown')}"):
                                 st.markdown(f"**Context:**\n{ctx.get('context_text', '')}")
                                 st.caption(f"Added: {ctx.get('created_at', 'Unknown')} | ID: {ctx.get('context_id', '')[:8]}...")
 
                                 # Delete button
-                                if st.button(f"🗑️ Delete", key=f"delete_ctx_{ctx.get('context_id')}"):
+                                if st.button(f"Delete", key=f"delete_ctx_{ctx.get('context_id')}"):
                                     if context_service.delete_context(ctx.get('context_id')):
                                         st.success("Context deleted!")
                                         st.rerun()
@@ -7787,12 +8333,12 @@ def render_data_center(s3_manager, processor):
 
     # Data management section
     st.markdown("---")
-    st.subheader("🗂️ Data Management")
+    st.subheader("Data Management")
     
     mgmt_col1, mgmt_col2, mgmt_col3 = st.columns(3)
     
     with mgmt_col1:
-        if st.button("🔄 Reload from S3", type="primary", width='stretch'):
+        if st.button("Reload from S3", type="primary", width='stretch'):
             with st.spinner("Reloading data from S3..."):
                 # Clear all caches to ensure fresh data
                 _clear_all_data_caches()
@@ -7832,13 +8378,13 @@ def render_data_center(s3_manager, processor):
                     loaded_items.append(f"Budtenders ({len(st.session_state.budtender_data)})")
 
                 if loaded_items:
-                    st.success(f"✅ Reloaded: {', '.join(loaded_items)}")
+                    st.success(f"Reloaded: {', '.join(loaded_items)}")
                 else:
                     st.info("No data found in S3")
                 st.rerun()
     
     with mgmt_col2:
-        if st.button("🗑️ Clear Session Data", type="secondary", width='stretch'):
+        if st.button("Clear Session Data", type="secondary", width='stretch'):
             st.session_state.sales_data = None
             st.session_state.brand_data = None
             st.session_state.product_data = None
@@ -7851,7 +8397,7 @@ def render_data_center(s3_manager, processor):
     
     with mgmt_col3:
         if st.session_state.sales_data is not None or st.session_state.brand_data is not None:
-            if st.button("📥 Export Summary", width='stretch'):
+            if st.button("Export Summary", width='stretch'):
                 # Create a summary export
                 export_data = {
                     'export_date': datetime.now().isoformat(),
@@ -7860,6 +8406,79 @@ def render_data_center(s3_manager, processor):
                     'product_records': len(st.session_state.product_data) if st.session_state.product_data is not None else 0,
                 }
                 st.json(export_data)
+
+    # =========================================================================
+    # UPLOADED DOCUMENTS SECTION (Small text at bottom)
+    # =========================================================================
+    st.markdown("---")
+
+    # Get list of all uploaded files from S3
+    if s3_connected:
+        try:
+            uploaded_files = s3_manager.list_files(prefix="raw-uploads/")
+            if uploaded_files:
+                # Group files by type
+                file_groups = {
+                    'Sales': [],
+                    'Brand': [],
+                    'Product': [],
+                    'Customer': [],
+                    'Budtender': [],
+                    'Other': []
+                }
+
+                for f in uploaded_files:
+                    filename = f.split('/')[-1] if '/' in f else f
+                    if '/sales_' in f or filename.startswith('sales_'):
+                        file_groups['Sales'].append(filename)
+                    elif '/brand_' in f or filename.startswith('brand_'):
+                        file_groups['Brand'].append(filename)
+                    elif '/product_' in f or filename.startswith('product_'):
+                        file_groups['Product'].append(filename)
+                    elif '/customers_' in f or filename.startswith('customers_'):
+                        file_groups['Customer'].append(filename)
+                    elif '/budtender_' in f or filename.startswith('budtender_'):
+                        file_groups['Budtender'].append(filename)
+                    else:
+                        file_groups['Other'].append(filename)
+
+                # Display in small text
+                st.markdown(f'''
+                <div style="
+                    font-size: 0.75rem;
+                    color: #6b6b6b;
+                    padding: 12px 16px;
+                    background: rgba(30, 57, 31, 0.03);
+                    border-radius: 4px;
+                    margin-top: 8px;
+                ">
+                    <div style="font-weight: 600; margin-bottom: 8px; color: #1e391f;">
+                        {icon("folder", "#1e391f", 14)} Uploaded Documents ({len(uploaded_files)} files)
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 16px;">
+                ''', unsafe_allow_html=True)
+
+                # Display each group
+                group_html = []
+                for group_name, files in file_groups.items():
+                    if files:
+                        file_list = ' | '.join(files[:5])  # Show max 5 per group
+                        more_text = f" +{len(files)-5} more" if len(files) > 5 else ""
+                        group_html.append(f'<div><strong>{group_name}:</strong> {file_list}{more_text}</div>')
+
+                st.markdown(''.join(group_html) + '</div></div>', unsafe_allow_html=True)
+            else:
+                st.markdown(f'''
+                <div style="font-size: 0.75rem; color: #6b6b6b; padding: 8px 0;">
+                    {icon("info", "#6b6b6b", 12)} No documents uploaded yet
+                </div>
+                ''', unsafe_allow_html=True)
+        except Exception as e:
+            st.markdown(f'''
+            <div style="font-size: 0.75rem; color: #8b6914; padding: 8px 0;">
+                {icon("alert", "#8b6914", 12)} Could not retrieve uploaded documents
+            </div>
+            ''', unsafe_allow_html=True)
 
 
 if __name__ == "__main__":
