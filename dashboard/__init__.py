@@ -92,7 +92,12 @@ from .core.cache_manager import (
 from .data.s3_manager import S3DataManager
 from .data.processor import DataProcessor
 from .data.analytics import AnalyticsEngine
-from .data.dynamodb import load_invoice_data_from_dynamodb
+from .data.dynamodb import (
+    load_invoice_data_from_dynamodb,
+    get_dynamodb_table_hash,
+    get_invoice_summary_cached,
+    get_product_summary_cached,
+)
 
 # =============================================================================
 # UI Components
@@ -218,6 +223,9 @@ __all__ = [
     'DataProcessor',
     'AnalyticsEngine',
     'load_invoice_data_from_dynamodb',
+    'get_dynamodb_table_hash',
+    'get_invoice_summary_cached',
+    'get_product_summary_cached',
 
     # Visualization
     'plot_sales_trend',

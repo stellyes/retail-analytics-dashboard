@@ -1420,7 +1420,7 @@ def _get_s3_data_hash(bucket_name: str, _s3_manager) -> str:
     return _s3_manager.get_data_hash()
 
 
-@st.cache_data(ttl=86400, show_spinner=False)  # 24-hour TTL for DynamoDB hash check (use manual refresh for immediate updates)
+@st.cache_data(ttl=3600, show_spinner=False)  # 1-hour TTL for DynamoDB hash check
 def _get_dynamodb_hash(_aws_access_key: str, _aws_secret_key: str, _region: str) -> str:
     """Get a hash based on DynamoDB invoice count (lightweight check)."""
     try:
@@ -1433,15 +1433,18 @@ def _get_dynamodb_hash(_aws_access_key: str, _aws_secret_key: str, _region: str)
             region=_region
         )
         # Get item count from table (lightweight operation)
-        table = invoice_service.dynamodb.Table(invoice_service.line_items_table_name)
         # Use describe_table for item count estimate (fast)
         response = invoice_service.dynamodb.meta.client.describe_table(
             TableName=invoice_service.line_items_table_name
         )
         item_count = response['Table'].get('ItemCount', 0)
         last_update = response['Table'].get('TableStatus', 'ACTIVE')
-        return hashlib.md5(f"{item_count}:{last_update}".encode()).hexdigest()
+        # Also get last update time from table metadata for better change detection
+        table_size = response['Table'].get('TableSizeBytes', 0)
+        return hashlib.md5(f"{item_count}:{last_update}:{table_size}".encode()).hexdigest()
     except Exception as e:
+        # Log the error for debugging
+        print(f"DynamoDB hash check error: {e}")
         return ""
 
 
@@ -1458,16 +1461,45 @@ def _get_cached_s3_data(data_hash: str, s3_manager, processor) -> dict:
     return _load_s3_data(data_hash)
 
 
-def _get_cached_dynamodb_data(data_hash: str, invoice_service) -> tuple:
+@st.cache_data(ttl=3600, show_spinner=False)  # 1-hour cache for DynamoDB data
+def _get_cached_dynamodb_data(_data_hash: str, _aws_access_key: str, _aws_secret_key: str, _region: str) -> pd.DataFrame:
     """
     Load DynamoDB invoice data with caching. Hash parameter ensures
     cache invalidation when new invoices are added.
-    """
-    @st.cache_data(ttl=86400, show_spinner=False)  # Cache for 24 hours (use manual refresh for immediate updates)
-    def _load_dynamo_data(_hash: str) -> pd.DataFrame:
-        return load_invoice_data_from_dynamodb(invoice_service)
 
-    return _load_dynamo_data(data_hash)
+    Note: Using underscore prefix for parameters to exclude from cache key computation
+    while still allowing Streamlit to cache properly.
+    """
+    try:
+        if not INVOICE_DATA_AVAILABLE or InvoiceDataService is None:
+            return None
+
+        # Create fresh service instance (not cached)
+        invoice_service = InvoiceDataService(
+            aws_access_key=_aws_access_key,
+            aws_secret_key=_aws_secret_key,
+            region=_region
+        )
+
+        # Also check with unified cache manager if available
+        cache_key = f"dynamodb_invoices_{_data_hash}"
+        cache_mgr = get_cache_manager() if 'get_cache_manager' in dir() else None
+        if cache_mgr:
+            cached = cache_mgr.get(cache_key)
+            if cached is not None:
+                return cached
+
+        # Load from DynamoDB
+        df = load_invoice_data_from_dynamodb(invoice_service)
+
+        # Store in unified cache if available
+        if cache_mgr and df is not None:
+            cache_mgr.set(cache_key, df, ttl_seconds=3600, levels=[CacheLevel.SESSION])
+
+        return df
+    except Exception as e:
+        print(f"DynamoDB data load error: {e}")
+        return None
 
 
 def _get_cached_brand_mapping(data_hash: str, s3_manager) -> dict:
@@ -1492,6 +1524,18 @@ def _clear_all_data_caches():
         pass
     try:
         _get_dynamodb_hash.clear()
+    except:
+        pass
+    try:
+        _get_cached_dynamodb_data.clear()
+    except:
+        pass
+
+    # Clear unified cache manager if available
+    try:
+        cache_mgr = get_cache_manager()
+        if cache_mgr:
+            cache_mgr.clear()
     except:
         pass
 
@@ -1622,21 +1666,13 @@ def main():
             # Load DynamoDB invoice data if hash changed
             if dynamo_needs_refresh and current_dynamo_hash:
                 try:
-                    # InvoiceDataService imported from dashboard package at top of file
-                    invoice_service = InvoiceDataService(
-                        aws_access_key=aws_access_key,
-                        aws_secret_key=aws_secret_key,
-                        region=aws_region
+                    # Load invoice data (cached by hash) - pass credentials directly
+                    dynamo_invoice_df = _get_cached_dynamodb_data(
+                        current_dynamo_hash,
+                        aws_access_key,
+                        aws_secret_key,
+                        aws_region
                     )
-
-                    # Verify table exists
-                    try:
-                        invoice_service.dynamodb.Table(invoice_service.line_items_table_name).table_status
-                    except Exception as table_err:
-                        raise Exception(f"DynamoDB table not accessible: {invoice_service.line_items_table_name}")
-
-                    # Load invoice data (cached by hash)
-                    dynamo_invoice_df = _get_cached_dynamodb_data(current_dynamo_hash, invoice_service)
                     if dynamo_invoice_df is not None and len(dynamo_invoice_df) > 0:
                         st.session_state.dynamo_invoice_count = len(dynamo_invoice_df)
                         # Merge with existing S3 invoice data if any
