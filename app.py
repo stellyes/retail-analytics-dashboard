@@ -132,153 +132,180 @@ CHAPTERS_CSS = """
 }
 
 /* ============================================
-   SIDEBAR STYLING - Dark Green High Contrast
+   SIDEBAR STYLING - Dark background, white text
    ============================================ */
+
+/* Sidebar container - DARK background */
 [data-testid="stSidebar"] {
-    background: linear-gradient(180deg, var(--ink) 0%, #0a150a 100%) !important;
+    background: linear-gradient(180deg, #050805 0%, #1e391f 100%) !important;
     border-right: 1px solid rgba(61, 107, 62, 0.3) !important;
+    min-width: 280px !important;
+    width: 280px !important;
 }
 
 [data-testid="stSidebar"] > div:first-child {
     background: transparent !important;
-    padding-top: 1.5rem !important;
+    padding-top: 1rem !important;
 }
 
-/* Sidebar branding area */
-.sidebar-branding {
-    text-align: center;
-    padding: 1rem 1.5rem 1.5rem;
-    border-bottom: 1px solid rgba(61, 107, 62, 0.2);
-    margin-bottom: 1rem;
-}
+/* ============================================
+   SIDEBAR - All text WHITE (dark background)
+   ============================================ */
 
-.sidebar-branding img {
-    max-width: 120px;
-    height: auto;
-    margin-bottom: 0.75rem;
-    filter: brightness(0) invert(1);
-}
-
-.sidebar-branding .company-name {
+/* Base rule: ALL text in sidebar is white */
+[data-testid="stSidebar"],
+[data-testid="stSidebar"] * {
     font-family: 'Cormorant Garamond', Georgia, serif !important;
-    font-size: 0.95rem !important;
-    font-weight: 500 !important;
-    color: var(--paper) !important;
-    letter-spacing: 0.02em;
-    line-height: 1.3;
 }
 
-/* Sidebar navigation items */
-[data-testid="stSidebar"] .stRadio > label {
-    font-family: 'DM Sans', sans-serif !important;
-    font-size: 0.85rem !important;
-    font-weight: 500 !important;
-    color: rgba(248, 246, 243, 0.6) !important;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+[data-testid="stSidebar"] p,
+[data-testid="stSidebar"] span,
+[data-testid="stSidebar"] label,
+[data-testid="stSidebar"] div,
+[data-testid="stSidebar"] strong {
+    color: #ffffff !important;
 }
 
-[data-testid="stSidebar"] .stRadio > div {
-    gap: 0.25rem !important;
-}
-
-[data-testid="stSidebar"] .stRadio > div > label {
-    padding: 0.75rem 1rem !important;
-    border-radius: var(--radius-sm) !important;
-    transition: var(--transition) !important;
-    background: transparent !important;
-    color: rgba(248, 246, 243, 0.85) !important;
-}
-
-[data-testid="stSidebar"] .stRadio > div > label:hover {
-    background: rgba(61, 107, 62, 0.25) !important;
-    color: var(--paper) !important;
-}
-
-[data-testid="stSidebar"] .stRadio > div > label[data-checked="true"] {
-    background: var(--accent-light) !important;
-    color: var(--paper) !important;
-    font-weight: 600 !important;
-}
-
-/* Sidebar text - light colors for contrast */
-[data-testid="stSidebar"] .stMarkdown {
-    color: rgba(248, 246, 243, 0.9) !important;
-}
-
-[data-testid="stSidebar"] .stMarkdown p {
-    color: rgba(248, 246, 243, 0.9) !important;
-}
-
-[data-testid="stSidebar"] .stMarkdown strong {
-    color: var(--paper) !important;
-}
-
+/* Sidebar dividers */
 [data-testid="stSidebar"] hr {
-    border-color: rgba(61, 107, 62, 0.3) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
     margin: 1rem 0 !important;
 }
 
-/* Sidebar selectbox styling */
-[data-testid="stSidebar"] .stSelectbox > label {
-    color: rgba(248, 246, 243, 0.7) !important;
-    font-size: 0.85rem !important;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
+/* Sidebar images - invert to white */
+[data-testid="stSidebar"] img {
+    filter: brightness(0) invert(1) !important;
 }
 
-[data-testid="stSidebar"] .stSelectbox > div > div {
+/* Sidebar SVG icons - white */
+[data-testid="stSidebar"] svg {
+    fill: #ffffff !important;
+    color: #ffffff !important;
+}
+
+/* ============================================
+   SIDEBAR FORM INPUTS - Dark bg, white text
+   ============================================ */
+
+/* Selectbox */
+[data-testid="stSidebar"] .stSelectbox > div > div,
+[data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] > div {
     background: rgba(61, 107, 62, 0.2) !important;
-    border: 1px solid rgba(61, 107, 62, 0.3) !important;
-    color: var(--paper) !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
 }
 
-[data-testid="stSidebar"] .stSelectbox > div > div:hover {
-    border-color: var(--accent-light) !important;
+[data-testid="stSidebar"] .stSelectbox > div > div:hover,
+[data-testid="stSidebar"] .stSelectbox [data-baseweb="select"] > div:hover {
+    border-color: rgba(255, 255, 255, 0.5) !important;
 }
 
-/* Sidebar date input styling */
-[data-testid="stSidebar"] .stDateInput > label {
-    color: rgba(248, 246, 243, 0.7) !important;
-    font-size: 0.85rem !important;
-}
-
+/* Date input */
 [data-testid="stSidebar"] .stDateInput input {
     background: rgba(61, 107, 62, 0.2) !important;
-    border: 1px solid rgba(61, 107, 62, 0.3) !important;
-    color: var(--paper) !important;
+    border: 1px solid rgba(255, 255, 255, 0.3) !important;
+    color: #ffffff !important;
 }
 
-/* Sidebar button styling */
+/* ============================================
+   SIDEBAR BUTTONS - Light bg, dark text
+   Exception: buttons have LIGHT backgrounds
+   ============================================ */
+
+/* All sidebar buttons - LIGHT background, DARK text */
 [data-testid="stSidebar"] .stButton > button {
-    background: transparent !important;
-    border: 1px solid rgba(248, 246, 243, 0.3) !important;
-    color: var(--paper) !important;
+    background: #f8f6f3 !important;
+    border: 1px solid #e0ddd8 !important;
+    color: #050805 !important;
     width: 100%;
-    transition: var(--transition) !important;
+}
+
+[data-testid="stSidebar"] .stButton > button p,
+[data-testid="stSidebar"] .stButton > button span {
+    color: #050805 !important;
 }
 
 [data-testid="stSidebar"] .stButton > button:hover {
-    background: rgba(248, 246, 243, 0.1) !important;
-    border-color: var(--paper) !important;
+    background: #ffffff !important;
+    border-color: #1e391f !important;
 }
 
-/* Dark mode toggle styling */
-[data-testid="stSidebar"] .stToggle {
-    padding: 0.5rem 0;
+[data-testid="stSidebar"] .stButton > button:hover p,
+[data-testid="stSidebar"] .stButton > button:hover span {
+    color: #1e391f !important;
 }
 
-[data-testid="stSidebar"] .stToggle > label {
-    color: rgba(248, 246, 243, 0.7) !important;
-    font-size: 0.85rem !important;
+/* Active/Primary buttons - DARK background, WHITE text */
+[data-testid="stSidebar"] .stButton > button[kind="primary"],
+[data-testid="stSidebar"] button[data-testid="baseButton-primary"] {
+    background: #1e391f !important;
+    border: 1px solid #1e391f !important;
+    color: #ffffff !important;
+    font-weight: 600 !important;
 }
 
-[data-testid="stSidebar"] .stToggle > label > span:first-child {
-    background: rgba(61, 107, 62, 0.3) !important;
+[data-testid="stSidebar"] .stButton > button[kind="primary"] p,
+[data-testid="stSidebar"] .stButton > button[kind="primary"] span,
+[data-testid="stSidebar"] button[data-testid="baseButton-primary"] p,
+[data-testid="stSidebar"] button[data-testid="baseButton-primary"] span {
+    color: #ffffff !important;
 }
 
-[data-testid="stSidebar"] .stToggle > label > span:first-child[data-checked="true"] {
-    background: var(--accent-light) !important;
+[data-testid="stSidebar"] .stButton > button[kind="primary"]:hover,
+[data-testid="stSidebar"] button[data-testid="baseButton-primary"]:hover {
+    background: #3d6b3e !important;
+    border-color: #3d6b3e !important;
+}
+
+/* Dark mode toggle */
+[data-testid="stSidebar"] [role="switch"] {
+    background: rgba(255, 255, 255, 0.3) !important;
+}
+
+[data-testid="stSidebar"] [role="switch"][aria-checked="true"] {
+    background: #3d6b3e !important;
+}
+
+/* Dark mode toggle switch - larger */
+[data-testid="stSidebar"] [role="switch"] {
+    width: 56px !important;
+    height: 28px !important;
+    background: rgba(255, 255, 255, 0.3) !important;
+    border-radius: 14px !important;
+}
+
+[data-testid="stSidebar"] [role="switch"][aria-checked="true"] {
+    background: #3d6b3e !important;
+}
+
+[data-testid="stSidebar"] [role="switch"] > span {
+    width: 24px !important;
+    height: 24px !important;
+}
+
+/* Dismiss button - white text on dark background */
+button[key="dismiss_notices"],
+[data-testid="stButton"] button:has(span:contains("×")),
+.stButton button {
+    color: #ffffff !important;
+}
+
+/* Specifically target the dismiss X button in notice box */
+[data-testid="stHorizontalBlock"] > div:last-child button,
+[data-testid="stHorizontalBlock"] > div:last-child [data-testid="stButton"] button,
+[data-testid="column"]:last-child button {
+    background: #1e391f !important;
+    background-color: #1e391f !important;
+    color: #ffffff !important;
+    border: none !important;
+    font-size: 1.2rem !important;
+    font-weight: bold !important;
+    border-radius: 4px !important;
+}
+[data-testid="stHorizontalBlock"] > div:last-child button *,
+[data-testid="stHorizontalBlock"] > div:last-child button p,
+[data-testid="stHorizontalBlock"] > div:last-child button span,
+[data-testid="column"]:last-child button * {
+    color: #ffffff !important;
 }
 
 /* ============================================
@@ -301,7 +328,7 @@ h2, h3, .stHeader {
 
 /* Section labels - uppercase accent */
 .stSubheader, [data-testid="stSubheader"] {
-    font-family: 'DM Sans', sans-serif !important;
+    font-family: 'Cormorant Garamond', Georgia, serif !important;
     font-size: 0.75rem !important;
     font-weight: 600 !important;
     letter-spacing: 0.15em !important;
@@ -358,7 +385,7 @@ p, span, div, label {
 
 /* Metric delta (change indicator) */
 [data-testid="stMetric"] [data-testid="stMetricDelta"] {
-    font-family: 'DM Sans', sans-serif !important;
+    font-family: 'Cormorant Garamond', Georgia, serif !important;
     font-weight: 500 !important;
 }
 
@@ -389,9 +416,32 @@ p, span, div, label {
 }
 
 [data-testid="stExpander"] summary {
-    font-family: 'DM Sans', sans-serif !important;
+    font-family: 'Cormorant Garamond', Georgia, serif !important;
     font-weight: 500 !important;
     color: var(--ink) !important;
+}
+
+/* Hide expander icon font text fallback and use custom chevron */
+[data-testid="stExpander"] summary svg,
+[data-testid="stExpander"] summary [data-baseweb="icon"] {
+    font-size: 0 !important;
+    overflow: hidden !important;
+}
+
+[data-testid="stExpander"] summary::before {
+    content: '' !important;
+    display: inline-block !important;
+    width: 12px !important;
+    height: 12px !important;
+    margin-right: 8px !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23050805' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+    transition: transform 0.2s ease !important;
+}
+
+[data-testid="stExpander"][open] summary::before {
+    transform: rotate(180deg) !important;
 }
 
 /* Info/Warning/Error boxes */
@@ -413,7 +463,7 @@ p, span, div, label {
 }
 
 .stTabs [data-baseweb="tab"] {
-    font-family: 'DM Sans', sans-serif !important;
+    font-family: 'Cormorant Garamond', Georgia, serif !important;
     font-weight: 500 !important;
     color: var(--muted) !important;
     padding: 0.75rem 1.25rem !important;
@@ -528,6 +578,92 @@ p, span, div, label {
     border-color: var(--accent) !important;
 }
 
+/* ============================================
+   FIX: Hide icon font text fallback (shows as "keyword" when font fails)
+   Replace with custom SVG dropdown arrows
+   ============================================ */
+
+/* Hide ALL icon font text that shows as fallback */
+[data-baseweb="select"] svg,
+[data-baseweb="icon"],
+.stSelectbox svg,
+.stMultiSelect svg {
+    /* Keep SVGs visible but ensure they don't show text */
+}
+
+/* Target the dropdown indicator container and hide text overflow */
+[data-baseweb="select"] [data-baseweb="select-arrow"],
+[data-baseweb="select"] > div > div:last-child {
+    overflow: hidden !important;
+    font-size: 0 !important;
+    width: 24px !important;
+    min-width: 24px !important;
+    max-width: 24px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+/* Hide any text content inside arrow containers */
+[data-baseweb="select"] [data-baseweb="select-arrow"] *,
+[data-baseweb="select"] > div > div:last-child span {
+    font-size: 0 !important;
+    color: transparent !important;
+}
+
+/* Custom dropdown arrow using ::after pseudo-element */
+[data-baseweb="select"] > div::after {
+    content: '' !important;
+    position: absolute !important;
+    right: 10px !important;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 12px !important;
+    height: 12px !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23050805' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E") !important;
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+    pointer-events: none !important;
+}
+
+/* Ensure select container has relative positioning for arrow */
+[data-baseweb="select"] > div {
+    position: relative !important;
+}
+
+/* Hide the original icon/arrow element */
+[data-baseweb="select"] [data-baseweb="icon"],
+[data-baseweb="select"] .css-1hwfws3 svg {
+    display: none !important;
+}
+
+/* ============================================
+   GLOBAL: Hide any icon font text fallbacks
+   Material Icons show icon names like "keyboard_arrow_down" when font fails
+   ============================================ */
+/* Target common icon font class names */
+.material-icons,
+.material-icons-outlined,
+.material-symbols-outlined,
+[class*="icon"] > span:empty,
+[data-baseweb="icon"] {
+    font-size: 0 !important;
+    overflow: hidden !important;
+}
+
+/* Multiselect dropdown arrow fix */
+.stMultiSelect [data-baseweb="select"] > div > div:last-child {
+    overflow: hidden !important;
+    font-size: 0 !important;
+    width: 24px !important;
+    min-width: 24px !important;
+}
+
+.stMultiSelect [data-baseweb="select"] > div > div:last-child * {
+    font-size: 0 !important;
+    color: transparent !important;
+}
+
 /* Multiselect */
 .stMultiSelect > div > div {
     background: var(--white) !important;
@@ -537,7 +673,7 @@ p, span, div, label {
 
 /* Date input */
 .stDateInput > div > div > input {
-    font-family: 'DM Sans', sans-serif !important;
+    font-family: 'Cormorant Garamond', Georgia, serif !important;
     background: var(--white) !important;
     border: 1px solid var(--border) !important;
     border-radius: var(--radius-sm) !important;
@@ -549,20 +685,20 @@ p, span, div, label {
 }
 
 .stSlider [data-baseweb="slider"] [data-testid="stThumbValue"] {
-    font-family: 'DM Sans', sans-serif !important;
+    font-family: 'Cormorant Garamond', Georgia, serif !important;
     color: var(--ink) !important;
 }
 
 /* Radio buttons */
 .stRadio > label {
-    font-family: 'DM Sans', sans-serif !important;
+    font-family: 'Cormorant Garamond', Georgia, serif !important;
     font-weight: 500 !important;
     color: var(--ink) !important;
 }
 
 /* Checkboxes */
 .stCheckbox > label {
-    font-family: 'DM Sans', sans-serif !important;
+    font-family: 'Cormorant Garamond', Georgia, serif !important;
 }
 
 .stCheckbox > label > span[data-testid="stCheckbox"] {
@@ -581,7 +717,7 @@ p, span, div, label {
 }
 
 [data-testid="stDataFrame"] th {
-    font-family: 'DM Sans', sans-serif !important;
+    font-family: 'Cormorant Garamond', Georgia, serif !important;
     font-weight: 600 !important;
     font-size: 0.75rem !important;
     text-transform: uppercase !important;
@@ -593,7 +729,7 @@ p, span, div, label {
 }
 
 [data-testid="stDataFrame"] td {
-    font-family: 'DM Sans', sans-serif !important;
+    font-family: 'Cormorant Garamond', Georgia, serif !important;
     color: var(--ink) !important;
     padding: 0.75rem !important;
     border-bottom: 1px solid var(--border) !important;
@@ -657,7 +793,7 @@ p, span, div, label {
    TOAST NOTIFICATIONS
    ============================================ */
 [data-testid="stToast"] {
-    font-family: 'DM Sans', sans-serif !important;
+    font-family: 'Cormorant Garamond', Georgia, serif !important;
     background: var(--ink) !important;
     color: var(--paper) !important;
     border-radius: var(--radius-md) !important;
@@ -717,16 +853,108 @@ hr, [data-testid="stMarkdownContainer"] hr {
 /* ============================================
    SPECIAL ELEMENTS
    ============================================ */
-/* Login page styling */
-.stMarkdown h2 {
-    font-family: 'Cormorant Garamond', Georgia, serif !important;
-    color: var(--ink) !important;
+/* Login page styling - applied via login-page class on main container */
+
+.login-form .stButton > button:hover {
+    background: var(--accentLight) !important;
+}
+
+/* Error message styling */
+.login-form .stAlert {
+    margin-top: 1rem !important;
+    border-radius: var(--radius-sm) !important;
 }
 
 /* Hide Streamlit branding (optional) */
 #MainMenu {visibility: hidden;}
 footer {visibility: hidden;}
 header {visibility: hidden;}
+
+/* ============================================
+   SIDEBAR COLLAPSE BUTTON (Streamlit Native)
+   FIX: Hide icon font text that shows as "keyword" fallback
+   ============================================ */
+/* Style the sidebar collapse/expand button */
+[data-testid="collapsedControl"] {
+    background: #1e391f !important;
+    border: none !important;
+    border-radius: 0 8px 8px 0 !important;
+    padding: 8px !important;
+    min-width: 32px !important;
+    width: 32px !important;
+    height: 32px !important;
+    overflow: hidden !important;
+    font-size: 0 !important;
+    line-height: 0 !important;
+}
+
+/* Hide ALL text content inside collapse button (including icon font fallback) */
+[data-testid="collapsedControl"] * {
+    font-size: 0 !important;
+    color: transparent !important;
+    line-height: 0 !important;
+}
+
+[data-testid="collapsedControl"] span,
+[data-testid="collapsedControl"] p,
+[data-testid="collapsedControl"] div {
+    display: none !important;
+}
+
+/* Style the collapse button with a hamburger/arrow icon via CSS */
+[data-testid="collapsedControl"]::before {
+    content: '' !important;
+    display: block !important;
+    width: 16px !important;
+    height: 16px !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23f8f6f3' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cline x1='3' y1='12' x2='21' y2='12'%3E%3C/line%3E%3Cline x1='3' y1='6' x2='21' y2='6'%3E%3C/line%3E%3Cline x1='3' y1='18' x2='21' y2='18'%3E%3C/line%3E%3C/svg%3E") !important;
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+}
+
+[data-testid="collapsedControl"]:hover {
+    background: #3d6b3e !important;
+}
+
+/* Also target the button inside sidebar header */
+[data-testid="stSidebar"] button[kind="header"] {
+    background: transparent !important;
+    border: none !important;
+    color: transparent !important;
+    overflow: hidden !important;
+    font-size: 0 !important;
+}
+
+[data-testid="stSidebar"] button[kind="header"] * {
+    font-size: 0 !important;
+    color: transparent !important;
+}
+
+[data-testid="stSidebar"] button[kind="header"] span,
+[data-testid="stSidebar"] button[kind="header"] p {
+    display: none !important;
+}
+
+[data-testid="stSidebar"] button[kind="header"]::before {
+    content: '' !important;
+    display: block !important;
+    width: 20px !important;
+    height: 20px !important;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='15 18 9 12 15 6'%3E%3C/polyline%3E%3C/svg%3E") !important;
+    background-size: contain !important;
+    background-repeat: no-repeat !important;
+    background-position: center !important;
+}
+
+/* Remove top headspace from main content */
+.stMainBlockContainer,
+[data-testid="stAppViewBlockContainer"],
+.block-container {
+    padding-top: 1rem !important;
+    max-width: 100% !important;
+}
+
 
 /* Status badges */
 .status-success {
@@ -921,18 +1149,27 @@ header {visibility: hidden;}
     color: var(--accent-light) !important;
 }
 
-/* Dark mode metric cards */
+/* Dark mode metric cards - dark text on bright backgrounds */
 .dark-mode [data-testid="stMetric"] {
-    background: rgba(30, 57, 31, 0.15) !important;
+    background: #f8f6f3 !important;
     border: 1px solid rgba(61, 107, 62, 0.3) !important;
 }
 
-.dark-mode [data-testid="stMetric"] label {
-    color: rgba(248, 246, 243, 0.7) !important;
+.dark-mode [data-testid="stMetric"] label,
+.dark-mode [data-testid="stMetric"] label *,
+.dark-mode [data-testid="stMetric"] p,
+.dark-mode [data-testid="stMetric"] span {
+    color: #1e391f !important;
 }
 
-.dark-mode [data-testid="stMetric"] [data-testid="stMetricValue"] {
-    color: var(--paper) !important;
+.dark-mode [data-testid="stMetric"] [data-testid="stMetricValue"],
+.dark-mode [data-testid="stMetric"] [data-testid="stMetricValue"] * {
+    color: #050805 !important;
+}
+
+.dark-mode [data-testid="stMetric"] [data-testid="stMetricDelta"],
+.dark-mode [data-testid="stMetric"] [data-testid="stMetricDelta"] * {
+    color: #1e391f !important;
 }
 
 /* Dark mode tabs */
@@ -960,6 +1197,52 @@ header {visibility: hidden;}
 .dark-mode .stButton > button:hover {
     background: var(--accent-light) !important;
     border-color: var(--accent-light) !important;
+}
+
+/* Dark mode sidebar navigation - active button needs dark text on bright background */
+.dark-mode [data-testid="stSidebar"] .stButton > button[kind="primary"],
+.dark-mode [data-testid="stSidebar"] button[data-testid="baseButton-primary"] {
+    background: #f8f6f3 !important;
+    border-color: #f8f6f3 !important;
+    color: #1e391f !important;
+    font-weight: 600 !important;
+}
+
+/* Dark mode sidebar active button text - DARK text on light background */
+/* Using high specificity selectors to override any other rules */
+.dark-mode [data-testid="stSidebar"] .stButton > button[kind="primary"] p,
+.dark-mode [data-testid="stSidebar"] .stButton > button[kind="primary"] span,
+.dark-mode [data-testid="stSidebar"] .stButton > button[kind="primary"] div,
+.dark-mode [data-testid="stSidebar"] .stButton > button[kind="primary"] *,
+.dark-mode [data-testid="stSidebar"] button[data-testid="baseButton-primary"] p,
+.dark-mode [data-testid="stSidebar"] button[data-testid="baseButton-primary"] span,
+.dark-mode [data-testid="stSidebar"] button[data-testid="baseButton-primary"] div,
+.dark-mode [data-testid="stSidebar"] button[data-testid="baseButton-primary"] *,
+.dark-mode [data-testid="stSidebar"] [data-testid="stButton"] button[kind="primary"] p,
+.dark-mode [data-testid="stSidebar"] [data-testid="stButton"] button[kind="primary"] span,
+.dark-mode [data-testid="stSidebar"] [data-testid="stButton"] button[kind="primary"] * {
+    color: #1e391f !important;
+}
+
+.dark-mode [data-testid="stSidebar"] .stButton > button[kind="primary"]:hover,
+.dark-mode [data-testid="stSidebar"] button[data-testid="baseButton-primary"]:hover {
+    background: #ffffff !important;
+    border-color: #ffffff !important;
+    color: #1e391f !important;
+}
+
+.dark-mode [data-testid="stSidebar"] .stButton > button[kind="primary"]:hover p,
+.dark-mode [data-testid="stSidebar"] .stButton > button[kind="primary"]:hover span,
+.dark-mode [data-testid="stSidebar"] .stButton > button[kind="primary"]:hover div,
+.dark-mode [data-testid="stSidebar"] .stButton > button[kind="primary"]:hover *,
+.dark-mode [data-testid="stSidebar"] button[data-testid="baseButton-primary"]:hover p,
+.dark-mode [data-testid="stSidebar"] button[data-testid="baseButton-primary"]:hover span,
+.dark-mode [data-testid="stSidebar"] button[data-testid="baseButton-primary"]:hover div,
+.dark-mode [data-testid="stSidebar"] button[data-testid="baseButton-primary"]:hover *,
+.dark-mode [data-testid="stSidebar"] [data-testid="stButton"] button[kind="primary"]:hover p,
+.dark-mode [data-testid="stSidebar"] [data-testid="stButton"] button[kind="primary"]:hover span,
+.dark-mode [data-testid="stSidebar"] [data-testid="stButton"] button[kind="primary"]:hover * {
+    color: #1e391f !important;
 }
 
 /* Dark mode inputs */
@@ -1006,6 +1289,176 @@ header {visibility: hidden;}
 /* Dark mode dividers */
 .dark-mode hr {
     border-color: rgba(61, 107, 62, 0.3) !important;
+}
+
+/* ============================================
+   DARK MODE - Charts & Visualizations
+   Light background tiles = dark text
+   ============================================ */
+.dark-mode [data-testid="stPlotlyChart"] {
+    background: #f8f6f3 !important;
+    border: 1px solid rgba(61, 107, 62, 0.3) !important;
+}
+
+/* ============================================
+   DARK MODE - Expanders
+   Light background = dark text
+   ============================================ */
+.dark-mode [data-testid="stExpander"] {
+    background: #f8f6f3 !important;
+    border: 1px solid rgba(61, 107, 62, 0.3) !important;
+}
+
+.dark-mode [data-testid="stExpander"] summary {
+    color: #050805 !important;
+}
+
+.dark-mode [data-testid="stExpander"] summary span,
+.dark-mode [data-testid="stExpander"] summary p {
+    color: #050805 !important;
+}
+
+.dark-mode [data-testid="stExpander"] [data-testid="stExpanderDetails"] p,
+.dark-mode [data-testid="stExpander"] [data-testid="stExpanderDetails"] span,
+.dark-mode [data-testid="stExpander"] [data-testid="stExpanderDetails"] div,
+.dark-mode [data-testid="stExpander"] [data-testid="stExpanderDetails"] label {
+    color: #050805 !important;
+}
+
+/* ============================================
+   DARK MODE - File Uploader
+   Light background = dark text
+   ============================================ */
+.dark-mode [data-testid="stFileUploader"] {
+    background: #f8f6f3 !important;
+    border: 2px dashed rgba(61, 107, 62, 0.5) !important;
+}
+
+.dark-mode [data-testid="stFileUploader"] p,
+.dark-mode [data-testid="stFileUploader"] span,
+.dark-mode [data-testid="stFileUploader"] label,
+.dark-mode [data-testid="stFileUploader"] small {
+    color: #050805 !important;
+}
+
+.dark-mode [data-testid="stFileUploader"]:hover {
+    border-color: #1e391f !important;
+    background: #ffffff !important;
+}
+
+/* ============================================
+   DARK MODE - Cards & Markdown Containers
+   Light background = dark text
+   ============================================ */
+.dark-mode [data-testid="stMarkdownContainer"] {
+    color: #f8f6f3 !important;
+}
+
+/* Cards with light backgrounds in dark mode */
+.dark-mode .metric-card,
+.dark-mode .info-card,
+.dark-mode .stat-card {
+    background: #f8f6f3 !important;
+    border: 1px solid rgba(61, 107, 62, 0.3) !important;
+}
+
+.dark-mode .metric-card p,
+.dark-mode .metric-card span,
+.dark-mode .metric-card div,
+.dark-mode .info-card p,
+.dark-mode .info-card span,
+.dark-mode .info-card div,
+.dark-mode .stat-card p,
+.dark-mode .stat-card span,
+.dark-mode .stat-card div {
+    color: #050805 !important;
+}
+
+/* ============================================
+   DARK MODE - Selectbox dropdown
+   Dark background = light text
+   ============================================ */
+.dark-mode [data-baseweb="popover"] {
+    background: #050805 !important;
+    border: 1px solid rgba(61, 107, 62, 0.3) !important;
+}
+
+.dark-mode [data-baseweb="popover"] li,
+.dark-mode [data-baseweb="popover"] [role="option"] {
+    color: #f8f6f3 !important;
+    background: transparent !important;
+}
+
+.dark-mode [data-baseweb="popover"] li:hover,
+.dark-mode [data-baseweb="popover"] [role="option"]:hover {
+    background: rgba(61, 107, 62, 0.3) !important;
+}
+
+.dark-mode [data-baseweb="popover"] [aria-selected="true"] {
+    background: #1e391f !important;
+    color: #ffffff !important;
+}
+
+/* ============================================
+   DARK MODE - Scrollbar
+   ============================================ */
+.dark-mode ::-webkit-scrollbar-track {
+    background: #050805 !important;
+}
+
+.dark-mode ::-webkit-scrollbar-thumb {
+    background: #3d6b3e !important;
+}
+
+.dark-mode ::-webkit-scrollbar-thumb:hover {
+    background: #5a8f5c !important;
+}
+
+/* ============================================
+   DARK MODE - Toast notifications
+   Dark background = light text
+   ============================================ */
+.dark-mode [data-testid="stToast"] {
+    background: #1e391f !important;
+    color: #f8f6f3 !important;
+}
+
+/* ============================================
+   DARK MODE - Progress bar
+   ============================================ */
+.dark-mode .stProgress > div {
+    background: rgba(61, 107, 62, 0.2) !important;
+}
+
+.dark-mode .stProgress > div > div > div {
+    background: linear-gradient(90deg, #3d6b3e, #5a8f5c) !important;
+}
+
+/* ============================================
+   DARK MODE - Column containers (maintain contrast)
+   ============================================ */
+.dark-mode [data-testid="stVerticalBlock"] > div > div > [data-testid="stVerticalBlock"] {
+    background: transparent !important;
+}
+
+/* ============================================
+   DARK MODE - Main content text overrides
+   Ensure proper contrast everywhere
+   ============================================ */
+.dark-mode [data-testid="stMainBlockContainer"] > div > div > div > div > div p,
+.dark-mode [data-testid="stMainBlockContainer"] > div > div > div > div > div span {
+    color: #f8f6f3 !important;
+}
+
+/* But metric cards keep dark text on light bg */
+.dark-mode [data-testid="stMetric"] p,
+.dark-mode [data-testid="stMetric"] span,
+.dark-mode [data-testid="stMetric"] div {
+    color: #050805 !important;
+}
+
+.dark-mode [data-testid="stMetric"] label {
+    color: #1e391f !important;
 }
 </style>
 """
@@ -1167,7 +1620,23 @@ def render_notice_box():
         </div>
         ''', unsafe_allow_html=True)
     with col2:
-        if st.button("×", key="dismiss_notices", help="Dismiss"):
+        # Create dismiss button with explicit white styling
+        clicked = st.button("✕", key="dismiss_notices", help="Dismiss")
+        # Inject CSS specifically for this button right after it renders
+        st.markdown('''
+        <style>
+        /* Target the dismiss button specifically */
+        button[kind="secondary"] {
+            background-color: #1e391f !important;
+            color: white !important;
+        }
+        button[kind="secondary"] p,
+        button[kind="secondary"] span {
+            color: white !important;
+        }
+        </style>
+        ''', unsafe_allow_html=True)
+        if clicked:
             clear_notifications()
             st.rerun()
 
@@ -1571,10 +2040,9 @@ SAMPLE_PREFIXES = ["[DS]", "[SS]"]
 def check_password():
     """Returns True if the user has entered a correct password."""
 
-    def password_entered():
-        """Checks whether a password entered by the user is correct."""
+    def validate_credentials(username: str, password: str) -> bool:
+        """Validate username and password credentials."""
         # In production, use environment variables or AWS Secrets Manager
-        # Default passwords if secrets.toml not configured
         default_users = {
             "admin": hashlib.sha256("changeme123".encode()).hexdigest(),
             "analyst": hashlib.sha256("viewonly456".encode()).hexdigest()
@@ -1585,26 +2053,208 @@ def check_password():
         except:
             users = default_users
 
-        entered_hash = hashlib.sha256(st.session_state["password"].encode()).hexdigest()
+        if not username or not password:
+            return False
 
-        if st.session_state["username"] in users and users[st.session_state["username"]] == entered_hash:
-            st.session_state["password_correct"] = True
-            st.session_state["logged_in_user"] = st.session_state["username"]
-            del st.session_state["password"]
-        else:
-            st.session_state["password_correct"] = False
+        entered_hash = hashlib.sha256(password.encode()).hexdigest()
+        return username in users and users[username] == entered_hash
 
     if st.session_state.get("password_correct", False):
         return True
 
-    # First run or incorrect password
-    st.markdown("## Login Required")
-    st.text_input("Username", key="username")
-    st.text_input("Password", type="password", key="password", on_change=password_entered)
-    
-    if "password_correct" in st.session_state and not st.session_state["password_correct"]:
-        st.error("Incorrect username or password")
-    
+    # Hide sidebar and add login page styling
+    st.markdown("""
+        <style>
+        [data-testid="stSidebar"] { display: none !important; }
+        [data-testid="stSidebarCollapsedControl"] { display: none !important; }
+        .stApp > header { display: none !important; }
+
+        /* Remove default top padding */
+        .stMainBlockContainer { padding-top: 2rem !important; }
+        [data-testid="stAppViewBlockContainer"] { padding-top: 2rem !important; }
+        .block-container { padding-top: 2rem !important; }
+
+        /* Login form styling */
+        .login-header {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 1.5rem;
+        }
+        .login-header img {
+            height: 40px;
+            width: auto;
+        }
+        .login-header h1 {
+            font-family: 'Cormorant Garamond', Georgia, serif;
+            font-size: 1.75rem;
+            font-weight: 500;
+            color: #050805;
+            margin: 0;
+            padding: 0;
+        }
+
+        /* Style form container */
+        [data-testid="stForm"] {
+            background: transparent !important;
+            border: none !important;
+            padding: 0 !important;
+        }
+
+        /* Text inputs - keep white background in all states */
+        [data-testid="stForm"] [data-testid="stTextInput"] > div {
+            background: transparent !important;
+        }
+        [data-testid="stForm"] input,
+        [data-testid="stForm"] input:valid,
+        [data-testid="stForm"] input:invalid,
+        [data-testid="stForm"] input:-webkit-autofill,
+        [data-testid="stForm"] input:not(:placeholder-shown) {
+            background: #ffffff !important;
+            background-color: #ffffff !important;
+            border: 1px solid rgba(5, 8, 5, 0.2) !important;
+            border-radius: 4px !important;
+            padding: 0.75rem 1rem !important;
+            width: 100% !important;
+            color: #050805 !important;
+            -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+            box-shadow: 0 0 0 1000px #ffffff inset !important;
+        }
+        [data-testid="stForm"] input:focus {
+            border-color: #1e391f !important;
+            box-shadow: 0 0 0 2px rgba(30, 57, 31, 0.1) !important;
+            -webkit-box-shadow: 0 0 0 2px rgba(30, 57, 31, 0.1), 0 0 0 1000px #ffffff inset !important;
+            background: #ffffff !important;
+            background-color: #ffffff !important;
+        }
+
+        /* Password input container - ensure input takes most space */
+        [data-testid="stForm"] [data-testid="stTextInput"] > div > div {
+            display: flex !important;
+            align-items: center !important;
+            background: #ffffff !important;
+            background-color: #ffffff !important;
+            border: 1px solid rgba(5, 8, 5, 0.2) !important;
+            border-radius: 4px !important;
+            overflow: hidden !important;
+        }
+        [data-testid="stForm"] [data-testid="stTextInput"] > div > div > input,
+        [data-testid="stForm"] [data-testid="stTextInput"] > div > div > input:not(:placeholder-shown) {
+            flex: 1 !important;
+            border: none !important;
+            background: transparent !important;
+            background-color: transparent !important;
+            -webkit-box-shadow: none !important;
+            box-shadow: none !important;
+        }
+
+        /* Password visibility toggle - small circular button */
+        [data-testid="stForm"] [data-testid="stTextInput"] button {
+            width: 32px !important;
+            min-width: 32px !important;
+            max-width: 32px !important;
+            height: 32px !important;
+            padding: 0 !important;
+            margin: 4px !important;
+            background: transparent !important;
+            border: 1px solid #1e391f !important;
+            border-radius: 50% !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+            flex-shrink: 0 !important;
+        }
+        [data-testid="stForm"] [data-testid="stTextInput"] button svg {
+            width: 16px !important;
+            height: 16px !important;
+            color: #1e391f !important;
+        }
+
+        /* Login button - outline style with green border */
+        [data-testid="stFormSubmitButton"] button {
+            width: 100% !important;
+            height: auto !important;
+            min-height: 44px !important;
+            background-color: transparent !important;
+            color: #1e391f !important;
+            border: 2px solid #1e391f !important;
+            border-radius: 4px !important;
+            padding: 0.75rem 2rem !important;
+            font-weight: 500 !important;
+            font-size: 1rem !important;
+            white-space: nowrap !important;
+            line-height: 1.4 !important;
+        }
+        [data-testid="stFormSubmitButton"] button:hover {
+            background-color: #1e391f !important;
+            color: #ffffff !important;
+        }
+
+        /* Fix button text */
+        [data-testid="stFormSubmitButton"] button p {
+            color: inherit !important;
+            margin: 0 !important;
+            white-space: nowrap !important;
+        }
+
+        /* Mobile responsive */
+        @media (max-width: 480px) {
+            .login-header h1 { font-size: 1.25rem; }
+            .login-header img { height: 32px; }
+            .login-header { gap: 8px; }
+        }
+        </style>
+    """, unsafe_allow_html=True)
+
+    # Load and encode logo for embedding
+    import base64
+    logo_path = os.path.join(os.path.dirname(__file__), "chapters-logo.svg")
+    try:
+        with open(logo_path, "r") as f:
+            logo_svg = f.read()
+        logo_b64 = base64.b64encode(logo_svg.encode()).decode()
+        logo_src = f"data:image/svg+xml;base64,{logo_b64}"
+    except:
+        logo_src = ""
+
+    # Use columns to center content - 40% left, 20% center, 40% right
+    left_spacer, center_col, right_spacer = st.columns([2, 1, 2])
+
+    with center_col:
+        # Logo and Login header
+        if logo_src:
+            st.markdown(f'''
+                <div class="login-header">
+                    <img src="{logo_src}" alt="Chapters Logo">
+                    <h1>Login</h1>
+                </div>
+            ''', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="login-header"><h1>Login</h1></div>', unsafe_allow_html=True)
+
+        # Use a form so Enter key submits properly
+        with st.form("login_form", clear_on_submit=False):
+            username = st.text_input("Username", key="login_username", placeholder="Enter username")
+            password = st.text_input("Password", type="password", key="login_password", placeholder="Enter password")
+
+            # Center the button using columns: 10% | 80% | 10%
+            btn_left, btn_center, btn_right = st.columns([1, 8, 1])
+            with btn_center:
+                submitted = st.form_submit_button("Login", use_container_width=True)
+
+            if submitted:
+                if validate_credentials(username, password):
+                    st.session_state["password_correct"] = True
+                    st.session_state["logged_in_user"] = username
+                    st.rerun()
+                else:
+                    st.session_state["password_correct"] = False
+
+        # Show error if login failed
+        if "password_correct" in st.session_state and st.session_state["password_correct"] is False:
+            st.error("Incorrect username or password")
+
     return False
 
 
@@ -2455,7 +3105,16 @@ def plot_sales_trend(df: pd.DataFrame, store_filter: str = "All Stores"):
         )
         color_idx += 1
 
-    fig.update_layout(height=500, showlegend=True)
+    fig.update_layout(
+        height=500,
+        showlegend=True,
+        paper_bgcolor='#ffffff',
+        plot_bgcolor='#ffffff',
+        legend=dict(
+            bgcolor='rgba(255,255,255,0.9)',
+            font=dict(size=11, color='#050805')
+        )
+    )
     return apply_chapters_theme(fig)
 
 
@@ -2474,6 +3133,19 @@ def plot_category_breakdown(df: pd.DataFrame):
         textinfo='percent+label',
         textfont=dict(family="DM Sans, sans-serif", size=11, color=CHAPTERS_COLORS['white']),
         marker=dict(line=dict(color=CHAPTERS_COLORS['white'], width=2))
+    )
+    fig.update_layout(
+        paper_bgcolor='#ffffff',
+        plot_bgcolor='#ffffff',
+        margin=dict(t=50, b=30, l=30, r=120),
+        legend=dict(
+            orientation='v',
+            yanchor='middle',
+            y=0.5,
+            xanchor='left',
+            x=1.02,
+            font=dict(size=11, color='#050805')
+        )
     )
     return apply_chapters_theme(fig)
 
@@ -2546,12 +3218,16 @@ def plot_brand_performance(df: pd.DataFrame, top_n: int = 15):
         title=f'Top {top_n} Brands by Net Sales with Margin Overlay',
         xaxis_tickangle=-45,
         height=500,
+        paper_bgcolor='#ffffff',
+        plot_bgcolor='#ffffff',
         legend=dict(
             orientation="h",
             yanchor="bottom",
             y=1.02,
             xanchor="right",
-            x=1
+            x=1,
+            bgcolor='rgba(255,255,255,0.9)',
+            font=dict(size=11, color='#050805')
         ),
         hovermode='x unified'
     )
@@ -2617,7 +3293,13 @@ def plot_store_comparison(metrics: dict):
             bgcolor=CHAPTERS_COLORS['white']
         ),
         showlegend=True,
-        title='Store Performance Comparison (Normalized)'
+        title='Store Performance Comparison (Normalized)',
+        paper_bgcolor='#ffffff',
+        plot_bgcolor='#ffffff',
+        legend=dict(
+            bgcolor='rgba(255,255,255,0.9)',
+            font=dict(size=11, color='#050805')
+        )
     )
 
     return apply_chapters_theme(fig)
@@ -2874,11 +3556,11 @@ def _clear_all_data_caches():
 
 def main():
     """Main application entry point."""
-    
+
     # Authentication check
     if not check_password():
         st.stop()
-    
+
     # Initialize services
     s3_manager = S3DataManager()
     processor = DataProcessor()
@@ -3023,31 +3705,43 @@ def main():
     # Sidebar
     with st.sidebar:
         # Branding section with logo and company name (centered)
-        col1, col2, col3 = st.columns([1, 3, 1])
-        with col2:
-            # Use the local chapters logo SVG file
-            import os
-            logo_path = os.path.join(os.path.dirname(__file__), 'chapters-logo.svg')
-            if os.path.exists(logo_path):
-                st.image(logo_path, width=100)
-            else:
-                # Fallback: simple text logo
-                st.markdown('<div style="font-size: 2rem; text-align: center; color: #3d6b3e;">C</div>', unsafe_allow_html=True)
+        import os
+        import base64
+        logo_path = os.path.join(os.path.dirname(__file__), 'chapters-logo.svg')
 
-        # Company name centered
-        st.markdown('''
-        <div style="text-align: center; padding: 0.5rem 0 1rem 0; border-bottom: 1px solid rgba(61, 107, 62, 0.2); margin-bottom: 1rem;">
-            <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 0.95rem; font-weight: 500; color: #f8f6f3; letter-spacing: 0.02em; line-height: 1.3;">
-                Chapters Data & Marketing, LLC
+        # Load and encode logo for white rendering
+        logo_html = ""
+        if os.path.exists(logo_path):
+            with open(logo_path, 'r') as f:
+                logo_svg = f.read()
+            logo_b64 = base64.b64encode(logo_svg.encode()).decode()
+            logo_html = f'<img src="data:image/svg+xml;base64,{logo_b64}" style="width: 60px; height: auto; filter: brightness(0) invert(1);">'
+
+        # Logo + Company name block with white divider
+        st.markdown(f'''
+        <div style="text-align: center; padding: 0.5rem 0 1rem 0; margin-bottom: 0.5rem;">
+            <div style="margin-bottom: 0.5rem;">
+                {logo_html}
             </div>
+            <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 1.5rem; font-weight: 500; color: #ffffff; letter-spacing: 0.02em; line-height: 1.2;">Chapters</div>
+            <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 0.7rem; font-weight: 400; color: #ffffff; letter-spacing: 0.03em; margin-top: 0.25rem;">Data & Marketing, LLC</div>
         </div>
+        <div style="width: 100%; height: 1px; background-color: rgba(255, 255, 255, 0.5); margin: 0.5rem 0 1rem 0;"></div>
         ''', unsafe_allow_html=True)
 
-        st.markdown(f"**Logged in as:** {st.session_state.get('logged_in_user', 'Unknown')}")
-        st.markdown("---")
+        st.markdown(f'''
+        <div style="font-family: 'Cormorant Garamond', Georgia, serif; font-size: 0.95rem; margin: 0.75rem 0; line-height: 1.6;">
+            <span style="color: #ffffff;"><strong style="color: #ffffff;">Logged in as:</strong> <span style="color: #ffffff;">{st.session_state.get("logged_in_user", "Unknown")}</span></span><br>
+            <span style="color: #ffffff;"><strong style="color: #ffffff;">Business ID:</strong> <span style="color: #ffffff;">BCSF, Inc.</span></span>
+        </div>
+        <div style="width: 100%; height: 1px; background: rgba(255, 255, 255, 0.5); margin: 1rem 0;"></div>
+        ''', unsafe_allow_html=True)
 
-        # Dark mode toggle
-        dark_mode = st.toggle("Dark Mode", key="dark_mode_toggle", value=st.session_state.get('dark_mode', False))
+        # Dark mode toggle with custom white label
+        st.markdown('<p style="font-family: \'Cormorant Garamond\', Georgia, serif; color: #ffffff; font-size: 1.1rem; font-weight: 500; margin-bottom: 0.5rem; text-align: center;">Dark Mode</p>', unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 1, 1])
+        with col2:
+            dark_mode = st.toggle("", key="dark_mode_toggle", value=st.session_state.get('dark_mode', False), label_visibility="collapsed")
         if dark_mode != st.session_state.get('dark_mode', False):
             st.session_state.dark_mode = dark_mode
             st.rerun()
@@ -3338,18 +4032,27 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
         with col1:
             # Sales trend
             fig = px.line(df, x='Date', y='Net Sales', color='Store_ID',
-                         title='Daily Net Sales Trend')
+                         title='Daily Net Sales Trend',
+                         color_discrete_sequence=CHAPTERS_COLOR_SEQUENCE)
+            apply_chapters_theme(fig)
+            fig.update_layout(paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
             st.plotly_chart(fig, use_container_width=True)
 
         with col2:
             # Customer trend
             fig = px.line(df, x='Date', y='Customers Count', color='Store_ID',
-                         title='Daily Customer Count')
+                         title='Daily Customer Count',
+                         color_discrete_sequence=CHAPTERS_COLOR_SEQUENCE)
+            apply_chapters_theme(fig)
+            fig.update_layout(paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
             st.plotly_chart(fig, use_container_width=True)
 
         # Margin trend
         fig = px.line(df, x='Date', y='Gross Margin %', color='Store_ID',
-                     title='Gross Margin % Trend')
+                     title='Gross Margin % Trend',
+                     color_discrete_sequence=CHAPTERS_COLOR_SEQUENCE)
+        apply_chapters_theme(fig)
+        fig.update_layout(paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
         st.plotly_chart(fig, use_container_width=True)
 
     # ===== TAB 2: Brand Performance =====
@@ -3435,14 +4138,15 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
                         # Already percentage form (55)
                         significant_brands['Margin_Pct'] = significant_brands['Gross Margin %']
 
-                    # Color by margin performance
+                    # Color by margin performance - Chapters color scale
+                    chapters_scale = [[0, '#8b1414'], [0.5, '#a3cca4'], [1, '#1e391f']]
                     fig = px.scatter(
                         significant_brands,
                         x='Net Sales',
                         y='Margin_Pct',
                         hover_name='Brand',
                         color='Margin_Pct',
-                        color_continuous_scale='RdYlGn',  # Red (low) to Green (high)
+                        color_continuous_scale=chapters_scale,
                         size='Net Sales',
                         size_max=30,
                         title='Brand Positioning: Sales vs Margin',
@@ -3454,13 +4158,16 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
                     fig.add_hline(
                         y=55,
                         line_dash="dash",
-                        line_color="rgba(255,255,255,0.5)",
+                        line_color="rgba(61, 107, 62, 0.5)",
                         annotation_text="55% Target Margin",
                         annotation_position="right"
                     )
 
+                    apply_chapters_theme(fig)
                     fig.update_layout(
                         height=500,
+                        paper_bgcolor='#ffffff',
+                        plot_bgcolor='#ffffff',
                         coloraxis_colorbar=dict(title="Margin %")
                     )
 
@@ -3536,11 +4243,14 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
                     df_product['Sales Share %'] = (df_product['Net Sales'] / df_product['Net Sales'].sum() * 100).round(2)
                     st.dataframe(df_product, width='stretch')
 
-                # Category bar chart
+                # Category bar chart - Chapters green scale
+                chapters_green_scale = [[0, '#a3cca4'], [0.5, '#3d6b3e'], [1, '#1e391f']]
                 fig = px.bar(df_product, x='Product Type', y='Net Sales',
                             title='Net Sales by Product Category',
                             color='Net Sales',
-                            color_continuous_scale='Blues')
+                            color_continuous_scale=chapters_green_scale)
+                apply_chapters_theme(fig)
+                fig.update_layout(paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
                 st.plotly_chart(fig, use_container_width=True)
 
     # ===== TAB 4: Daily Breakdown =====
@@ -3562,7 +4272,10 @@ def render_sales_analysis(state, analytics, store_filter, date_filter=None):
         dow_sales = dow_sales.sort_values('Day_of_Week')
 
         fig = px.bar(dow_sales, x='Day_of_Week', y='Net Sales', color='Store_ID',
-                    barmode='group', title='Average Sales by Day of Week')
+                    barmode='group', title='Average Sales by Day of Week',
+                    color_discrete_sequence=CHAPTERS_COLOR_SEQUENCE)
+        apply_chapters_theme(fig)
+        fig.update_layout(paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
         st.plotly_chart(fig, use_container_width=True)
 
     # ===== TAB 5: Raw Data =====
@@ -3807,13 +4520,15 @@ def _render_budtender_analytics(state, analytics, store_filter):
             fig = go.Figure(data=[go.Bar(
                 x=budtender_sales.head(15).index,
                 y=budtender_sales.head(15).values,
-                marker_color='#6c5ce7'
+                marker_color='#1e391f'
             )])
             fig.update_layout(
                 height=350,
                 xaxis_title="Budtender",
                 yaxis_title="Net Sales ($)",
-                xaxis_tickangle=-45
+                xaxis_tickangle=-45,
+                paper_bgcolor='#ffffff',
+                plot_bgcolor='#ffffff'
             )
             st.plotly_chart(fig, use_container_width=True)
 
@@ -3824,13 +4539,15 @@ def _render_budtender_analytics(state, analytics, store_filter):
             fig = go.Figure(data=[go.Bar(
                 x=budtender_units.head(15).index,
                 y=budtender_units.head(15).values,
-                marker_color='#00b894'
+                marker_color='#3d6b3e'
             )])
             fig.update_layout(
                 height=350,
                 xaxis_title="Budtender",
                 yaxis_title="Units Sold",
-                xaxis_tickangle=-45
+                xaxis_tickangle=-45,
+                paper_bgcolor='#ffffff',
+                plot_bgcolor='#ffffff'
             )
             st.plotly_chart(fig, use_container_width=True)
 
@@ -3899,6 +4616,7 @@ def _render_budtender_analytics(state, analytics, store_filter):
         st.markdown("**Sales vs. Units Sold (Bubble = Brands Sold)**")
 
         scatter_df = performance_df.reset_index().head(30)
+        chapters_scale = [[0, '#8b1414'], [0.5, '#a3cca4'], [1, '#1e391f']]
         fig = px.scatter(
             scatter_df,
             x='Units Sold',
@@ -3906,10 +4624,11 @@ def _render_budtender_analytics(state, analytics, store_filter):
             size='Brands Sold',
             color='Avg Margin',
             hover_name='Employee',
-            color_continuous_scale='RdYlGn',
+            color_continuous_scale=chapters_scale,
             labels={'y': 'Total Sales ($)'}
         )
-        fig.update_layout(height=450)
+        apply_chapters_theme(fig)
+        fig.update_layout(height=450, paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
         st.plotly_chart(fig, use_container_width=True)
 
     # ===== Product Insights Tab =====
@@ -3937,11 +4656,12 @@ def _render_budtender_analytics(state, analytics, store_filter):
                 y=top_products_sales.index,
                 x=top_products_sales['Net Sales'],
                 orientation='h',
-                marker_color='#e17055',
+                marker_color='#1e391f',
                 text=[f"${x:,.0f}" for x in top_products_sales['Net Sales']],
                 textposition='auto'
             )])
-            fig.update_layout(height=500, yaxis={'categoryorder': 'total ascending'})
+            apply_chapters_theme(fig)
+            fig.update_layout(height=500, yaxis={'categoryorder': 'total ascending'}, paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
             st.plotly_chart(fig, use_container_width=True)
 
         with col2:
@@ -3952,11 +4672,12 @@ def _render_budtender_analytics(state, analytics, store_filter):
                 y=top_products_units.index,
                 x=top_products_units['Units Sold'],
                 orientation='h',
-                marker_color='#00cec9',
+                marker_color='#3d6b3e',
                 text=[f"{x:,.0f}" for x in top_products_units['Units Sold']],
                 textposition='auto'
             )])
-            fig.update_layout(height=500, yaxis={'categoryorder': 'total ascending'})
+            apply_chapters_theme(fig)
+            fig.update_layout(height=500, yaxis={'categoryorder': 'total ascending'}, paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
             st.plotly_chart(fig, use_container_width=True)
 
         st.markdown("---")
@@ -3974,13 +4695,16 @@ def _render_budtender_analytics(state, analytics, store_filter):
             x=product_adoption.index,
             y=product_adoption['Adoption Rate'],
             name='Adoption Rate (%)',
-            marker_color='#74b9ff'
+            marker_color='#5a8f5c'
         ))
+        apply_chapters_theme(fig)
         fig.update_layout(
             height=400,
             xaxis_tickangle=-45,
             yaxis_title="% of Budtenders Selling",
-            showlegend=False
+            showlegend=False,
+            paper_bgcolor='#ffffff',
+            plot_bgcolor='#ffffff'
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -3990,15 +4714,17 @@ def _render_budtender_analytics(state, analytics, store_filter):
 
         high_margin = product_sales[product_sales['Net Sales'] > product_sales['Net Sales'].median()].sort_values('Avg Margin', ascending=False).head(20)
 
+        chapters_margin_scale = [[0, '#8b1414'], [0.5, '#a3cca4'], [1, '#1e391f']]
         fig = go.Figure(data=[go.Bar(
             x=high_margin.index,
             y=high_margin['Avg Margin'],
             marker_color=high_margin['Avg Margin'],
-            marker_colorscale='RdYlGn',
+            marker_colorscale=chapters_margin_scale,
             text=[f"{x:.1f}%" for x in high_margin['Avg Margin']],
             textposition='auto'
         )])
-        fig.update_layout(height=350, xaxis_tickangle=-45, yaxis_title="Gross Margin %")
+        apply_chapters_theme(fig)
+        fig.update_layout(height=350, xaxis_tickangle=-45, yaxis_title="Gross Margin %", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
         st.plotly_chart(fig, use_container_width=True)
 
     # ===== Brand Analysis Tab =====
@@ -4063,7 +4789,7 @@ def _render_budtender_analytics(state, analytics, store_filter):
                 color_continuous_scale='RdYlBu_r',
                 labels={'Avg Margin': 'Gross Margin (%)'}
             )
-            fig.update_layout(height=400)
+            fig.update_layout(height=400, paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
             st.plotly_chart(fig, use_container_width=True)
 
         with col2:
@@ -4085,7 +4811,7 @@ def _render_budtender_analytics(state, analytics, store_filter):
                 fig = go.Figure(data=[go.Bar(
                     x=brand_budtenders.index,
                     y=brand_budtenders['Net_Sales'],
-                    marker_color='#a29bfe',
+                    marker_color='#3d6b3e',
                     text=[f"${x:,.0f}" for x in brand_budtenders['Net_Sales']],
                     textposition='auto'
                 )])
@@ -4093,7 +4819,9 @@ def _render_budtender_analytics(state, analytics, store_filter):
                     height=350,
                     xaxis_tickangle=-45,
                     yaxis_title="Net Sales ($)",
-                    title=f"Top 10 Budtenders for {selected_brand_detail}"
+                    title=f"Top 10 Budtenders for {selected_brand_detail}",
+                    paper_bgcolor='#ffffff',
+                    plot_bgcolor='#ffffff'
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
@@ -4138,7 +4866,7 @@ def _render_budtender_analytics(state, analytics, store_filter):
                     normalized[col] = normalized[col] / max_val * 100
 
             fig = go.Figure()
-            colors = ['#6c5ce7', '#00b894', '#e17055', '#0984e3', '#fdcb6e']
+            colors = ['#1e391f', '#3d6b3e', '#5a8f5c', '#7eb37f', '#a3cca4']
 
             for i, employee in enumerate(normalized.index):
                 fig.add_trace(go.Scatterpolar(
@@ -4153,7 +4881,9 @@ def _render_budtender_analytics(state, analytics, store_filter):
             fig.update_layout(
                 polar=dict(radialaxis=dict(visible=True, range=[0, 100])),
                 showlegend=True,
-                height=450
+                height=450,
+                paper_bgcolor='#ffffff',
+                plot_bgcolor='#ffffff'
             )
             st.plotly_chart(fig, use_container_width=True)
 
@@ -4227,22 +4957,22 @@ def _render_budtender_analytics(state, analytics, store_filter):
                 fig = go.Figure(data=[go.Bar(
                     x=store_comparison.index,
                     y=store_comparison['Total Sales'],
-                    marker_color=['#6c5ce7', '#00b894'],
+                    marker_color=['#1e391f', '#3d6b3e'],
                     text=[f"${x:,.0f}" for x in store_comparison['Total Sales']],
                     textposition='auto'
                 )])
-                fig.update_layout(height=300, yaxis_title="Total Sales ($)")
+                fig.update_layout(height=300, yaxis_title="Total Sales ($)", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
                 st.plotly_chart(fig, use_container_width=True)
 
             with col2:
                 fig = go.Figure(data=[go.Bar(
                     x=store_comparison.index,
                     y=store_comparison['Budtenders'],
-                    marker_color=['#6c5ce7', '#00b894'],
+                    marker_color=['#1e391f', '#3d6b3e'],
                     text=store_comparison['Budtenders'],
                     textposition='auto'
                 )])
-                fig.update_layout(height=300, yaxis_title="Number of Budtenders")
+                fig.update_layout(height=300, yaxis_title="Number of Budtenders", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
                 st.plotly_chart(fig, use_container_width=True)
 
 
@@ -4285,9 +5015,25 @@ def _render_customer_overview(df):
                 labels=segment_counts.index,
                 values=segment_counts.values,
                 hole=0.4,
-                marker=dict(colors=['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7'])
+                marker=dict(colors=['#1e391f', '#3d6b3e', '#5a8f5c', '#7eb37f', '#a3cca4']),
+                textinfo='percent',
+                textposition='outside'
             )])
-            fig.update_layout(height=350, margin=dict(t=30, b=0, l=0, r=0))
+            apply_chapters_theme(fig)
+            fig.update_layout(
+                height=400,
+                margin=dict(t=30, b=30, l=30, r=120),
+                paper_bgcolor='#ffffff',
+                plot_bgcolor='#ffffff',
+                legend=dict(
+                    orientation='v',
+                    yanchor='middle',
+                    y=0.5,
+                    xanchor='left',
+                    x=1.02,
+                    font=dict(size=11, color='#050805')
+                )
+            )
             st.plotly_chart(fig, use_container_width=True)
 
     with col2:
@@ -4298,9 +5044,25 @@ def _render_customer_overview(df):
                 labels=recency_counts.index,
                 values=recency_counts.values,
                 hole=0.4,
-                marker=dict(colors=['#55efc4', '#74b9ff', '#a29bfe', '#fd79a8', '#636e72'])
+                marker=dict(colors=['#1e391f', '#3d6b3e', '#5a8f5c', '#7eb37f', '#a3cca4']),
+                textinfo='percent',
+                textposition='outside'
             )])
-            fig.update_layout(height=350, margin=dict(t=30, b=0, l=0, r=0))
+            apply_chapters_theme(fig)
+            fig.update_layout(
+                height=400,
+                margin=dict(t=30, b=30, l=30, r=120),
+                paper_bgcolor='#ffffff',
+                plot_bgcolor='#ffffff',
+                legend=dict(
+                    orientation='v',
+                    yanchor='middle',
+                    y=0.5,
+                    xanchor='left',
+                    x=1.02,
+                    font=dict(size=11, color='#050805')
+                )
+            )
             st.plotly_chart(fig, use_container_width=True)
 
     # Customer growth over time
@@ -4316,7 +5078,7 @@ def _render_customer_overview(df):
             y=df_sorted['Cumulative Customers'],
             mode='lines',
             fill='tozeroy',
-            line=dict(color='#6c5ce7', width=2)
+            line=dict(color='#1e391f', width=2)
         ))
         fig.update_layout(
             height=300,
@@ -4367,9 +5129,9 @@ def _render_customer_segments(df, analytics):
             fig = go.Figure(data=[go.Bar(
                 x=segment_data.index,
                 y=segment_data['Total Sales'],
-                marker_color=['#ffeaa7', '#96ceb4', '#45b7d1', '#4ecdc4', '#ff6b6b']
+                marker_color=['#1e391f', '#3d6b3e', '#5a8f5c', '#7eb37f', '#a3cca4']
             )])
-            fig.update_layout(height=300, xaxis_title="Segment", yaxis_title="Total Sales ($)")
+            fig.update_layout(height=300, xaxis_title="Segment", yaxis_title="Total Sales ($)", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
             st.plotly_chart(fig, use_container_width=True)
 
         with col2:
@@ -4377,9 +5139,9 @@ def _render_customer_segments(df, analytics):
             fig = go.Figure(data=[go.Bar(
                 x=segment_data.index,
                 y=segment_data['Avg LTV'],
-                marker_color=['#ffeaa7', '#96ceb4', '#45b7d1', '#4ecdc4', '#ff6b6b']
+                marker_color=['#1e391f', '#3d6b3e', '#5a8f5c', '#7eb37f', '#a3cca4']
             )])
-            fig.update_layout(height=300, xaxis_title="Segment", yaxis_title="Avg LTV ($)")
+            fig.update_layout(height=300, xaxis_title="Segment", yaxis_title="Avg LTV ($)", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
             st.plotly_chart(fig, use_container_width=True)
 
     elif segment_type == "Recency Segments":
@@ -4404,9 +5166,9 @@ def _render_customer_segments(df, analytics):
             fig = go.Figure(data=[go.Bar(
                 x=recency_data.index,
                 y=recency_data['Customer Count'],
-                marker_color=['#55efc4', '#74b9ff', '#a29bfe', '#fd79a8', '#636e72']
+                marker_color=['#1e391f', '#3d6b3e', '#5a8f5c', '#7eb37f', '#a3cca4']
             )])
-            fig.update_layout(height=300, xaxis_title="Recency Status", yaxis_title="Customers")
+            fig.update_layout(height=300, xaxis_title="Recency Status", yaxis_title="Customers", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
             st.plotly_chart(fig, use_container_width=True)
 
         with col2:
@@ -4414,9 +5176,9 @@ def _render_customer_segments(df, analytics):
             fig = go.Figure(data=[go.Bar(
                 x=recency_data.index,
                 y=recency_data['Avg Days Since Visit'],
-                marker_color=['#55efc4', '#74b9ff', '#a29bfe', '#fd79a8', '#636e72']
+                marker_color=['#1e391f', '#3d6b3e', '#5a8f5c', '#7eb37f', '#a3cca4']
             )])
-            fig.update_layout(height=300, xaxis_title="Recency Status", yaxis_title="Days")
+            fig.update_layout(height=300, xaxis_title="Recency Status", yaxis_title="Days", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
             st.plotly_chart(fig, use_container_width=True)
 
     else:  # Combined Matrix
@@ -4445,12 +5207,12 @@ def _render_customer_segments(df, analytics):
             z=matrix_no_totals.values,
             x=matrix_no_totals.columns,
             y=matrix_no_totals.index,
-            colorscale='Blues',
+            colorscale=[[0, '#a3cca4'], [0.5, '#3d6b3e'], [1, '#1e391f']],
             text=matrix_no_totals.values,
             texttemplate='%{text}',
             textfont={"size": 12}
         ))
-        fig.update_layout(height=400, xaxis_title="Recency", yaxis_title="Value Segment")
+        fig.update_layout(height=400, xaxis_title="Recency", yaxis_title="Value Segment", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
         st.plotly_chart(fig, use_container_width=True)
 
     # Demographics by Segment Analysis
@@ -4466,11 +5228,11 @@ def _render_customer_segments(df, analytics):
             fig = go.Figure(data=[go.Bar(
                 x=age_by_segment.index,
                 y=age_by_segment.values,
-                marker_color=['#ffeaa7', '#96ceb4', '#45b7d1', '#4ecdc4', '#ff6b6b'],
+                marker_color=['#1e391f', '#3d6b3e', '#5a8f5c', '#7eb37f', '#a3cca4'],
                 text=[f"{v:.1f}" for v in age_by_segment.values],
                 textposition='auto'
             )])
-            fig.update_layout(height=300, xaxis_title="Segment", yaxis_title="Average Age")
+            fig.update_layout(height=300, xaxis_title="Segment", yaxis_title="Average Age", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
             st.plotly_chart(fig, use_container_width=True)
 
         with col2:
@@ -4510,7 +5272,7 @@ def _render_customer_segments(df, analytics):
                 boxmean='sd'
             ))
 
-        fig.update_layout(height=350, yaxis_title="Age", xaxis_title="Customer Segment")
+        fig.update_layout(height=350, yaxis_title="Age", xaxis_title="Customer Segment", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
         st.plotly_chart(fig, use_container_width=True)
 
     if 'City' in df.columns:
@@ -4569,9 +5331,10 @@ def _render_customer_demographics(df):
             fig = go.Figure(data=[go.Histogram(
                 x=df['Age'],
                 nbinsx=20,
-                marker_color='#6c5ce7'
+                marker_color='#1e391f'
             )])
-            fig.update_layout(height=250, xaxis_title="Age", yaxis_title="Count", margin=dict(t=20, b=0))
+            apply_chapters_theme(fig)
+            fig.update_layout(height=250, xaxis_title="Age", yaxis_title="Count", margin=dict(t=20, b=30, l=40, r=20), paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
             st.plotly_chart(fig, use_container_width=True)
 
     # Gender distribution
@@ -4587,9 +5350,17 @@ def _render_customer_demographics(df):
             fig = go.Figure(data=[go.Pie(
                 labels=gender_counts.index,
                 values=gender_counts.values,
-                hole=0.4
+                hole=0.4,
+                marker=dict(colors=['#1e391f', '#3d6b3e', '#5a8f5c', '#7eb37f', '#a3cca4'])
             )])
-            fig.update_layout(height=250, margin=dict(t=20, b=0, l=0, r=0))
+            apply_chapters_theme(fig)
+            fig.update_layout(
+                height=250,
+                margin=dict(t=20, b=20, l=20, r=80),
+                paper_bgcolor='#ffffff',
+                plot_bgcolor='#ffffff',
+                legend=dict(font=dict(size=10, color='#050805'))
+            )
             st.plotly_chart(fig, use_container_width=True)
 
     # Customer type
@@ -4605,9 +5376,17 @@ def _render_customer_demographics(df):
             fig = go.Figure(data=[go.Pie(
                 labels=type_counts.index,
                 values=type_counts.values,
-                hole=0.4
+                hole=0.4,
+                marker=dict(colors=['#1e391f', '#3d6b3e', '#5a8f5c', '#7eb37f', '#a3cca4'])
             )])
-            fig.update_layout(height=250, margin=dict(t=20, b=0, l=0, r=0))
+            apply_chapters_theme(fig)
+            fig.update_layout(
+                height=250,
+                margin=dict(t=20, b=20, l=20, r=80),
+                paper_bgcolor='#ffffff',
+                plot_bgcolor='#ffffff',
+                legend=dict(font=dict(size=10, color='#050805'))
+            )
             st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("---")
@@ -4629,9 +5408,9 @@ def _render_customer_demographics(df):
                 fig = go.Figure(data=[go.Bar(
                     x=state_counts.index,
                     y=state_counts.values,
-                    marker_color='#00b894'
+                    marker_color='#3d6b3e'
                 )])
-                fig.update_layout(height=300, xaxis_title="State", yaxis_title="Customers")
+                fig.update_layout(height=300, xaxis_title="State", yaxis_title="Customers", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
                 st.plotly_chart(fig, use_container_width=True)
 
 
@@ -4672,9 +5451,9 @@ def _render_customer_ltv(df):
         fig = go.Figure(data=[go.Histogram(
             x=df['Lifetime Net Sales'],
             nbinsx=50,
-            marker_color='#fdcb6e'
+            marker_color='#7eb37f'
         )])
-        fig.update_layout(height=300, xaxis_title="Lifetime Value ($)", yaxis_title="Customers")
+        fig.update_layout(height=300, xaxis_title="Lifetime Value ($)", yaxis_title="Customers", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
         st.plotly_chart(fig, use_container_width=True)
 
     with col2:
@@ -4700,7 +5479,7 @@ def _render_customer_ltv(df):
                 boxmean='sd'
             ))
 
-        fig.update_layout(height=400, yaxis_title="Lifetime Value ($)", xaxis_title="Segment")
+        fig.update_layout(height=400, yaxis_title="Lifetime Value ($)", xaxis_title="Segment", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
         st.plotly_chart(fig, use_container_width=True)
 
 
@@ -4741,9 +5520,9 @@ def _render_customer_recency(df):
         fig = go.Figure(data=[go.Histogram(
             x=df['Days Since Last Visit'],
             nbinsx=30,
-            marker_color='#e17055'
+            marker_color='#5a8f5c'
         )])
-        fig.update_layout(height=300, xaxis_title="Days Since Last Visit", yaxis_title="Customers")
+        fig.update_layout(height=300, xaxis_title="Days Since Last Visit", yaxis_title="Customers", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
         st.plotly_chart(fig, use_container_width=True)
 
     with col2:
@@ -4752,9 +5531,9 @@ def _render_customer_recency(df):
             fig = go.Figure(data=[go.Histogram(
                 x=df['Lifetime In-Store Visits'],
                 nbinsx=30,
-                marker_color='#00b894'
+                marker_color='#3d6b3e'
             )])
-            fig.update_layout(height=300, xaxis_title="Lifetime Visits", yaxis_title="Customers")
+            fig.update_layout(height=300, xaxis_title="Lifetime Visits", yaxis_title="Customers", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
             st.plotly_chart(fig, use_container_width=True)
 
     # Churn risk analysis
@@ -4971,9 +5750,25 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
                     labels=segment_counts.index,
                     values=segment_counts.values,
                     hole=0.4,
-                    marker=dict(colors=['#ff6b6b', '#4ecdc4', '#45b7d1', '#96ceb4', '#ffeaa7'])
+                    marker=dict(colors=['#1e391f', '#3d6b3e', '#5a8f5c', '#7eb37f', '#a3cca4']),
+                    textinfo='percent',
+                    textposition='outside'
                 )])
-                fig.update_layout(height=350, margin=dict(t=30, b=0, l=0, r=0))
+                apply_chapters_theme(fig)
+                fig.update_layout(
+                    height=400,
+                    margin=dict(t=30, b=30, l=30, r=120),
+                    paper_bgcolor='#ffffff',
+                    plot_bgcolor='#ffffff',
+                    legend=dict(
+                        orientation='v',
+                        yanchor='middle',
+                        y=0.5,
+                        xanchor='left',
+                        x=1.02,
+                        font=dict(size=11, color='#050805')
+                    )
+                )
                 st.plotly_chart(fig, use_container_width=True)
 
         with col2:
@@ -4984,9 +5779,25 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
                     labels=recency_counts.index,
                     values=recency_counts.values,
                     hole=0.4,
-                    marker=dict(colors=['#55efc4', '#74b9ff', '#a29bfe', '#fd79a8', '#636e72'])
+                    marker=dict(colors=['#1e391f', '#3d6b3e', '#5a8f5c', '#7eb37f', '#a3cca4']),
+                    textinfo='percent',
+                    textposition='outside'
                 )])
-                fig.update_layout(height=350, margin=dict(t=30, b=0, l=0, r=0))
+                apply_chapters_theme(fig)
+                fig.update_layout(
+                    height=400,
+                    margin=dict(t=30, b=30, l=30, r=120),
+                    paper_bgcolor='#ffffff',
+                    plot_bgcolor='#ffffff',
+                    legend=dict(
+                        orientation='v',
+                        yanchor='middle',
+                        y=0.5,
+                        xanchor='left',
+                        x=1.02,
+                        font=dict(size=11, color='#050805')
+                    )
+                )
                 st.plotly_chart(fig, use_container_width=True)
 
         # Customer growth over time
@@ -5002,13 +5813,16 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
                 y=df_sorted['Cumulative Customers'],
                 mode='lines',
                 fill='tozeroy',
-                line=dict(color='#6c5ce7', width=2)
+                line=dict(color='#1e391f', width=2)
             ))
+            apply_chapters_theme(fig)
             fig.update_layout(
                 height=300,
                 xaxis_title="Date",
                 yaxis_title="Total Customers",
-                margin=dict(t=30, b=0, l=0, r=0)
+                margin=dict(t=30, b=0, l=0, r=0),
+                paper_bgcolor='#ffffff',
+                plot_bgcolor='#ffffff'
             )
             st.plotly_chart(fig, use_container_width=True)
 
@@ -5050,9 +5864,9 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
                 fig = go.Figure(data=[go.Bar(
                     x=segment_data.index,
                     y=segment_data['Total Sales'],
-                    marker_color=['#ffeaa7', '#96ceb4', '#45b7d1', '#4ecdc4', '#ff6b6b']
+                    marker_color=['#1e391f', '#3d6b3e', '#5a8f5c', '#7eb37f', '#a3cca4']
                 )])
-                fig.update_layout(height=300, xaxis_title="Segment", yaxis_title="Total Sales ($)")
+                fig.update_layout(height=300, xaxis_title="Segment", yaxis_title="Total Sales ($)", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
                 st.plotly_chart(fig, use_container_width=True)
 
             with col2:
@@ -5060,9 +5874,9 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
                 fig = go.Figure(data=[go.Bar(
                     x=segment_data.index,
                     y=segment_data['Avg LTV'],
-                    marker_color=['#ffeaa7', '#96ceb4', '#45b7d1', '#4ecdc4', '#ff6b6b']
+                    marker_color=['#1e391f', '#3d6b3e', '#5a8f5c', '#7eb37f', '#a3cca4']
                 )])
-                fig.update_layout(height=300, xaxis_title="Segment", yaxis_title="Avg LTV ($)")
+                fig.update_layout(height=300, xaxis_title="Segment", yaxis_title="Avg LTV ($)", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
                 st.plotly_chart(fig, use_container_width=True)
 
         elif segment_type == "Recency Segments":
@@ -5087,9 +5901,9 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
                 fig = go.Figure(data=[go.Bar(
                     x=recency_data.index,
                     y=recency_data['Customer Count'],
-                    marker_color=['#55efc4', '#74b9ff', '#a29bfe', '#fd79a8', '#636e72']
+                    marker_color=['#1e391f', '#3d6b3e', '#5a8f5c', '#7eb37f', '#a3cca4']
                 )])
-                fig.update_layout(height=300, xaxis_title="Recency Status", yaxis_title="Customers")
+                fig.update_layout(height=300, xaxis_title="Recency Status", yaxis_title="Customers", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
                 st.plotly_chart(fig, use_container_width=True)
 
             with col2:
@@ -5097,9 +5911,9 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
                 fig = go.Figure(data=[go.Bar(
                     x=recency_data.index,
                     y=recency_data['Avg Days Since Visit'],
-                    marker_color=['#55efc4', '#74b9ff', '#a29bfe', '#fd79a8', '#636e72']
+                    marker_color=['#1e391f', '#3d6b3e', '#5a8f5c', '#7eb37f', '#a3cca4']
                 )])
-                fig.update_layout(height=300, xaxis_title="Recency Status", yaxis_title="Days")
+                fig.update_layout(height=300, xaxis_title="Recency Status", yaxis_title="Days", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
                 st.plotly_chart(fig, use_container_width=True)
 
         else:  # Combined Matrix
@@ -5129,12 +5943,12 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
                 z=matrix_no_totals.values,
                 x=matrix_no_totals.columns,
                 y=matrix_no_totals.index,
-                colorscale='Blues',
+                colorscale=[[0, '#a3cca4'], [0.5, '#3d6b3e'], [1, '#1e391f']],
                 text=matrix_no_totals.values,
                 texttemplate='%{text}',
                 textfont={"size": 12}
             ))
-            fig.update_layout(height=400, xaxis_title="Recency", yaxis_title="Value Segment")
+            fig.update_layout(height=400, xaxis_title="Recency", yaxis_title="Value Segment", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
             st.plotly_chart(fig, use_container_width=True)
 
         # Demographics by Segment Analysis
@@ -5150,11 +5964,11 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
                 fig = go.Figure(data=[go.Bar(
                     x=age_by_segment.index,
                     y=age_by_segment.values,
-                    marker_color=['#ffeaa7', '#96ceb4', '#45b7d1', '#4ecdc4', '#ff6b6b'],
+                    marker_color=['#1e391f', '#3d6b3e', '#5a8f5c', '#7eb37f', '#a3cca4'],
                     text=[f"{v:.1f}" for v in age_by_segment.values],
                     textposition='auto'
                 )])
-                fig.update_layout(height=300, xaxis_title="Segment", yaxis_title="Average Age")
+                fig.update_layout(height=300, xaxis_title="Segment", yaxis_title="Average Age", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
                 st.plotly_chart(fig, use_container_width=True)
 
             with col2:
@@ -5178,7 +5992,9 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
                     barmode='stack',
                     xaxis_title="Segment",
                     yaxis_title="Percentage (%)",
-                    showlegend=True
+                    showlegend=True,
+                    paper_bgcolor='#ffffff',
+                    plot_bgcolor='#ffffff'
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
@@ -5196,7 +6012,7 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
                     boxmean='sd'
                 ))
 
-            fig.update_layout(height=350, yaxis_title="Age", xaxis_title="Customer Segment")
+            fig.update_layout(height=350, yaxis_title="Age", xaxis_title="Customer Segment", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
             st.plotly_chart(fig, use_container_width=True)
 
         # Geographic distribution by segment
@@ -5234,7 +6050,9 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
                 barmode='group',
                 xaxis_title="City",
                 yaxis_title="Customer Count",
-                showlegend=True
+                showlegend=True,
+                paper_bgcolor='#ffffff',
+                plot_bgcolor='#ffffff'
             )
             st.plotly_chart(fig, use_container_width=True)
 
@@ -5257,9 +6075,10 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
                 fig = go.Figure(data=[go.Histogram(
                     x=df['Age'],
                     nbinsx=20,
-                    marker_color='#6c5ce7'
+                    marker_color='#1e391f'
                 )])
-                fig.update_layout(height=250, xaxis_title="Age", yaxis_title="Count", margin=dict(t=20, b=0))
+                apply_chapters_theme(fig)
+                fig.update_layout(height=250, xaxis_title="Age", yaxis_title="Count", margin=dict(t=20, b=30, l=40, r=20), paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
                 st.plotly_chart(fig, use_container_width=True)
 
         # Gender distribution
@@ -5275,9 +6094,17 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
                 fig = go.Figure(data=[go.Pie(
                     labels=gender_counts.index,
                     values=gender_counts.values,
-                    hole=0.4
+                    hole=0.4,
+                    marker=dict(colors=['#1e391f', '#3d6b3e', '#5a8f5c', '#7eb37f', '#a3cca4'])
                 )])
-                fig.update_layout(height=250, margin=dict(t=20, b=0, l=0, r=0))
+                apply_chapters_theme(fig)
+                fig.update_layout(
+                    height=250,
+                    margin=dict(t=20, b=20, l=20, r=80),
+                    paper_bgcolor='#ffffff',
+                    plot_bgcolor='#ffffff',
+                    legend=dict(font=dict(size=10, color='#050805'))
+                )
                 st.plotly_chart(fig, use_container_width=True)
 
         # Customer type
@@ -5293,9 +6120,17 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
                 fig = go.Figure(data=[go.Pie(
                     labels=type_counts.index,
                     values=type_counts.values,
-                    hole=0.4
+                    hole=0.4,
+                    marker=dict(colors=['#1e391f', '#3d6b3e', '#5a8f5c', '#7eb37f', '#a3cca4'])
                 )])
-                fig.update_layout(height=250, margin=dict(t=20, b=0, l=0, r=0))
+                apply_chapters_theme(fig)
+                fig.update_layout(
+                    height=250,
+                    margin=dict(t=20, b=20, l=20, r=80),
+                    paper_bgcolor='#ffffff',
+                    plot_bgcolor='#ffffff',
+                    legend=dict(font=dict(size=10, color='#050805'))
+                )
                 st.plotly_chart(fig, use_container_width=True)
 
         st.markdown("---")
@@ -5317,9 +6152,10 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
                     fig = go.Figure(data=[go.Bar(
                         x=state_counts.index,
                         y=state_counts.values,
-                        marker_color='#00b894'
+                        marker_color='#3d6b3e'
                     )])
-                    fig.update_layout(height=300, xaxis_title="State", yaxis_title="Customers")
+                    apply_chapters_theme(fig)
+                    fig.update_layout(height=300, xaxis_title="State", yaxis_title="Customers", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
                     st.plotly_chart(fig, use_container_width=True)
 
     # ===== TAB 4: Lifetime Value =====
@@ -5359,9 +6195,9 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
             fig = go.Figure(data=[go.Histogram(
                 x=df['Lifetime Net Sales'],
                 nbinsx=50,
-                marker_color='#fdcb6e'
+                marker_color='#7eb37f'
             )])
-            fig.update_layout(height=300, xaxis_title="Lifetime Value ($)", yaxis_title="Customers")
+            fig.update_layout(height=300, xaxis_title="Lifetime Value ($)", yaxis_title="Customers", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
             st.plotly_chart(fig, use_container_width=True)
 
         with col2:
@@ -5387,7 +6223,7 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
                     boxmean='sd'
                 ))
 
-            fig.update_layout(height=400, yaxis_title="Lifetime Value ($)", xaxis_title="Segment")
+            fig.update_layout(height=400, yaxis_title="Lifetime Value ($)", xaxis_title="Segment", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
             st.plotly_chart(fig, use_container_width=True)
 
     # ===== TAB 5: Recency & Retention =====
@@ -5427,9 +6263,9 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
             fig = go.Figure(data=[go.Histogram(
                 x=df['Days Since Last Visit'],
                 nbinsx=30,
-                marker_color='#e17055'
+                marker_color='#5a8f5c'
             )])
-            fig.update_layout(height=300, xaxis_title="Days Since Last Visit", yaxis_title="Customers")
+            fig.update_layout(height=300, xaxis_title="Days Since Last Visit", yaxis_title="Customers", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
             st.plotly_chart(fig, use_container_width=True)
 
         with col2:
@@ -5438,9 +6274,9 @@ def render_customer_analytics(state, analytics, store_filter, date_filter=None):
                 fig = go.Figure(data=[go.Histogram(
                     x=df['Lifetime In-Store Visits'],
                     nbinsx=30,
-                    marker_color='#00b894'
+                    marker_color='#3d6b3e'
                 )])
-                fig.update_layout(height=300, xaxis_title="Lifetime Visits", yaxis_title="Customers")
+                fig.update_layout(height=300, xaxis_title="Lifetime Visits", yaxis_title="Customers", paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
                 st.plotly_chart(fig, use_container_width=True)
 
         # Churn risk analysis
@@ -5625,7 +6461,7 @@ def render_brand_analysis(state, analytics, store_filter, date_filter=None):
             y='Margin_Pct',
             hover_name='Brand',
             color='Margin_Pct',
-            color_continuous_scale='RdYlGn',  # Red (low) to Green (high)
+            color_continuous_scale=[[0, '#8b1414'], [0.5, '#a3cca4'], [1, '#1e391f']],
             size='Net Sales',
             size_max=30,
             title='Brand Positioning: Sales vs Margin',
@@ -5637,20 +6473,23 @@ def render_brand_analysis(state, analytics, store_filter, date_filter=None):
         fig.add_hline(
             y=55,
             line_dash="dash",
-            line_color="rgba(255,255,255,0.5)",
+            line_color="rgba(61, 107, 62, 0.5)",
             annotation_text="55% Target Margin",
             annotation_position="right"
         )
 
+        apply_chapters_theme(fig)
         fig.update_layout(
             height=500,
+            paper_bgcolor='#ffffff',
+            plot_bgcolor='#ffffff',
             coloraxis_colorbar=dict(title="Margin %")
         )
 
         st.plotly_chart(fig, use_container_width=True)
     else:
         st.info("No brand data with sufficient sales volume to display.")
-    
+
     # Add interpretation help
     with st.expander("How to read this chart"):
         st.markdown("""
@@ -5723,11 +6562,14 @@ def render_product_analysis(state, store_filter=None, date_filter=None):
         df['Sales Share %'] = (df['Net Sales'] / df['Net Sales'].sum() * 100).round(2)
         st.dataframe(df, width='stretch')
     
-    # Category bar chart
+    # Category bar chart - Chapters green scale
+    chapters_green_scale = [[0, '#a3cca4'], [0.5, '#3d6b3e'], [1, '#1e391f']]
     fig = px.bar(df, x='Product Type', y='Net Sales',
                 title='Net Sales by Product Category',
                 color='Net Sales',
-                color_continuous_scale='Blues')
+                color_continuous_scale=chapters_green_scale)
+    apply_chapters_theme(fig)
+    fig.update_layout(paper_bgcolor='#ffffff', plot_bgcolor='#ffffff')
     st.plotly_chart(fig, use_container_width=True)
 
 
